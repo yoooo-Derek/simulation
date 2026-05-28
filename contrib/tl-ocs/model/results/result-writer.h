@@ -5,7 +5,9 @@
 #include "ns3/output-config.h"
 #include "ns3/simulation-config.h"
 
+#include <cstdint>
 #include <filesystem>
+#include <optional>
 #include <string>
 
 namespace ns3
@@ -19,7 +21,8 @@ class ResultWriter
     std::filesystem::path WriteSmokeSummary(const SimulationConfig& simulation,
                                             const ExperimentConfig& experiment,
                                             const OutputConfig& output,
-                                            const std::string& status = "smoke_ok") const;
+                                            const std::string& status = "smoke_ok",
+                                            std::optional<uint64_t> receivedBytes = std::nullopt) const;
 };
 
 } // namespace tl_ocs

@@ -29,7 +29,8 @@ std::filesystem::path
 ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 const ExperimentConfig& experiment,
                                 const OutputConfig& output,
-                                const std::string& status) const
+                                const std::string& status,
+                                std::optional<uint64_t> receivedBytes) const
 {
     const std::filesystem::path outputDir(output.GetOutputDir());
     std::filesystem::create_directories(outputDir);
@@ -56,7 +57,12 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
            << simulation.GetServersPerTor() << ','
            << FormatSeconds(simulation.GetObserverWindow()) << ','
            << FormatSeconds(simulation.GetOcsReconfigurationPeriod()) << ','
-           << FormatSeconds(simulation.GetStopTime()) << ',' << EscapeCsvField(status) << '\n';
+           << FormatSeconds(simulation.GetStopTime()) << ',' << EscapeCsvField(status) << ',';
+    if (receivedBytes.has_value())
+    {
+        stream << receivedBytes.value();
+    }
+    stream << '\n';
 
     return summaryPath;
 }

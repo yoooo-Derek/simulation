@@ -16,7 +16,8 @@ The new project is an ns-3.47 source tree. TL-OCS self-authored code belongs in
   and constrained link-selection logic.
 - `controller`: future periodic orchestration that connects observer state,
   algorithm output, OCS admission, EPS fallback, and rule updates.
-- `topology`: future EPS and OCS physical/logical topology construction.
+- `topology`: EPS physical/logical topology construction now, future OCS topology
+  construction later.
 - `routing`: future OCS hit handling, EPS fallback, ECMP, and WECMP path binding.
 - `applications`: future training-flow generators and ns-3 application helpers.
 - `metrics`: future flow completion time, throughput, utilization, OCS hit rate,
@@ -28,6 +29,13 @@ Phase 2 implements the smallest closed loop across `config` and `results`:
 `SimulationConfig`, `ExperimentConfig`, and `OutputConfig` describe a smoke run,
 and `ResultWriter` writes a summary CSV artifact. The other boundaries are
 documented now to prevent new logic from accumulating in scratch.
+
+Phase 3 adds the first `topology` implementation for EPS only.
+`EpsTopologyBuilder` creates ToR/access nodes, server nodes, spine nodes,
+server-ToR point-to-point links, ToR-spine point-to-point links, IPv4 addresses,
+and global routing. `NodeIndex` stores the resulting node and server-address
+lookups. TCP smoke flow installation remains in the scratch runner, not in the
+topology builder.
 
 ## V3 Pipeline Mapping
 
@@ -55,9 +63,18 @@ concise summaries, run an empty ns-3 simulator interval, and call `ResultWriter`
 for a smoke summary. It must not contain TL-OCS algorithms, topology
 construction, traffic generation, routing, or CSV formatting logic.
 
+For Phase 3, the runner may optionally build the minimum EPS topology and run
+one cross-ToR TCP smoke flow using ns-3 applications. It must not add OCS
+management, TrafficObserver logic, WECMP, baselines, training traffic generation,
+or paper metric computation.
+
 ## Phase 2 Summary CSV
 
 `results/raw/phase2-summary.csv` is a smoke artifact. It records run identity,
 basic configuration values, and a fixed `smoke_ok` status after the empty ns-3
 interval completes. It is not a paper metric output and must not be interpreted
 as FCT, throughput, OCS hit rate, WECMP behavior, or topology-level evidence.
+
+Phase 3 may write `received_bytes` for the TCP smoke flow because that value is
+directly observed from the `PacketSink`. It still must not export fake FCT,
+throughput, OCS hit rate, or other paper metrics.

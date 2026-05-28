@@ -1,7 +1,9 @@
+#include "ns3/applications-module.h"
 #include "ns3/core-module.h"
 #include "ns3/tl-ocs-module.h"
 
 #include <iostream>
+#include <optional>
 #include <string>
 
 using namespace ns3;
@@ -23,6 +25,10 @@ main(int argc, char* argv[])
     std::string outputDir = "results/raw";
     std::string summaryFile = "summary.csv";
     bool overwrite = true;
+    bool enableEpsTopology = false;
+    bool enableTcpSmoke = false;
+    uint32_t spines = 1;
+    uint64_t tcpFlowBytes = 1000000;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("numTors", "Number of ToR/access nodes", numTors);
@@ -38,6 +44,10 @@ main(int argc, char* argv[])
     cmd.AddValue("outputDir", "Directory for TL-OCS smoke artifacts", outputDir);
     cmd.AddValue("summaryFile", "Summary CSV file name", summaryFile);
     cmd.AddValue("overwrite", "Overwrite summary CSV before writing", overwrite);
+    cmd.AddValue("enableEpsTopology", "Build the minimum EPS topology", enableEpsTopology);
+    cmd.AddValue("enableTcpSmoke", "Run one cross-ToR TCP smoke flow", enableTcpSmoke);
+    cmd.AddValue("spines", "Number of EPS spine nodes", spines);
+    cmd.AddValue("tcpFlowBytes", "Maximum bytes sent by the TCP smoke flow", tcpFlowBytes);
     cmd.Parse(argc, argv);
 
     SimulationConfig config;
@@ -66,17 +76,79 @@ main(int argc, char* argv[])
         std::cerr << "Invalid TL-OCS smoke configuration: " << config.GetSummary() << std::endl;
         return 1;
     }
+    if (spines < 1)
+    {
+        std::cerr << "Invalid TL-OCS EPS topology configuration: spines must be at least 1"
+                  << std::endl;
+        return 1;
+    }
+    if (enableTcpSmoke && !enableEpsTopology)
+    {
+        std::cerr << "TCP smoke requires --enableEpsTopology=true" << std::endl;
+        return 1;
+    }
 
     std::cout << "TL-OCS smoke configuration: " << config.GetSummary() << std::endl;
     std::cout << "TL-OCS experiment configuration: " << experiment.GetSummary() << std::endl;
     std::cout << "TL-OCS output configuration: " << output.GetSummary() << std::endl;
 
-    Simulator::Stop(config.GetStopTime());
-    Simulator::Run();
-    Simulator::Destroy();
+    std::string status = "smoke_ok";
+    std::optional<uint64_t> receivedBytes;
+
+    if (enableEpsTopology)
+    {
+        EpsTopologyBuilder builder;
+        NodeIndex index = builder.Build(config, spines);
+        std::cout << "TL-OCS EPS topology: tors=" << index.GetTorCount()
+                  << ", servers=" << index.GetServerCount() << ", spines=" << index.GetSpineCount()
+                  << std::endl;
+
+        if (enableTcpSmoke)
+        {
+            const uint16_t port = 9000;
+            Ptr<Node> source = index.GetServer(0, 0);
+            Ptr<Node> destination = index.GetServer(1, 0);
+            Ipv4Address destinationAddress = index.GetServerIpv4Address(1, 0);
+
+            PacketSinkHelper sinkHelper("ns3::TcpSocketFactory",
+                                        InetSocketAddress(Ipv4Address::GetAny(), port));
+            ApplicationContainer sinkApps = sinkHelper.Install(destination);
+            sinkApps.Start(MilliSeconds(0));
+            sinkApps.Stop(config.GetStopTime());
+
+            BulkSendHelper sourceHelper("ns3::TcpSocketFactory",
+                                        InetSocketAddress(destinationAddress, port));
+            sourceHelper.SetAttribute("MaxBytes", UintegerValue(tcpFlowBytes));
+            ApplicationContainer sourceApps = sourceHelper.Install(source);
+            sourceApps.Start(MilliSeconds(1));
+            sourceApps.Stop(config.GetStopTime());
+
+            Simulator::Stop(config.GetStopTime());
+            Simulator::Run();
+
+            Ptr<PacketSink> sink = DynamicCast<PacketSink>(sinkApps.Get(0));
+            receivedBytes = sink->GetTotalRx();
+            status = "tcp_smoke_ok";
+            std::cout << "TL-OCS TCP smoke received bytes: " << receivedBytes.value()
+                      << std::endl;
+            Simulator::Destroy();
+        }
+        else
+        {
+            Simulator::Stop(config.GetStopTime());
+            Simulator::Run();
+            Simulator::Destroy();
+        }
+    }
+    else
+    {
+        Simulator::Stop(config.GetStopTime());
+        Simulator::Run();
+        Simulator::Destroy();
+    }
 
     ResultWriter writer;
-    const auto summaryPath = writer.WriteSmokeSummary(config, experiment, output);
+    const auto summaryPath = writer.WriteSmokeSummary(config, experiment, output, status, receivedBytes);
     std::cout << "TL-OCS smoke summary: " << summaryPath << std::endl;
     return 0;
 }
