@@ -14,7 +14,7 @@ main(int argc, char* argv[])
     CommandLine cmd(__FILE__);
     cmd.Parse(argc, argv);
 
-    if (!config.Validate())
+    if (!config.IsConsistent())
     {
         std::cerr << "Invalid TL-OCS minimal configuration\n";
         return 1;
@@ -27,4 +27,3 @@ main(int argc, char* argv[])
     Simulator::Destroy();
     return 0;
 }
-

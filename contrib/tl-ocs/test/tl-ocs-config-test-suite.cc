@@ -23,7 +23,7 @@ TlOcsSimulationConfigDefaultsTestCase::DoRun()
 {
     SimulationConfig config;
 
-    NS_TEST_ASSERT_MSG_EQ(config.Validate(), true, "default configuration should be valid");
+    NS_TEST_ASSERT_MSG_EQ(config.IsConsistent(), true, "default configuration should be consistent");
     NS_TEST_ASSERT_MSG_EQ(config.GetNumTors(), 4, "unexpected default ToR count");
     NS_TEST_ASSERT_MSG_EQ(config.GetServersPerTor(), 2, "unexpected default servers per ToR");
     NS_TEST_ASSERT_MSG_EQ(config.GetEpsDataRate(), "25Gbps", "unexpected default EPS rate");
@@ -40,7 +40,7 @@ class TlOcsSimulationConfigInvalidTestCase : public TestCase
 };
 
 TlOcsSimulationConfigInvalidTestCase::TlOcsSimulationConfigInvalidTestCase()
-    : TestCase("TL-OCS SimulationConfig rejects invalid values")
+    : TestCase("TL-OCS SimulationConfig minimum consistency checks")
 {
 }
 
@@ -48,13 +48,13 @@ void
 TlOcsSimulationConfigInvalidTestCase::DoRun()
 {
     SimulationConfig config;
-    config.SetNumTors(0);
-    NS_TEST_ASSERT_MSG_EQ(config.Validate(), false, "zero ToR count should be invalid");
+    config.SetNumTors(1);
+    NS_TEST_ASSERT_MSG_EQ(config.IsConsistent(), false, "single ToR is below the minimum");
 
     config.SetNumTors(4);
-    config.SetObserverWindow(MilliSeconds(20));
-    config.SetStopTime(MilliSeconds(10));
-    NS_TEST_ASSERT_MSG_EQ(config.Validate(), false, "observer window must fit in stop time");
+    config.SetObserverWindow(MilliSeconds(5));
+    config.SetOcsReconfigurationPeriod(MilliSeconds(1));
+    NS_TEST_ASSERT_MSG_EQ(config.IsConsistent(), false, "OCS period must not be shorter than observer window");
 }
 
 class TlOcsConfigTestSuite : public TestSuite
@@ -71,4 +71,3 @@ TlOcsConfigTestSuite::TlOcsConfigTestSuite()
 }
 
 static TlOcsConfigTestSuite g_tlOcsConfigTestSuite;
-

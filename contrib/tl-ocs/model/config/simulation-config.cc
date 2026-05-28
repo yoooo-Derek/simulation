@@ -130,12 +130,11 @@ SimulationConfig::GetRunId() const
 }
 
 bool
-SimulationConfig::Validate() const
+SimulationConfig::IsConsistent() const
 {
-    return m_numTors > 0 && m_serversPerTor > 0 && !m_epsDataRate.empty() &&
-           !m_ocsDataRate.empty() && m_stopTime.IsPositive() && m_observerWindow.IsPositive() &&
-           m_ocsReconfigurationPeriod.IsPositive() && m_observerWindow <= m_stopTime &&
-           m_ocsReconfigurationPeriod <= m_stopTime;
+    return m_numTors >= 2 && m_serversPerTor >= 1 && m_stopTime.IsPositive() &&
+           m_observerWindow.IsPositive() && m_ocsReconfigurationPeriod.IsPositive() &&
+           m_ocsReconfigurationPeriod >= m_observerWindow;
 }
 
 std::string

@@ -7,7 +7,7 @@ The new project is an ns-3.47 source tree. TL-OCS self-authored code belongs in
 
 `contrib/tl-ocs` is the project module. It maps V3 into the following boundaries:
 
-- `config`: simulation and controller parameters, validation, and preset loading.
+- `config`: lightweight simulation, experiment, and output parameters.
 - `traffic`: future ToR-pair traffic matrix inputs, synthetic training traffic
   descriptions, and trace adapters.
 - `observer`: future data-plane counters that build `W(t)` from ns-3 packets or
@@ -21,10 +21,13 @@ The new project is an ns-3.47 source tree. TL-OCS self-authored code belongs in
 - `applications`: future training-flow generators and ns-3 application helpers.
 - `metrics`: future flow completion time, throughput, utilization, OCS hit rate,
   and reconfiguration counters.
-- `results`: future structured CSV or artifact export paths and schemas.
+- `results`: structured smoke artifacts now, future experiment artifact export
+  paths and schemas.
 
-Only `config` exists in this round. The other boundaries are documented now to
-prevent new logic from accumulating in scratch.
+Phase 2 implements the smallest closed loop across `config` and `results`:
+`SimulationConfig`, `ExperimentConfig`, and `OutputConfig` describe a smoke run,
+and `ResultWriter` writes a summary CSV artifact. The other boundaries are
+documented now to prevent new logic from accumulating in scratch.
 
 ## V3 Pipeline Mapping
 
@@ -47,7 +50,14 @@ V3's control flow maps to module responsibilities as follows:
 ## Scratch Boundary
 
 `scratch/tl-ocs-runner.cc` is a smoke runner. It may parse command-line options,
-construct `SimulationConfig`, call `Validate()`, print a concise summary, and
-run an empty ns-3 simulator interval. It must not contain TL-OCS algorithms,
-topology construction, traffic generation, routing, or result export logic.
+construct lightweight config objects, perform minimum consistency checks, print
+concise summaries, run an empty ns-3 simulator interval, and call `ResultWriter`
+for a smoke summary. It must not contain TL-OCS algorithms, topology
+construction, traffic generation, routing, or CSV formatting logic.
 
+## Phase 2 Summary CSV
+
+`results/raw/phase2-summary.csv` is a smoke artifact. It records run identity,
+basic configuration values, and a fixed `smoke_ok` status after the empty ns-3
+interval completes. It is not a paper metric output and must not be interpreted
+as FCT, throughput, OCS hit rate, WECMP behavior, or topology-level evidence.

@@ -43,7 +43,7 @@ class SimulationConfig
     void SetRunId(uint32_t runId);
     uint32_t GetRunId() const;
 
-    bool Validate() const;
+    bool IsConsistent() const;
     std::string GetSummary() const;
 
   private:
@@ -62,4 +62,3 @@ class SimulationConfig
 } // namespace ns3
 
 #endif /* TL_OCS_SIMULATION_CONFIG_H */
-
