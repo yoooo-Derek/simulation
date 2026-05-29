@@ -29,7 +29,10 @@ class ResultWriter
                                             std::optional<uint32_t> algorithmSelectedEdges = std::nullopt,
                                             std::optional<uint32_t> ocsActiveEdges = std::nullopt,
                                             std::optional<uint32_t> ocsAdmittedFlows = std::nullopt,
-                                            std::optional<uint32_t> epsFallbackFlows = std::nullopt) const;
+                                            std::optional<uint32_t> epsFallbackFlows = std::nullopt,
+                                            std::optional<uint32_t> epsWecmpFlows = std::nullopt,
+                                            std::optional<uint32_t> epsWecmpSpine0Flows = std::nullopt,
+                                            std::optional<uint32_t> epsWecmpSpine1Flows = std::nullopt) const;
 };
 
 } // namespace tl_ocs

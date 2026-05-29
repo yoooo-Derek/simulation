@@ -125,6 +125,11 @@ installs new flows with routing decisions from `routing`. The runner must not
 embed OCS admission, active-set management, path-selection, or static route
 logic. It must not retroactively reroute stage-1 flows.
 
+For Phase 8, the same two-stage runner may enable EPS-WECMP for OCS fallback
+flows. The runner may print selected-spine decisions and aggregate smoke counts,
+but assigned-byte state, spine selection, and EPS host-route installation remain
+inside `routing`.
+
 ## Phase 2 Summary CSV
 
 `results/raw/phase2-summary.csv` is a smoke artifact. It records run identity,
@@ -149,3 +154,17 @@ hit-rate or performance metrics.
 Phase 7 may write `ocs_active_edges`, `ocs_admitted_flows`, and
 `eps_fallback_flows`. These are smoke counts for the new-flow admission path,
 not OCS hit rate, throughput, FCT, or paper evaluation metrics.
+
+Phase 8 adds a minimal controlled EPS-WECMP residual-routing smoke. `NodeIndex`
+records ToR-spine EPS link addresses and interface indices. `EpsLinkState`
+stores assigned bytes from Phase 8 path decisions only; it is not measured link
+utilization. `EpsWecmpRouter` routes only new flows that missed OCS admission by
+choosing the least-loaded spine under that assigned-byte state, then
+`FlowPathSelector` installs static host routes through the selected spine while
+applications still connect to destination server IPv4 addresses. This is not a
+complete five-tuple WECMP datapath and it does not reroute already-running
+flows.
+
+Phase 8 may write `eps_wecmp_flows`, `eps_wecmp_spine0_flows`, and
+`eps_wecmp_spine1_flows`. These are smoke path-assignment counts, not measured
+link utilization, throughput, FCT, p95, or OCS hit-rate metrics.

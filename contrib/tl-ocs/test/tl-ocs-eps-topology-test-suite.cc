@@ -34,6 +34,10 @@ TlOcsEpsTopologyBuildTestCase::DoRun()
     NS_TEST_ASSERT_MSG_EQ(index.GetServersPerTor(), 1, "unexpected servers per ToR");
     NS_TEST_ASSERT_MSG_EQ(index.GetServerCount(), 2, "unexpected server count");
     NS_TEST_ASSERT_MSG_EQ(index.GetSpineCount(), 1, "unexpected spine count");
+    NS_TEST_ASSERT_MSG_EQ(index.HasTorSpineLink(0, 0), true, "missing ToR-spine link");
+    NS_TEST_ASSERT_MSG_NE(index.GetTorSpineLink(0, 0).torAddress,
+                          Ipv4Address("0.0.0.0"),
+                          "ToR-spine ToR address was not assigned");
     NS_TEST_ASSERT_MSG_NE(index.GetServerIpv4Address(0, 0),
                           Ipv4Address("0.0.0.0"),
                           "server address was not assigned");

@@ -82,7 +82,15 @@ EpsTopologyBuilder::Build(const SimulationConfig& config,
         {
             NodeContainer pair(index.GetTor(torId), index.GetSpine(spineId));
             NetDeviceContainer devices = torSpineLink.Install(pair);
-            ipv4.Assign(devices);
+            Ipv4InterfaceContainer interfaces = ipv4.Assign(devices);
+            index.AddTorSpineLink({torId,
+                                   spineId,
+                                   interfaces.GetAddress(0),
+                                   interfaces.GetAddress(1),
+                                   interfaces.Get(0).second,
+                                   interfaces.Get(1).second,
+                                   devices.Get(0),
+                                   devices.Get(1)});
             ipv4.NewNetwork();
         }
     }

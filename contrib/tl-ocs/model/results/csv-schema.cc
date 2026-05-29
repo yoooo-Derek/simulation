@@ -11,7 +11,8 @@ GetSmokeSummaryCsvHeader()
     return "experiment,scheme,traffic_pattern,run_id,random_seed,num_tors,servers_per_tor,"
            "observer_window_s,ocs_period_s,stop_time_s,status,installed_flows,received_bytes,"
            "observed_matrix_bytes,algorithm_candidate_edges,algorithm_selected_edges,"
-           "ocs_active_edges,ocs_admitted_flows,eps_fallback_flows";
+           "ocs_active_edges,ocs_admitted_flows,eps_fallback_flows,eps_wecmp_flows,"
+           "eps_wecmp_spine0_flows,eps_wecmp_spine1_flows";
 }
 
 std::string

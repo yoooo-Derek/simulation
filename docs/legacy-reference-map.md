@@ -148,6 +148,62 @@ New implementation:
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 7 implementation.
 
+## Phase 8 Reference
+
+Additional read-only files reviewed for EPS-WECMP residual routing:
+
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc`
+- `/home/dyn/sim/src/eps/eps-wecmp-state.h`
+- `/home/dyn/sim/docs/architecture.md`
+- `/home/dyn/sim/docs/tl_ocs_data_plane_path_validation.md`
+- `/home/dyn/sim/docs/tl_ocs_patch3_1_timeseries_robustness_audit.md`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_smoke_matrix.sh`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_medium_sanity.sh`
+
+Borrowed behavior and naming:
+
+- OCS-missed flows are residual EPS flows and are eligible for EPS-WECMP
+  decision before application installation.
+- A WECMP decision freezes a residual flow to one selected spine, and data-plane
+  realization uses host routes through source ToR, selected spine, destination
+  ToR, and destination server while applications still connect to the
+  destination server address.
+- Old names such as `selectedSpine`, `pathType`, `eps-fallback`,
+  `eps-residual`, and `wecmp-frozen` are useful vocabulary for the new smoke
+  decisions and logs.
+- Legacy docs explicitly distinguish control-plane estimated residual load from
+  ns-3 measured utilization; Phase 8 keeps that distinction by naming the new
+  state assigned bytes.
+
+Not migrated:
+
+- The old `hybrid-dcn-main.cc` route-binding implementation, probability update
+  logic, diagnostic load injection, measured-utilization path, structured WECMP
+  CSV, validation matrix, FCT/goodput metrics, OCS hit-rate metrics, and
+  full-controller timeline were not copied or migrated.
+- The old `eps-wecmp-state.h` structures were not copied; they were used only
+  to confirm field names and semantic boundaries.
+- Phase 8 does not implement complete five-tuple WECMP. Static host routes are
+  sufficient for the controlled smoke but cannot distinguish multiple
+  concurrent flows with the same source and destination hosts if they require
+  different spines.
+
+New implementation:
+
+- `NodeIndex` records ToR-spine EPS link addresses, interface indices, and
+  devices.
+- `EpsLinkState` stores assigned bytes by `(ToR, spine)` and scores a
+  source-destination path with the max assigned bytes across its two endpoint
+  ToR-spine directions.
+- `EpsWecmpRouter` chooses the least-loaded spine deterministically and updates
+  assigned bytes after each residual flow decision.
+- `FlowPathSelector` marks OCS-admitted flows as `ocs`, OCS-missed flows as
+  `eps`, and, when enabled, OCS-missed residual flows as `eps-wecmp`.
+- `InstallEpsWecmpHostRoutes` installs static host routes through the selected
+  spine for new residual EPS flows only.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 8 implementation.
+
 ## Phase 5 Reference
 
 Additional read-only files reviewed for TrafficObserver:

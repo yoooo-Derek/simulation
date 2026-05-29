@@ -64,6 +64,16 @@ NodeIndex::SetTorIngressDevice(uint32_t torId, uint32_t serverId, Ptr<NetDevice>
 }
 
 void
+NodeIndex::AddTorSpineLink(const TorSpineLinkInfo& linkInfo)
+{
+    if (linkInfo.torId >= m_tors.GetN() || linkInfo.spineId >= m_spines.GetN())
+    {
+        throw std::out_of_range("TL-OCS EPS ToR-spine link index is out of range");
+    }
+    m_torSpineLinks[{linkInfo.torId, linkInfo.spineId}] = linkInfo;
+}
+
+void
 NodeIndex::AddOcsLink(const OcsLinkInfo& linkInfo)
 {
     if (linkInfo.torA >= m_tors.GetN() || linkInfo.torB >= m_tors.GetN() ||
@@ -134,6 +144,23 @@ NodeIndex::GetTorIngressDevice(uint32_t torId, uint32_t serverId) const
         throw std::out_of_range("TL-OCS ToR ingress device index is out of range");
     }
     return m_torIngressDevicesByTor[torId][serverId];
+}
+
+bool
+NodeIndex::HasTorSpineLink(uint32_t torId, uint32_t spineId) const
+{
+    return m_torSpineLinks.find({torId, spineId}) != m_torSpineLinks.end();
+}
+
+NodeIndex::TorSpineLinkInfo
+NodeIndex::GetTorSpineLink(uint32_t torId, uint32_t spineId) const
+{
+    const auto match = m_torSpineLinks.find({torId, spineId});
+    if (match == m_torSpineLinks.end())
+    {
+        throw std::out_of_range("TL-OCS EPS ToR-spine link does not exist");
+    }
+    return match->second;
 }
 
 bool
