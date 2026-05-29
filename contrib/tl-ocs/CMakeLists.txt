@@ -1,6 +1,7 @@
 build_lib(
   LIBNAME tl-ocs
   SOURCE_FILES
+    model/applications/flow-launcher.cc
     model/config/experiment-config.cc
     model/config/output-config.cc
     model/config/simulation-config.cc
@@ -8,7 +9,13 @@ build_lib(
     model/results/result-writer.cc
     model/topology/eps-topology-builder.cc
     model/topology/node-index.cc
+    model/traffic/aggregation-traffic-generator.cc
+    model/traffic/community-traffic-generator.cc
+    model/traffic/flow-spec.cc
+    model/traffic/training-traffic-generator.cc
+    model/traffic/uniform-traffic-generator.cc
   HEADER_FILES
+    model/applications/flow-launcher.h
     model/config/experiment-config.h
     model/config/output-config.h
     model/config/simulation-config.h
@@ -16,7 +23,13 @@ build_lib(
     model/results/result-writer.h
     model/topology/eps-topology-builder.h
     model/topology/node-index.h
+    model/traffic/aggregation-traffic-generator.h
+    model/traffic/community-traffic-generator.h
+    model/traffic/flow-spec.h
+    model/traffic/training-traffic-generator.h
+    model/traffic/uniform-traffic-generator.h
   LIBRARIES_TO_LINK
+    ${libapplications}
     ${libcore}
     ${libinternet}
     ${libnetwork}
@@ -24,5 +37,7 @@ build_lib(
   TEST_SOURCES
     test/tl-ocs-config-test-suite.cc
     test/tl-ocs-eps-topology-test-suite.cc
+    test/tl-ocs-flow-launcher-test-suite.cc
     test/tl-ocs-result-writer-test-suite.cc
+    test/tl-ocs-traffic-generator-test-suite.cc
 )

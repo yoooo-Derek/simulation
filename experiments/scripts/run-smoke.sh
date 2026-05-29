@@ -3,4 +3,4 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
-./ns3 run "tl-ocs-runner --numTors=2 --serversPerTor=1 --spines=1 --observerWindow=0.001 --ocsPeriod=0.005 --stopTime=0.05 --experimentName=phase3-tcp-smoke --schemeName=eps-smoke --trafficPattern=single-tcp --outputDir=results/raw --summaryFile=phase3-summary.csv --overwrite=true --enableEpsTopology=true --enableTcpSmoke=true --tcpFlowBytes=1000000"
+./ns3 run "tl-ocs-runner --numTors=4 --serversPerTor=2 --spines=1 --observerWindow=0.001 --ocsPeriod=0.005 --stopTime=0.05 --experimentName=phase4-uniform --schemeName=eps-smoke --trafficPattern=uniform --outputDir=results/raw --summaryFile=phase4-uniform.csv --overwrite=true --enableEpsTopology=true --enableTrainingTraffic=true --numFlows=4 --flowSizeBytes=100000 --flowStartInterval=0.001"

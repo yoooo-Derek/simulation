@@ -37,6 +37,14 @@ and global routing. `NodeIndex` stores the resulting node and server-address
 lookups. TCP smoke flow installation remains in the scratch runner, not in the
 topology builder.
 
+Phase 4 adds the first data-plane training traffic smoke path. `traffic`
+generators produce `FlowSpec` records only; they do not install ns-3
+applications and do not create controller matrices. `applications` owns
+`FlowLauncher`, which maps `FlowSpec` records onto existing EPS server nodes
+using `PacketSink` and `BulkSend`. The runner selects the generator, launches
+flows, runs the simulator, and writes smoke CSV fields for installed flows and
+received bytes.
+
 ## V3 Pipeline Mapping
 
 V3's control flow maps to module responsibilities as follows:
@@ -68,6 +76,11 @@ one cross-ToR TCP smoke flow using ns-3 applications. It must not add OCS
 management, TrafficObserver logic, WECMP, baselines, training traffic generation,
 or paper metric computation.
 
+For Phase 4, the runner may optionally run generated training traffic through
+`FlowLauncher`. It must still not compute TrafficObserver matrices, TL-OCS
+decisions, OCS admission, WECMP, baselines, FCT, throughput, p95, or OCS hit
+rate.
+
 ## Phase 2 Summary CSV
 
 `results/raw/phase2-summary.csv` is a smoke artifact. It records run identity,
@@ -78,3 +91,6 @@ as FCT, throughput, OCS hit rate, WECMP behavior, or topology-level evidence.
 Phase 3 may write `received_bytes` for the TCP smoke flow because that value is
 directly observed from the `PacketSink`. It still must not export fake FCT,
 throughput, OCS hit rate, or other paper metrics.
+
+Phase 4 may also write `installed_flows` for generated training traffic. The
+field is an application installation count, not a completion metric.

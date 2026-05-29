@@ -9,7 +9,7 @@ std::string
 GetSmokeSummaryCsvHeader()
 {
     return "experiment,scheme,traffic_pattern,run_id,random_seed,num_tors,servers_per_tor,"
-           "observer_window_s,ocs_period_s,stop_time_s,status,received_bytes";
+           "observer_window_s,ocs_period_s,stop_time_s,status,installed_flows,received_bytes";
 }
 
 std::string

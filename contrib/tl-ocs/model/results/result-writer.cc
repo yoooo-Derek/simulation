@@ -30,7 +30,8 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 const ExperimentConfig& experiment,
                                 const OutputConfig& output,
                                 const std::string& status,
-                                std::optional<uint64_t> receivedBytes) const
+                                std::optional<uint64_t> receivedBytes,
+                                std::optional<uint32_t> installedFlows) const
 {
     const std::filesystem::path outputDir(output.GetOutputDir());
     std::filesystem::create_directories(outputDir);
@@ -58,6 +59,11 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
            << FormatSeconds(simulation.GetObserverWindow()) << ','
            << FormatSeconds(simulation.GetOcsReconfigurationPeriod()) << ','
            << FormatSeconds(simulation.GetStopTime()) << ',' << EscapeCsvField(status) << ',';
+    if (installedFlows.has_value())
+    {
+        stream << installedFlows.value();
+    }
+    stream << ',';
     if (receivedBytes.has_value())
     {
         stream << receivedBytes.value();

@@ -1,10 +1,11 @@
-#include "ns3/applications-module.h"
 #include "ns3/core-module.h"
 #include "ns3/tl-ocs-module.h"
 
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 using namespace ns3;
 using namespace ns3::tl_ocs;
@@ -27,8 +28,14 @@ main(int argc, char* argv[])
     bool overwrite = true;
     bool enableEpsTopology = false;
     bool enableTcpSmoke = false;
+    bool enableTrainingTraffic = false;
     uint32_t spines = 1;
     uint64_t tcpFlowBytes = 1000000;
+    uint32_t numFlows = 4;
+    uint64_t flowSizeBytes = 1000000;
+    double flowStartIntervalSeconds = 0.001;
+    uint32_t communityCount = 2;
+    uint32_t aggregatorTor = 0;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("numTors", "Number of ToR/access nodes", numTors);
@@ -46,8 +53,14 @@ main(int argc, char* argv[])
     cmd.AddValue("overwrite", "Overwrite summary CSV before writing", overwrite);
     cmd.AddValue("enableEpsTopology", "Build the minimum EPS topology", enableEpsTopology);
     cmd.AddValue("enableTcpSmoke", "Run one cross-ToR TCP smoke flow", enableTcpSmoke);
+    cmd.AddValue("enableTrainingTraffic", "Run generated training traffic flows", enableTrainingTraffic);
     cmd.AddValue("spines", "Number of EPS spine nodes", spines);
     cmd.AddValue("tcpFlowBytes", "Maximum bytes sent by the TCP smoke flow", tcpFlowBytes);
+    cmd.AddValue("numFlows", "Number of generated training traffic flows", numFlows);
+    cmd.AddValue("flowSizeBytes", "Bytes per generated training traffic flow", flowSizeBytes);
+    cmd.AddValue("flowStartInterval", "Interval between generated flow start times in seconds", flowStartIntervalSeconds);
+    cmd.AddValue("communityCount", "Number of deterministic traffic communities", communityCount);
+    cmd.AddValue("aggregatorTor", "Aggregator ToR for parameter-aggregation traffic", aggregatorTor);
     cmd.Parse(argc, argv);
 
     SimulationConfig config;
@@ -87,6 +100,29 @@ main(int argc, char* argv[])
         std::cerr << "TCP smoke requires --enableEpsTopology=true" << std::endl;
         return 1;
     }
+    if (enableTrainingTraffic && !enableEpsTopology)
+    {
+        std::cerr << "Training traffic smoke requires --enableEpsTopology=true" << std::endl;
+        return 1;
+    }
+    if (enableTrainingTraffic && enableTcpSmoke)
+    {
+        std::cerr << "Use either --enableTrainingTraffic=true or --enableTcpSmoke=true" << std::endl;
+        return 1;
+    }
+    if (enableTrainingTraffic && (numFlows == 0 || flowSizeBytes == 0 ||
+                                  !Seconds(flowStartIntervalSeconds).IsPositive()))
+    {
+        std::cerr << "Invalid training traffic configuration" << std::endl;
+        return 1;
+    }
+    if (enableTrainingTraffic && trafficPattern == "parameter-aggregation" &&
+        aggregatorTor >= config.GetNumTors())
+    {
+        std::cerr << "Invalid training traffic configuration: aggregatorTor is out of range"
+                  << std::endl;
+        return 1;
+    }
 
     std::cout << "TL-OCS smoke configuration: " << config.GetSummary() << std::endl;
     std::cout << "TL-OCS experiment configuration: " << experiment.GetSummary() << std::endl;
@@ -94,6 +130,7 @@ main(int argc, char* argv[])
 
     std::string status = "smoke_ok";
     std::optional<uint64_t> receivedBytes;
+    std::optional<uint32_t> installedFlows;
 
     if (enableEpsTopology)
     {
@@ -103,31 +140,63 @@ main(int argc, char* argv[])
                   << ", servers=" << index.GetServerCount() << ", spines=" << index.GetSpineCount()
                   << std::endl;
 
-        if (enableTcpSmoke)
+        if (enableTrainingTraffic)
         {
-            const uint16_t port = 9000;
-            Ptr<Node> source = index.GetServer(0, 0);
-            Ptr<Node> destination = index.GetServer(1, 0);
-            Ipv4Address destinationAddress = index.GetServerIpv4Address(1, 0);
+            TrafficGenerationConfig trafficConfig;
+            trafficConfig.numFlows = numFlows;
+            trafficConfig.flowSizeBytes = flowSizeBytes;
+            trafficConfig.flowStartInterval = Seconds(flowStartIntervalSeconds);
+            trafficConfig.communityCount = communityCount;
+            trafficConfig.aggregatorTor = aggregatorTor;
 
-            PacketSinkHelper sinkHelper("ns3::TcpSocketFactory",
-                                        InetSocketAddress(Ipv4Address::GetAny(), port));
-            ApplicationContainer sinkApps = sinkHelper.Install(destination);
-            sinkApps.Start(MilliSeconds(0));
-            sinkApps.Stop(config.GetStopTime());
+            std::unique_ptr<TrainingTrafficGenerator> generator;
+            if (trafficPattern == "uniform")
+            {
+                generator = std::make_unique<UniformTrafficGenerator>();
+            }
+            else if (trafficPattern == "community-local")
+            {
+                generator = std::make_unique<CommunityTrafficGenerator>();
+            }
+            else if (trafficPattern == "parameter-aggregation")
+            {
+                generator = std::make_unique<AggregationTrafficGenerator>();
+            }
+            else
+            {
+                std::cerr << "Unsupported training traffic pattern: " << trafficPattern
+                          << std::endl;
+                return 1;
+            }
 
-            BulkSendHelper sourceHelper("ns3::TcpSocketFactory",
-                                        InetSocketAddress(destinationAddress, port));
-            sourceHelper.SetAttribute("MaxBytes", UintegerValue(tcpFlowBytes));
-            ApplicationContainer sourceApps = sourceHelper.Install(source);
-            sourceApps.Start(MilliSeconds(1));
-            sourceApps.Stop(config.GetStopTime());
+            const std::vector<FlowSpec> flows = generator->Generate(config, trafficConfig);
+            FlowLauncher launcher;
+            FlowLaunchResult launchResult = launcher.Install(flows, index, config.GetStopTime());
 
             Simulator::Stop(config.GetStopTime());
             Simulator::Run();
 
-            Ptr<PacketSink> sink = DynamicCast<PacketSink>(sinkApps.Get(0));
-            receivedBytes = sink->GetTotalRx();
+            installedFlows = launchResult.installedFlows;
+            receivedBytes = launchResult.GetTotalReceivedBytes();
+            status = "training_traffic_smoke_ok";
+            std::cout << "TL-OCS training traffic installed flows: "
+                      << installedFlows.value() << std::endl;
+            std::cout << "TL-OCS training traffic received bytes: " << receivedBytes.value()
+                      << std::endl;
+            Simulator::Destroy();
+        }
+        else if (enableTcpSmoke)
+        {
+            std::vector<FlowSpec> flows;
+            flows.emplace_back(0, 0, 0, 1, 0, tcpFlowBytes, MilliSeconds(1), "single-tcp");
+            FlowLauncher launcher;
+            FlowLaunchResult launchResult = launcher.Install(flows, index, config.GetStopTime());
+
+            Simulator::Stop(config.GetStopTime());
+            Simulator::Run();
+
+            installedFlows = launchResult.installedFlows;
+            receivedBytes = launchResult.GetTotalReceivedBytes();
             status = "tcp_smoke_ok";
             std::cout << "TL-OCS TCP smoke received bytes: " << receivedBytes.value()
                       << std::endl;
@@ -148,7 +217,8 @@ main(int argc, char* argv[])
     }
 
     ResultWriter writer;
-    const auto summaryPath = writer.WriteSmokeSummary(config, experiment, output, status, receivedBytes);
+    const auto summaryPath =
+        writer.WriteSmokeSummary(config, experiment, output, status, receivedBytes, installedFlows);
     std::cout << "TL-OCS smoke summary: " << summaryPath << std::endl;
     return 0;
 }
