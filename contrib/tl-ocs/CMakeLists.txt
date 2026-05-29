@@ -1,6 +1,12 @@
 build_lib(
   LIBNAME tl-ocs
   SOURCE_FILES
+    model/algorithm/community-detector.cc
+    model/algorithm/matrix-processor.cc
+    model/algorithm/null-model.cc
+    model/algorithm/optical-scheduler.cc
+    model/algorithm/tl-ocs-algorithm.cc
+    model/algorithm/traffic-graph.cc
     model/applications/flow-launcher.cc
     model/config/experiment-config.cc
     model/config/output-config.cc
@@ -17,6 +23,12 @@ build_lib(
     model/traffic/training-traffic-generator.cc
     model/traffic/uniform-traffic-generator.cc
   HEADER_FILES
+    model/algorithm/community-detector.h
+    model/algorithm/matrix-processor.h
+    model/algorithm/null-model.h
+    model/algorithm/optical-scheduler.h
+    model/algorithm/tl-ocs-algorithm.h
+    model/algorithm/traffic-graph.h
     model/applications/flow-launcher.h
     model/config/experiment-config.h
     model/config/output-config.h
@@ -39,9 +51,11 @@ build_lib(
     ${libnetwork}
     ${libpoint-to-point}
   TEST_SOURCES
+    test/tl-ocs-algorithm-test-suite.cc
     test/tl-ocs-config-test-suite.cc
     test/tl-ocs-eps-topology-test-suite.cc
     test/tl-ocs-flow-launcher-test-suite.cc
+    test/tl-ocs-matrix-processor-test-suite.cc
     test/tl-ocs-result-writer-test-suite.cc
     test/tl-ocs-traffic-observer-test-suite.cc
     test/tl-ocs-traffic-generator-test-suite.cc

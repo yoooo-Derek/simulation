@@ -32,7 +32,9 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 const std::string& status,
                                 std::optional<uint64_t> receivedBytes,
                                 std::optional<uint32_t> installedFlows,
-                                std::optional<uint64_t> observedMatrixBytes) const
+                                std::optional<uint64_t> observedMatrixBytes,
+                                std::optional<uint32_t> algorithmCandidateEdges,
+                                std::optional<uint32_t> algorithmSelectedEdges) const
 {
     const std::filesystem::path outputDir(output.GetOutputDir());
     std::filesystem::create_directories(outputDir);
@@ -73,6 +75,16 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     if (observedMatrixBytes.has_value())
     {
         stream << observedMatrixBytes.value();
+    }
+    stream << ',';
+    if (algorithmCandidateEdges.has_value())
+    {
+        stream << algorithmCandidateEdges.value();
+    }
+    stream << ',';
+    if (algorithmSelectedEdges.has_value())
+    {
+        stream << algorithmSelectedEdges.value();
     }
     stream << '\n';
 

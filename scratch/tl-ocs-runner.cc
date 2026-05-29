@@ -4,6 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -30,6 +31,7 @@ main(int argc, char* argv[])
     bool enableTcpSmoke = false;
     bool enableTrainingTraffic = false;
     bool enableTrafficObserver = false;
+    bool enableAlgorithmSmoke = false;
     bool observerDumpMatrix = false;
     uint32_t spines = 1;
     uint64_t tcpFlowBytes = 1000000;
@@ -38,6 +40,12 @@ main(int argc, char* argv[])
     double flowStartIntervalSeconds = 0.001;
     uint32_t communityCount = 2;
     uint32_t aggregatorTor = 0;
+    double beta = 0.8;
+    double thetaF = 0.0;
+    double eta = 1.0;
+    double alpha = 0.5;
+    double lambda = 0.0;
+    uint32_t opticalPortsPerTor = 1;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("numTors", "Number of ToR/access nodes", numTors);
@@ -57,6 +65,7 @@ main(int argc, char* argv[])
     cmd.AddValue("enableTcpSmoke", "Run one cross-ToR TCP smoke flow", enableTcpSmoke);
     cmd.AddValue("enableTrainingTraffic", "Run generated training traffic flows", enableTrainingTraffic);
     cmd.AddValue("enableTrafficObserver", "Observe source ToR ingress bytes into W(t)", enableTrafficObserver);
+    cmd.AddValue("enableAlgorithmSmoke", "Run pure TL-OCS algorithm on observed W(t)", enableAlgorithmSmoke);
     cmd.AddValue("observerDumpMatrix", "Print the observed W(t) matrix after the run", observerDumpMatrix);
     cmd.AddValue("spines", "Number of EPS spine nodes", spines);
     cmd.AddValue("tcpFlowBytes", "Maximum bytes sent by the TCP smoke flow", tcpFlowBytes);
@@ -65,6 +74,12 @@ main(int argc, char* argv[])
     cmd.AddValue("flowStartInterval", "Interval between generated flow start times in seconds", flowStartIntervalSeconds);
     cmd.AddValue("communityCount", "Number of deterministic traffic communities", communityCount);
     cmd.AddValue("aggregatorTor", "Aggregator ToR for parameter-aggregation traffic", aggregatorTor);
+    cmd.AddValue("beta", "EWMA beta for TL-OCS algorithm smoke", beta);
+    cmd.AddValue("thetaF", "Traffic graph sparsification threshold", thetaF);
+    cmd.AddValue("eta", "Null-model resolution parameter", eta);
+    cmd.AddValue("alpha", "Cross-community optical gain factor", alpha);
+    cmd.AddValue("lambda", "Previous-active optical edge score bonus", lambda);
+    cmd.AddValue("opticalPortsPerTor", "Optical port limit per ToR for pure scheduling", opticalPortsPerTor);
     cmd.Parse(argc, argv);
 
     SimulationConfig config;
@@ -114,6 +129,11 @@ main(int argc, char* argv[])
         std::cerr << "Traffic observer smoke requires --enableTrainingTraffic=true" << std::endl;
         return 1;
     }
+    if (enableAlgorithmSmoke && !enableTrafficObserver)
+    {
+        std::cerr << "Algorithm smoke requires --enableTrafficObserver=true" << std::endl;
+        return 1;
+    }
     if (enableTrainingTraffic && enableTcpSmoke)
     {
         std::cerr << "Use either --enableTrainingTraffic=true or --enableTcpSmoke=true" << std::endl;
@@ -132,6 +152,12 @@ main(int argc, char* argv[])
                   << std::endl;
         return 1;
     }
+    if (enableAlgorithmSmoke && opticalPortsPerTor == 0)
+    {
+        std::cerr << "Invalid TL-OCS algorithm configuration: opticalPortsPerTor must be positive"
+                  << std::endl;
+        return 1;
+    }
 
     std::cout << "TL-OCS smoke configuration: " << config.GetSummary() << std::endl;
     std::cout << "TL-OCS experiment configuration: " << experiment.GetSummary() << std::endl;
@@ -141,6 +167,8 @@ main(int argc, char* argv[])
     std::optional<uint64_t> receivedBytes;
     std::optional<uint32_t> installedFlows;
     std::optional<uint64_t> observedMatrixBytes;
+    std::optional<uint32_t> algorithmCandidateEdges;
+    std::optional<uint32_t> algorithmSelectedEdges;
 
     if (enableEpsTopology)
     {
@@ -211,6 +239,46 @@ main(int argc, char* argv[])
                 {
                     std::cout << "TL-OCS observed W(t): " << observed.ToString() << std::endl;
                 }
+                if (enableAlgorithmSmoke)
+                {
+                    TlOcsAlgorithmParameters algorithmParameters;
+                    algorithmParameters.beta = beta;
+                    algorithmParameters.thetaF = thetaF;
+                    algorithmParameters.eta = eta;
+                    algorithmParameters.alpha = alpha;
+                    algorithmParameters.lambda = lambda;
+                    algorithmParameters.opticalPortsPerTor = opticalPortsPerTor;
+
+                    TlOcsAlgorithm algorithm;
+                    const TlOcsAlgorithmResult algorithmResult =
+                        algorithm.Run(observed, DenseMatrix(), {}, algorithmParameters);
+                    algorithmCandidateEdges =
+                        static_cast<uint32_t>(algorithmResult.candidateEdges.size());
+                    algorithmSelectedEdges =
+                        static_cast<uint32_t>(algorithmResult.selectedEdges.size());
+                    status = "algorithm_smoke_ok";
+
+                    std::ostringstream selectedEdges;
+                    for (uint32_t edgeIndex = 0;
+                         edgeIndex < algorithmResult.selectedEdges.size();
+                         ++edgeIndex)
+                    {
+                        const auto& edge = algorithmResult.selectedEdges[edgeIndex];
+                        if (edgeIndex > 0)
+                        {
+                            selectedEdges << ';';
+                        }
+                        selectedEdges << edge.sourceTor << '-' << edge.destinationTor
+                                      << "(score=" << edge.score << ",gain=" << edge.gain << ')';
+                    }
+
+                    std::cout << "TL-OCS algorithm candidate edges: "
+                              << algorithmCandidateEdges.value() << std::endl;
+                    std::cout << "TL-OCS algorithm selected OCS edges: "
+                              << algorithmSelectedEdges.value() << std::endl;
+                    std::cout << "TL-OCS algorithm selected edge list: "
+                              << selectedEdges.str() << std::endl;
+                }
             }
             Simulator::Destroy();
         }
@@ -253,7 +321,9 @@ main(int argc, char* argv[])
                                  status,
                                  receivedBytes,
                                  installedFlows,
-                                 observedMatrixBytes);
+                                 observedMatrixBytes,
+                                 algorithmCandidateEdges,
+                                 algorithmSelectedEdges);
     std::cout << "TL-OCS smoke summary: " << summaryPath << std::endl;
     return 0;
 }

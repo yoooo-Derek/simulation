@@ -51,6 +51,17 @@ matrix `W(t)` from observed IPv4 packets. `TrafficMatrix` stores byte counts
 only; it does not perform EWMA, sparsification, controller input synthesis, or
 TL-OCS algorithm work.
 
+Phase 6 adds the first pure `algorithm` implementation. `MatrixProcessor`
+converts the observed directed matrix `W(t)` into undirected `A(t)`, applies
+EWMA into `Abar(t)`, and derives the sparse traffic graph `G_f(t)`.
+`NullModel` computes node degree, effective total traffic, random-background
+expectation, and modularity gain `B_ij`. `CommunityDetector` currently uses a
+deterministic lightweight Louvain-like merge over positive `B_ij` edges; it is
+not a full multi-level Louvain implementation. `OpticalScheduler` scores
+candidate ToR pairs and greedily selects OCS candidate edges under per-ToR port
+constraints. The algorithm output is only a candidate optical edge set; Phase 6
+does not install OCS links or change data-plane routing.
+
 ## V3 Pipeline Mapping
 
 V3's control flow maps to module responsibilities as follows:
@@ -91,6 +102,11 @@ For Phase 5, the runner may attach `TrafficObserver` before launching training
 traffic and snapshot the current matrix after simulation. The matrix must come
 from packet traces, not from `FlowSpec` generation.
 
+For Phase 6, the runner may pass the observed `TrafficMatrix` to the pure
+`TlOcsAlgorithm` façade and print candidate/selected edge counts. It must not
+install OCS links, modify routes, perform OCS admission, run WECMP, or treat
+candidate edge counts as paper metrics.
+
 ## Phase 2 Summary CSV
 
 `results/raw/phase2-summary.csv` is a smoke artifact. It records run identity,
@@ -107,3 +123,7 @@ field is an application installation count, not a completion metric.
 
 Phase 5 may write `observed_matrix_bytes`. This is the total bytes observed at
 source ToR ingress on server-ToR links. It is not application throughput or FCT.
+
+Phase 6 may write `algorithm_candidate_edges` and `algorithm_selected_edges`.
+These are pure algorithm smoke counts, not installed optical links and not OCS
+hit-rate or performance metrics.

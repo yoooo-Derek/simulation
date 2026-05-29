@@ -46,6 +46,56 @@ Phase 4 used `/home/dyn/sim` as a read-only behavior reference.
 
 No old `hybrid-dcn-main.cc` code was copied into the new repository.
 
+## Phase 6 Reference
+
+Additional read-only files reviewed for the pure algorithm module:
+
+- `/home/dyn/sim/src/model/louvain.h`
+- `/home/dyn/sim/src/ocs/ocs-state.h`
+- `/home/dyn/sim/src/traffic/traffic-matrix.h`
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_smoke_matrix.sh`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_medium_sanity.sh`
+
+Borrowed behavior and naming:
+
+- `trafficGraphThreshold`, `ewmaBeta`, `eta`, `communityAlpha`, and
+  `selectionMetric=community-excess` are useful naming references for the new
+  `thetaF`, `beta`, `eta`, `alpha`, and positive modularity-gain scheduling
+  path.
+- Legacy `WeightedMatrix`, `buildUndirectedCommunicationIntensityMatrix`,
+  `updateEwmaMatrix`, `computeNodeDegree`, and `computeTotalTraffic` confirm
+  the expected W-to-A, EWMA, degree, and effective-total-traffic semantics.
+- Legacy `OcsCandidateEdge` fields such as `modularityGain`, `utility`,
+  `communityFactor`, `stateHoldingGain`, and `selectionScore` map to the new
+  pure `OpticalEdge` score/gain fields at a smaller smoke scope.
+- Legacy Louvain code shows deterministic local-moving behavior. Phase 6 uses
+  that only as a behavior reference and implements a smaller deterministic
+  Louvain-like positive-gain merge.
+
+Not migrated:
+
+- Old `hybrid-dcn-main.cc` orchestration, OCS installation, OCS admission,
+  route binding, WECMP, hold-time gates, update-threshold gates, structured
+  result schemas, and paper metrics were not migrated.
+- The old `louvain.h`, `traffic-matrix.h`, and `ocs-state.h` implementations
+  were not copied; the new module implements fresh pure algorithm classes under
+  `contrib/tl-ocs/model/algorithm`.
+
+New implementation:
+
+- `MatrixProcessor` turns data-plane observed `TrafficMatrix` into `A`, `Abar`,
+  and sparse `TrafficGraph`.
+- `NullModel` computes `d_i`, `M`, `P_ij`, and `B_ij`.
+- `CommunityDetector` provides the Phase 6 lightweight Louvain-like
+  deterministic approximation.
+- `OpticalScheduler` scores candidate ToR pairs and enforces per-ToR optical
+  port limits while selecting pure candidate edges.
+- `TlOcsAlgorithm` is the façade used by the runner after TrafficObserver
+  snapshot. It does not call Simulator or modify NS-3 data-plane state.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 6 implementation.
+
 ## Phase 5 Reference
 
 Additional read-only files reviewed for TrafficObserver:

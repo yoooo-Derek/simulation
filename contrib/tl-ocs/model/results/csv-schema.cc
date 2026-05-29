@@ -10,7 +10,7 @@ GetSmokeSummaryCsvHeader()
 {
     return "experiment,scheme,traffic_pattern,run_id,random_seed,num_tors,servers_per_tor,"
            "observer_window_s,ocs_period_s,stop_time_s,status,installed_flows,received_bytes,"
-           "observed_matrix_bytes";
+           "observed_matrix_bytes,algorithm_candidate_edges,algorithm_selected_edges";
 }
 
 std::string
