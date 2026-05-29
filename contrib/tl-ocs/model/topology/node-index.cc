@@ -1,5 +1,6 @@
 #include "node-index.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace ns3
@@ -24,6 +25,7 @@ NodeIndex::AddServerGroup(const NodeContainer& servers)
 {
     m_serversByTor.push_back(servers);
     m_serverAddressesByTor.emplace_back(servers.GetN(), Ipv4Address());
+    m_serverLinksByTor.emplace_back(servers.GetN());
     m_torIngressDevicesByTor.emplace_back(servers.GetN(), nullptr);
 }
 
@@ -40,6 +42,17 @@ NodeIndex::SetServerIpv4Address(uint32_t torId, uint32_t serverId, Ipv4Address a
 }
 
 void
+NodeIndex::SetServerLinkInfo(uint32_t torId, uint32_t serverId, const ServerLinkInfo& linkInfo)
+{
+    if (torId >= m_serverLinksByTor.size() || serverId >= m_serverLinksByTor.at(torId).size())
+    {
+        throw std::out_of_range("TL-OCS server link index is out of range");
+    }
+    m_serverLinksByTor[torId][serverId] = linkInfo;
+    SetServerIpv4Address(torId, serverId, linkInfo.serverAddress);
+}
+
+void
 NodeIndex::SetTorIngressDevice(uint32_t torId, uint32_t serverId, Ptr<NetDevice> device)
 {
     if (torId >= m_torIngressDevicesByTor.size() ||
@@ -48,6 +61,17 @@ NodeIndex::SetTorIngressDevice(uint32_t torId, uint32_t serverId, Ptr<NetDevice>
         throw std::out_of_range("TL-OCS ToR ingress device index is out of range");
     }
     m_torIngressDevicesByTor[torId][serverId] = device;
+}
+
+void
+NodeIndex::AddOcsLink(const OcsLinkInfo& linkInfo)
+{
+    if (linkInfo.torA >= m_tors.GetN() || linkInfo.torB >= m_tors.GetN() ||
+        linkInfo.torA == linkInfo.torB)
+    {
+        throw std::out_of_range("TL-OCS OCS link ToR index is out of range");
+    }
+    m_ocsLinks[NormalizePair(linkInfo.torA, linkInfo.torB)] = linkInfo;
 }
 
 Ptr<Node>
@@ -91,6 +115,16 @@ NodeIndex::GetServerIpv4Address(uint32_t torId, uint32_t serverId) const
     return m_serverAddressesByTor[torId][serverId];
 }
 
+NodeIndex::ServerLinkInfo
+NodeIndex::GetServerLinkInfo(uint32_t torId, uint32_t serverId) const
+{
+    if (torId >= m_serverLinksByTor.size() || serverId >= m_serverLinksByTor.at(torId).size())
+    {
+        throw std::out_of_range("TL-OCS server link index is out of range");
+    }
+    return m_serverLinksByTor[torId][serverId];
+}
+
 Ptr<NetDevice>
 NodeIndex::GetTorIngressDevice(uint32_t torId, uint32_t serverId) const
 {
@@ -100,6 +134,53 @@ NodeIndex::GetTorIngressDevice(uint32_t torId, uint32_t serverId) const
         throw std::out_of_range("TL-OCS ToR ingress device index is out of range");
     }
     return m_torIngressDevicesByTor[torId][serverId];
+}
+
+bool
+NodeIndex::HasOcsLink(uint32_t torA, uint32_t torB) const
+{
+    return m_ocsLinks.find(NormalizePair(torA, torB)) != m_ocsLinks.end();
+}
+
+NodeIndex::OcsLinkInfo
+NodeIndex::GetOcsLink(uint32_t torA, uint32_t torB) const
+{
+    const auto match = m_ocsLinks.find(NormalizePair(torA, torB));
+    if (match == m_ocsLinks.end())
+    {
+        throw std::out_of_range("TL-OCS OCS link does not exist for ToR pair");
+    }
+    return match->second;
+}
+
+Ipv4Address
+NodeIndex::GetOcsPeerAddress(uint32_t sourceTor, uint32_t destinationTor) const
+{
+    const OcsLinkInfo link = GetOcsLink(sourceTor, destinationTor);
+    if (sourceTor == link.torA && destinationTor == link.torB)
+    {
+        return link.torBAddress;
+    }
+    if (sourceTor == link.torB && destinationTor == link.torA)
+    {
+        return link.torAAddress;
+    }
+    throw std::out_of_range("TL-OCS OCS peer address requested for non-endpoint ToR");
+}
+
+uint32_t
+NodeIndex::GetOcsInterfaceIndex(uint32_t sourceTor, uint32_t destinationTor) const
+{
+    const OcsLinkInfo link = GetOcsLink(sourceTor, destinationTor);
+    if (sourceTor == link.torA && destinationTor == link.torB)
+    {
+        return link.torAInterfaceIndex;
+    }
+    if (sourceTor == link.torB && destinationTor == link.torA)
+    {
+        return link.torBInterfaceIndex;
+    }
+    throw std::out_of_range("TL-OCS OCS interface requested for non-endpoint ToR");
 }
 
 bool
@@ -155,6 +236,18 @@ NodeIndex::GetServersPerTor() const
         return 0;
     }
     return m_serversByTor.front().GetN();
+}
+
+uint32_t
+NodeIndex::GetOcsLinkCount() const
+{
+    return static_cast<uint32_t>(m_ocsLinks.size());
+}
+
+std::pair<uint32_t, uint32_t>
+NodeIndex::NormalizePair(uint32_t torA, uint32_t torB)
+{
+    return {std::min(torA, torB), std::max(torA, torB)};
 }
 
 uint32_t

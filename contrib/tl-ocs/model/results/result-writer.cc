@@ -34,7 +34,10 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 std::optional<uint32_t> installedFlows,
                                 std::optional<uint64_t> observedMatrixBytes,
                                 std::optional<uint32_t> algorithmCandidateEdges,
-                                std::optional<uint32_t> algorithmSelectedEdges) const
+                                std::optional<uint32_t> algorithmSelectedEdges,
+                                std::optional<uint32_t> ocsActiveEdges,
+                                std::optional<uint32_t> ocsAdmittedFlows,
+                                std::optional<uint32_t> epsFallbackFlows) const
 {
     const std::filesystem::path outputDir(output.GetOutputDir());
     std::filesystem::create_directories(outputDir);
@@ -85,6 +88,21 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     if (algorithmSelectedEdges.has_value())
     {
         stream << algorithmSelectedEdges.value();
+    }
+    stream << ',';
+    if (ocsActiveEdges.has_value())
+    {
+        stream << ocsActiveEdges.value();
+    }
+    stream << ',';
+    if (ocsAdmittedFlows.has_value())
+    {
+        stream << ocsAdmittedFlows.value();
+    }
+    stream << ',';
+    if (epsFallbackFlows.has_value())
+    {
+        stream << epsFallbackFlows.value();
     }
     stream << '\n';
 

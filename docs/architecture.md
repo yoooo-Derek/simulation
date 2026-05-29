@@ -62,6 +62,18 @@ candidate ToR pairs and greedily selects OCS candidate edges under per-ToR port
 constraints. The algorithm output is only a candidate optical edge set; Phase 6
 does not install OCS links or change data-plane routing.
 
+Phase 7 adds the first minimal `routing` implementation. The topology builder
+can optionally precreate a full mesh of ToR-ToR point-to-point OCS candidate
+links after EPS global routing is populated. These links are candidate data-plane
+interfaces only; they are not considered active until `OcsLinkManager` applies
+the `OpticalScheduler` selected edge set. `OcsAdmission` admits only new
+`FlowSpec` records whose directed ToR pair matches an active undirected OCS
+edge. `FlowPathSelector` produces per-flow path decisions and installs host
+routes for admitted new flows so applications still connect to the destination
+server IPv4 address while packets traverse the active ToR-ToR OCS link. EPS
+fallback flows use the existing EPS routes. Phase 7 does not reroute existing
+flows, implement WECMP, implement baselines, or export paper metrics.
+
 ## V3 Pipeline Mapping
 
 V3's control flow maps to module responsibilities as follows:
@@ -107,6 +119,12 @@ For Phase 6, the runner may pass the observed `TrafficMatrix` to the pure
 install OCS links, modify routes, perform OCS admission, run WECMP, or treat
 candidate edge counts as paper metrics.
 
+For Phase 7, the runner may execute a two-stage smoke run: stage 1 runs training
+traffic and observation, the algorithm selects candidate OCS edges, and stage 2
+installs new flows with routing decisions from `routing`. The runner must not
+embed OCS admission, active-set management, path-selection, or static route
+logic. It must not retroactively reroute stage-1 flows.
+
 ## Phase 2 Summary CSV
 
 `results/raw/phase2-summary.csv` is a smoke artifact. It records run identity,
@@ -127,3 +145,7 @@ source ToR ingress on server-ToR links. It is not application throughput or FCT.
 Phase 6 may write `algorithm_candidate_edges` and `algorithm_selected_edges`.
 These are pure algorithm smoke counts, not installed optical links and not OCS
 hit-rate or performance metrics.
+
+Phase 7 may write `ocs_active_edges`, `ocs_admitted_flows`, and
+`eps_fallback_flows`. These are smoke counts for the new-flow admission path,
+not OCS hit rate, throughput, FCT, or paper evaluation metrics.

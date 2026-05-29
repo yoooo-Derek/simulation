@@ -11,6 +11,30 @@
 using namespace ns3;
 using namespace ns3::tl_ocs;
 
+namespace
+{
+
+std::vector<FlowSpec>
+OffsetFlows(const std::vector<FlowSpec>& flows, uint32_t flowIdOffset, Time startOffset)
+{
+    std::vector<FlowSpec> shifted;
+    shifted.reserve(flows.size());
+    for (const auto& flow : flows)
+    {
+        shifted.emplace_back(flow.GetFlowId() + flowIdOffset,
+                             flow.GetSourceTorId(),
+                             flow.GetSourceServerId(),
+                             flow.GetDestinationTorId(),
+                             flow.GetDestinationServerId(),
+                             flow.GetSizeBytes(),
+                             startOffset + flow.GetStartTime(),
+                             flow.GetPatternName());
+    }
+    return shifted;
+}
+
+} // namespace
+
 int
 main(int argc, char* argv[])
 {
@@ -32,8 +56,13 @@ main(int argc, char* argv[])
     bool enableTrainingTraffic = false;
     bool enableTrafficObserver = false;
     bool enableAlgorithmSmoke = false;
+    bool enableOcsLinks = false;
+    bool enableOcsAdmissionSmoke = false;
     bool observerDumpMatrix = false;
+    bool printOcsDecisions = false;
     uint32_t spines = 1;
+    std::string ocsDataRate = "100Gbps";
+    double ocsDelaySeconds = 0.000005;
     uint64_t tcpFlowBytes = 1000000;
     uint32_t numFlows = 4;
     uint64_t flowSizeBytes = 1000000;
@@ -66,8 +95,13 @@ main(int argc, char* argv[])
     cmd.AddValue("enableTrainingTraffic", "Run generated training traffic flows", enableTrainingTraffic);
     cmd.AddValue("enableTrafficObserver", "Observe source ToR ingress bytes into W(t)", enableTrafficObserver);
     cmd.AddValue("enableAlgorithmSmoke", "Run pure TL-OCS algorithm on observed W(t)", enableAlgorithmSmoke);
+    cmd.AddValue("enableOcsLinks", "Precreate candidate ToR-ToR OCS links", enableOcsLinks);
+    cmd.AddValue("enableOcsAdmissionSmoke", "Run new-flow OCS admission smoke after algorithm selection", enableOcsAdmissionSmoke);
     cmd.AddValue("observerDumpMatrix", "Print the observed W(t) matrix after the run", observerDumpMatrix);
+    cmd.AddValue("printOcsDecisions", "Print per-flow OCS/EPS path decisions", printOcsDecisions);
     cmd.AddValue("spines", "Number of EPS spine nodes", spines);
+    cmd.AddValue("ocsDataRate", "OCS candidate link data rate", ocsDataRate);
+    cmd.AddValue("ocsDelay", "OCS candidate link delay in seconds", ocsDelaySeconds);
     cmd.AddValue("tcpFlowBytes", "Maximum bytes sent by the TCP smoke flow", tcpFlowBytes);
     cmd.AddValue("numFlows", "Number of generated training traffic flows", numFlows);
     cmd.AddValue("flowSizeBytes", "Bytes per generated training traffic flow", flowSizeBytes);
@@ -87,6 +121,7 @@ main(int argc, char* argv[])
     config.SetServersPerTor(serversPerTor);
     config.SetObserverWindow(Seconds(observerWindowSeconds));
     config.SetOcsReconfigurationPeriod(Seconds(ocsPeriodSeconds));
+    config.SetOcsDataRate(ocsDataRate);
     config.SetStopTime(Seconds(stopTimeSeconds));
     config.SetRandomSeed(randomSeed);
     config.SetRunId(runId);
@@ -134,6 +169,20 @@ main(int argc, char* argv[])
         std::cerr << "Algorithm smoke requires --enableTrafficObserver=true" << std::endl;
         return 1;
     }
+    if (enableOcsLinks && !enableEpsTopology)
+    {
+        std::cerr << "OCS candidate links require --enableEpsTopology=true" << std::endl;
+        return 1;
+    }
+    if (enableOcsAdmissionSmoke &&
+        (!enableAlgorithmSmoke || !enableOcsLinks || !enableTrainingTraffic))
+    {
+        std::cerr << "OCS admission smoke requires --enableTrainingTraffic=true, "
+                     "--enableTrafficObserver=true, --enableAlgorithmSmoke=true, and "
+                     "--enableOcsLinks=true"
+                  << std::endl;
+        return 1;
+    }
     if (enableTrainingTraffic && enableTcpSmoke)
     {
         std::cerr << "Use either --enableTrainingTraffic=true or --enableTcpSmoke=true" << std::endl;
@@ -158,6 +207,12 @@ main(int argc, char* argv[])
                   << std::endl;
         return 1;
     }
+    if (enableOcsLinks && !Seconds(ocsDelaySeconds).IsPositive())
+    {
+        std::cerr << "Invalid TL-OCS OCS topology configuration: ocsDelay must be positive"
+                  << std::endl;
+        return 1;
+    }
 
     std::cout << "TL-OCS smoke configuration: " << config.GetSummary() << std::endl;
     std::cout << "TL-OCS experiment configuration: " << experiment.GetSummary() << std::endl;
@@ -169,13 +224,20 @@ main(int argc, char* argv[])
     std::optional<uint64_t> observedMatrixBytes;
     std::optional<uint32_t> algorithmCandidateEdges;
     std::optional<uint32_t> algorithmSelectedEdges;
+    std::optional<uint32_t> ocsActiveEdges;
+    std::optional<uint32_t> ocsAdmittedFlows;
+    std::optional<uint32_t> epsFallbackFlows;
 
     if (enableEpsTopology)
     {
         EpsTopologyBuilder builder;
-        NodeIndex index = builder.Build(config, spines);
+        EpsTopologyBuilder::BuildOptions buildOptions;
+        buildOptions.enableOcsLinks = enableOcsLinks;
+        buildOptions.ocsDelay = Seconds(ocsDelaySeconds);
+        NodeIndex index = builder.Build(config, spines, buildOptions);
         std::cout << "TL-OCS EPS topology: tors=" << index.GetTorCount()
                   << ", servers=" << index.GetServerCount() << ", spines=" << index.GetSpineCount()
+                  << ", ocsCandidateLinks=" << index.GetOcsLinkCount()
                   << std::endl;
 
         std::unique_ptr<TrafficObserver> observer;
@@ -219,7 +281,9 @@ main(int argc, char* argv[])
             FlowLauncher launcher;
             FlowLaunchResult launchResult = launcher.Install(flows, index, config.GetStopTime());
 
-            Simulator::Stop(config.GetStopTime());
+            const Time firstStageStop =
+                enableOcsAdmissionSmoke ? Seconds(stopTimeSeconds * 0.5) : config.GetStopTime();
+            Simulator::Stop(firstStageStop);
             Simulator::Run();
 
             installedFlows = launchResult.installedFlows;
@@ -278,6 +342,63 @@ main(int argc, char* argv[])
                               << algorithmSelectedEdges.value() << std::endl;
                     std::cout << "TL-OCS algorithm selected edge list: "
                               << selectedEdges.str() << std::endl;
+
+                    if (enableOcsAdmissionSmoke)
+                    {
+                        OcsLinkManager linkManager;
+                        linkManager.ApplySelectedEdges(algorithmResult.selectedEdges);
+                        ocsActiveEdges = linkManager.GetActiveEdgeCount();
+
+                        const std::vector<FlowSpec> admittedFlows =
+                            OffsetFlows(flows,
+                                        static_cast<uint32_t>(flows.size()),
+                                        Simulator::Now() + MilliSeconds(1));
+                        OcsAdmission admission(linkManager);
+                        FlowPathSelector selector;
+                        const std::vector<FlowPathDecision> decisions =
+                            selector.Select(admittedFlows, admission, index);
+                        InstallOcsHostRoutes(admittedFlows, decisions, index);
+
+                        FlowLaunchResult ocsLaunchResult =
+                            launcher.Install(admittedFlows,
+                                             decisions,
+                                             index,
+                                             config.GetStopTime(),
+                                             static_cast<uint16_t>(10000 + flows.size()));
+                        ocsAdmittedFlows = ocsLaunchResult.admittedOcsFlows;
+                        epsFallbackFlows = ocsLaunchResult.epsFlows;
+
+                        if (printOcsDecisions)
+                        {
+                            for (const auto& decision : decisions)
+                            {
+                                std::cout << "TL-OCS OCS admission flow " << decision.flowId
+                                          << ": " << decision.sourceTor << "->"
+                                          << decision.destinationTor
+                                          << " path=" << decision.pathType
+                                          << " admitted="
+                                          << (decision.admittedToOcs ? "true" : "false")
+                                          << " dst=" << decision.destinationAddress << std::endl;
+                            }
+                        }
+
+                        Simulator::Stop(config.GetStopTime());
+                        Simulator::Run();
+
+                        installedFlows = launchResult.installedFlows + ocsLaunchResult.installedFlows;
+                        receivedBytes = launchResult.GetTotalReceivedBytes() +
+                                        ocsLaunchResult.GetTotalReceivedBytes();
+                        status = "ocs_admission_smoke_ok";
+
+                        std::cout << "TL-OCS OCS active edges: " << ocsActiveEdges.value()
+                                  << std::endl;
+                        std::cout << "TL-OCS OCS admitted flows: "
+                                  << ocsAdmittedFlows.value() << std::endl;
+                        std::cout << "TL-OCS EPS fallback flows: "
+                                  << epsFallbackFlows.value() << std::endl;
+                        std::cout << "TL-OCS total received bytes after OCS admission smoke: "
+                                  << receivedBytes.value() << std::endl;
+                    }
                 }
             }
             Simulator::Destroy();
@@ -323,7 +444,10 @@ main(int argc, char* argv[])
                                  installedFlows,
                                  observedMatrixBytes,
                                  algorithmCandidateEdges,
-                                 algorithmSelectedEdges);
+                                 algorithmSelectedEdges,
+                                 ocsActiveEdges,
+                                 ocsAdmittedFlows,
+                                 epsFallbackFlows);
     std::cout << "TL-OCS smoke summary: " << summaryPath << std::endl;
     return 0;
 }

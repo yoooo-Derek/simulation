@@ -14,7 +14,16 @@ namespace tl_ocs
 class EpsTopologyBuilder
 {
   public:
+    struct BuildOptions
+    {
+        bool enableOcsLinks = false;
+        Time ocsDelay = MicroSeconds(5);
+    };
+
     NodeIndex Build(const SimulationConfig& config, uint32_t spineCount) const;
+    NodeIndex Build(const SimulationConfig& config,
+                    uint32_t spineCount,
+                    const BuildOptions& options) const;
 };
 
 } // namespace tl_ocs

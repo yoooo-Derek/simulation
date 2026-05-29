@@ -15,6 +15,9 @@ build_lib(
     model/observer/traffic-observer.cc
     model/results/csv-schema.cc
     model/results/result-writer.cc
+    model/routing/flow-path-selector.cc
+    model/routing/ocs-admission.cc
+    model/routing/ocs-link-manager.cc
     model/topology/eps-topology-builder.cc
     model/topology/node-index.cc
     model/traffic/aggregation-traffic-generator.cc
@@ -37,6 +40,9 @@ build_lib(
     model/observer/traffic-observer.h
     model/results/csv-schema.h
     model/results/result-writer.h
+    model/routing/flow-path-selector.h
+    model/routing/ocs-admission.h
+    model/routing/ocs-link-manager.h
     model/topology/eps-topology-builder.h
     model/topology/node-index.h
     model/traffic/aggregation-traffic-generator.h
@@ -56,6 +62,9 @@ build_lib(
     test/tl-ocs-eps-topology-test-suite.cc
     test/tl-ocs-flow-launcher-test-suite.cc
     test/tl-ocs-matrix-processor-test-suite.cc
+    test/tl-ocs-ocs-admission-test-suite.cc
+    test/tl-ocs-ocs-link-manager-test-suite.cc
+    test/tl-ocs-flow-path-selector-test-suite.cc
     test/tl-ocs-result-writer-test-suite.cc
     test/tl-ocs-traffic-observer-test-suite.cc
     test/tl-ocs-traffic-generator-test-suite.cc

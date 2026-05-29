@@ -37,6 +37,41 @@ TlOcsEpsTopologyBuildTestCase::DoRun()
     NS_TEST_ASSERT_MSG_NE(index.GetServerIpv4Address(0, 0),
                           Ipv4Address("0.0.0.0"),
                           "server address was not assigned");
+    NS_TEST_ASSERT_MSG_EQ(index.GetOcsLinkCount(), 0, "OCS links should be disabled by default");
+
+    Simulator::Destroy();
+}
+
+class TlOcsOcsCandidateTopologyBuildTestCase : public TestCase
+{
+  public:
+    TlOcsOcsCandidateTopologyBuildTestCase();
+
+  private:
+    void DoRun() override;
+};
+
+TlOcsOcsCandidateTopologyBuildTestCase::TlOcsOcsCandidateTopologyBuildTestCase()
+    : TestCase("TL-OCS topology builder can precreate OCS candidate links")
+{
+}
+
+void
+TlOcsOcsCandidateTopologyBuildTestCase::DoRun()
+{
+    SimulationConfig config;
+    config.SetNumTors(3);
+    config.SetServersPerTor(1);
+
+    EpsTopologyBuilder::BuildOptions options;
+    options.enableOcsLinks = true;
+
+    EpsTopologyBuilder builder;
+    NodeIndex index = builder.Build(config, 1, options);
+
+    NS_TEST_ASSERT_MSG_EQ(index.GetOcsLinkCount(), 3, "unexpected OCS candidate link count");
+    NS_TEST_ASSERT_MSG_EQ(index.HasOcsLink(0, 2), true, "missing OCS candidate link");
+    NS_TEST_ASSERT_MSG_EQ(index.HasOcsLink(2, 0), true, "OCS candidate link should be undirected");
 
     Simulator::Destroy();
 }
@@ -51,6 +86,7 @@ TlOcsEpsTopologyTestSuite::TlOcsEpsTopologyTestSuite()
     : TestSuite("tl-ocs-eps-topology")
 {
     AddTestCase(new TlOcsEpsTopologyBuildTestCase);
+    AddTestCase(new TlOcsOcsCandidateTopologyBuildTestCase);
 }
 
 static TlOcsEpsTopologyTestSuite g_tlOcsEpsTopologyTestSuite;

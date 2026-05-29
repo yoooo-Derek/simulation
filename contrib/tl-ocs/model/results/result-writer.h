@@ -26,7 +26,10 @@ class ResultWriter
                                             std::optional<uint32_t> installedFlows = std::nullopt,
                                             std::optional<uint64_t> observedMatrixBytes = std::nullopt,
                                             std::optional<uint32_t> algorithmCandidateEdges = std::nullopt,
-                                            std::optional<uint32_t> algorithmSelectedEdges = std::nullopt) const;
+                                            std::optional<uint32_t> algorithmSelectedEdges = std::nullopt,
+                                            std::optional<uint32_t> ocsActiveEdges = std::nullopt,
+                                            std::optional<uint32_t> ocsAdmittedFlows = std::nullopt,
+                                            std::optional<uint32_t> epsFallbackFlows = std::nullopt) const;
 };
 
 } // namespace tl_ocs

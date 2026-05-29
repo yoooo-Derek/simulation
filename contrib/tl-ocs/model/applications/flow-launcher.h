@@ -2,6 +2,7 @@
 #define TL_OCS_FLOW_LAUNCHER_H
 
 #include "ns3/application-container.h"
+#include "ns3/flow-path-selector.h"
 #include "ns3/flow-spec.h"
 #include "ns3/node-index.h"
 #include "ns3/nstime.h"
@@ -18,6 +19,8 @@ namespace tl_ocs
 struct FlowLaunchResult
 {
     uint32_t installedFlows = 0;
+    uint32_t admittedOcsFlows = 0;
+    uint32_t epsFlows = 0;
     ApplicationContainer sourceApplications;
     ApplicationContainer sinkApplications;
     std::vector<Ptr<PacketSink>> sinks;
@@ -29,6 +32,11 @@ class FlowLauncher
 {
   public:
     FlowLaunchResult Install(const std::vector<FlowSpec>& flows,
+                             const NodeIndex& nodeIndex,
+                             Time stopTime,
+                             uint16_t portBase = 10000) const;
+    FlowLaunchResult Install(const std::vector<FlowSpec>& flows,
+                             const std::vector<FlowPathDecision>& decisions,
                              const NodeIndex& nodeIndex,
                              Time stopTime,
                              uint16_t portBase = 10000) const;

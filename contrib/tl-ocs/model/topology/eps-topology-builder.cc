@@ -14,6 +14,14 @@ namespace tl_ocs
 NodeIndex
 EpsTopologyBuilder::Build(const SimulationConfig& config, uint32_t spineCount) const
 {
+    return Build(config, spineCount, BuildOptions());
+}
+
+NodeIndex
+EpsTopologyBuilder::Build(const SimulationConfig& config,
+                          uint32_t spineCount,
+                          const BuildOptions& options) const
+{
     NodeIndex index;
 
     NodeContainer tors;
@@ -57,7 +65,12 @@ EpsTopologyBuilder::Build(const SimulationConfig& config, uint32_t spineCount) c
             NodeContainer pair(index.GetServer(torId, serverId), index.GetTor(torId));
             NetDeviceContainer devices = serverTorLink.Install(pair);
             Ipv4InterfaceContainer interfaces = ipv4.Assign(devices);
-            index.SetServerIpv4Address(torId, serverId, interfaces.GetAddress(0));
+            index.SetServerLinkInfo(torId,
+                                    serverId,
+                                    {interfaces.GetAddress(0),
+                                     interfaces.GetAddress(1),
+                                     interfaces.Get(0).second,
+                                     interfaces.Get(1).second});
             index.SetTorIngressDevice(torId, serverId, devices.Get(1));
             ipv4.NewNetwork();
         }
@@ -75,6 +88,33 @@ EpsTopologyBuilder::Build(const SimulationConfig& config, uint32_t spineCount) c
     }
 
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
+
+    if (options.enableOcsLinks)
+    {
+        PointToPointHelper ocsLink;
+        ocsLink.SetDeviceAttribute("DataRate", StringValue(config.GetOcsDataRate()));
+        ocsLink.SetChannelAttribute("Delay", StringValue(std::to_string(options.ocsDelay.GetSeconds()) + "s"));
+
+        for (uint32_t torA = 0; torA < config.GetNumTors(); ++torA)
+        {
+            for (uint32_t torB = torA + 1; torB < config.GetNumTors(); ++torB)
+            {
+                NodeContainer pair(index.GetTor(torA), index.GetTor(torB));
+                NetDeviceContainer devices = ocsLink.Install(pair);
+                Ipv4InterfaceContainer interfaces = ipv4.Assign(devices);
+                index.AddOcsLink({torA,
+                                  torB,
+                                  interfaces.GetAddress(0),
+                                  interfaces.GetAddress(1),
+                                  interfaces.Get(0).second,
+                                  interfaces.Get(1).second,
+                                  devices.Get(0),
+                                  devices.Get(1)});
+                ipv4.NewNetwork();
+            }
+        }
+    }
+
     return index;
 }
 

@@ -96,6 +96,58 @@ New implementation:
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 6 implementation.
 
+## Phase 7 Reference
+
+Additional read-only files reviewed for OCS admission and routing:
+
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc`
+- `/home/dyn/sim/src/ocs/ocs-state.h`
+- `/home/dyn/sim/src/eps/eps-wecmp-state.h`
+- `/home/dyn/sim/docs/tl_ocs_patch1_metrics_validation.md`
+- `/home/dyn/sim/docs/tl_ocs_patch3_1_timeseries_robustness_audit.md`
+
+Borrowed behavior and naming:
+
+- OCS selected pairs are treated as undirected ToR/leaf pairs for hit checks.
+- Matrix-flow style applications still connect to the destination server
+  address; OCS use is forced by host routes through the ToR-ToR OCS peer, not
+  by sending application traffic to a ToR interface address.
+- Admission is a flow-level decision made before installing a new flow. A flow
+  either uses the active OCS pair or falls back to EPS; existing flows are not
+  rerouted.
+- Names such as `ocsAdmitted`, `epsFallback`, `pathType=ocs`, and
+  `pathType=eps-fallback` are useful behavior vocabulary for the new smoke
+  counters and logs.
+
+Not migrated:
+
+- The old `hybrid-dcn-main.cc` OCS installation, route binding, WECMP, admission
+  thresholds, measured utilization, link time series, structured result schema,
+  FCT/goodput metrics, and validation matrix were not copied or migrated.
+- The old `eps-wecmp-state.h` structures were read only to identify WECMP and
+  route-binding boundaries that remain out of scope for Phase 7.
+- The old `ocs-state.h` age/hold-time helpers remain out of scope; Phase 7 only
+  stores a current active OCS edge set.
+
+New implementation:
+
+- `EpsTopologyBuilder` can precreate a full mesh of ToR-ToR OCS candidate
+  point-to-point links. EPS global routing is populated before these candidate
+  links are assigned, so inactive OCS links do not participate in fallback
+  routing.
+- `NodeIndex` records server link addresses/interface indices and OCS peer
+  addresses/interface indices needed by routing decisions.
+- `OcsLinkManager` applies selected `OpticalEdge` records from the Phase 6
+  algorithm and stores the active undirected edge set.
+- `OcsAdmission` admits a `FlowSpec` only when its source/destination ToR pair
+  is active in `OcsLinkManager`.
+- `FlowPathSelector` returns `ocs` or `eps` path decisions for new flows and
+  installs OCS host routes only for admitted new flows.
+- `FlowLauncher` consumes the path decisions but continues to install normal
+  `PacketSink` and `BulkSend` applications on servers.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 7 implementation.
+
 ## Phase 5 Reference
 
 Additional read-only files reviewed for TrafficObserver:
