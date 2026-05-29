@@ -45,6 +45,12 @@ using `PacketSink` and `BulkSend`. The runner selects the generator, launches
 flows, runs the simulator, and writes smoke CSV fields for installed flows and
 received bytes.
 
+Phase 5 adds `observer`. `TrafficObserver` attaches to the ToR-side receive
+trace of each server-ToR point-to-point link and builds a directed ToR-pair
+matrix `W(t)` from observed IPv4 packets. `TrafficMatrix` stores byte counts
+only; it does not perform EWMA, sparsification, controller input synthesis, or
+TL-OCS algorithm work.
+
 ## V3 Pipeline Mapping
 
 V3's control flow maps to module responsibilities as follows:
@@ -81,6 +87,10 @@ For Phase 4, the runner may optionally run generated training traffic through
 decisions, OCS admission, WECMP, baselines, FCT, throughput, p95, or OCS hit
 rate.
 
+For Phase 5, the runner may attach `TrafficObserver` before launching training
+traffic and snapshot the current matrix after simulation. The matrix must come
+from packet traces, not from `FlowSpec` generation.
+
 ## Phase 2 Summary CSV
 
 `results/raw/phase2-summary.csv` is a smoke artifact. It records run identity,
@@ -94,3 +104,6 @@ throughput, OCS hit rate, or other paper metrics.
 
 Phase 4 may also write `installed_flows` for generated training traffic. The
 field is an application installation count, not a completion metric.
+
+Phase 5 may write `observed_matrix_bytes`. This is the total bytes observed at
+source ToR ingress on server-ToR links. It is not application throughput or FCT.

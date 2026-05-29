@@ -23,7 +23,8 @@ class ResultWriter
                                             const OutputConfig& output,
                                             const std::string& status = "smoke_ok",
                                             std::optional<uint64_t> receivedBytes = std::nullopt,
-                                            std::optional<uint32_t> installedFlows = std::nullopt) const;
+                                            std::optional<uint32_t> installedFlows = std::nullopt,
+                                            std::optional<uint64_t> observedMatrixBytes = std::nullopt) const;
 };
 
 } // namespace tl_ocs

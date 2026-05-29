@@ -24,6 +24,7 @@ NodeIndex::AddServerGroup(const NodeContainer& servers)
 {
     m_serversByTor.push_back(servers);
     m_serverAddressesByTor.emplace_back(servers.GetN(), Ipv4Address());
+    m_torIngressDevicesByTor.emplace_back(servers.GetN(), nullptr);
 }
 
 void
@@ -35,6 +36,18 @@ NodeIndex::SetServerIpv4Address(uint32_t torId, uint32_t serverId, Ipv4Address a
         throw std::out_of_range("TL-OCS server address index is out of range");
     }
     m_serverAddressesByTor[torId][serverId] = address;
+    m_serverAddressToTor[address.Get()] = torId;
+}
+
+void
+NodeIndex::SetTorIngressDevice(uint32_t torId, uint32_t serverId, Ptr<NetDevice> device)
+{
+    if (torId >= m_torIngressDevicesByTor.size() ||
+        serverId >= m_torIngressDevicesByTor.at(torId).size())
+    {
+        throw std::out_of_range("TL-OCS ToR ingress device index is out of range");
+    }
+    m_torIngressDevicesByTor[torId][serverId] = device;
 }
 
 Ptr<Node>
@@ -76,6 +89,50 @@ NodeIndex::GetServerIpv4Address(uint32_t torId, uint32_t serverId) const
         throw std::out_of_range("TL-OCS server address index is out of range");
     }
     return m_serverAddressesByTor[torId][serverId];
+}
+
+Ptr<NetDevice>
+NodeIndex::GetTorIngressDevice(uint32_t torId, uint32_t serverId) const
+{
+    if (torId >= m_torIngressDevicesByTor.size() ||
+        serverId >= m_torIngressDevicesByTor.at(torId).size())
+    {
+        throw std::out_of_range("TL-OCS ToR ingress device index is out of range");
+    }
+    return m_torIngressDevicesByTor[torId][serverId];
+}
+
+bool
+NodeIndex::GetTorIdForServerIpv4Address(Ipv4Address address, uint32_t& torId) const
+{
+    const auto match = m_serverAddressToTor.find(address.Get());
+    if (match == m_serverAddressToTor.end())
+    {
+        return false;
+    }
+    torId = match->second;
+    return true;
+}
+
+bool
+NodeIndex::GetTorIdForServer(Ptr<const Node> server, uint32_t& torId) const
+{
+    if (server == nullptr)
+    {
+        return false;
+    }
+    for (uint32_t candidateTor = 0; candidateTor < m_serversByTor.size(); ++candidateTor)
+    {
+        for (uint32_t serverId = 0; serverId < m_serversByTor[candidateTor].GetN(); ++serverId)
+        {
+            if (m_serversByTor[candidateTor].Get(serverId) == server)
+            {
+                torId = candidateTor;
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 uint32_t

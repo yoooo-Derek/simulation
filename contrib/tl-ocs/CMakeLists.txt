@@ -5,6 +5,8 @@ build_lib(
     model/config/experiment-config.cc
     model/config/output-config.cc
     model/config/simulation-config.cc
+    model/observer/traffic-matrix.cc
+    model/observer/traffic-observer.cc
     model/results/csv-schema.cc
     model/results/result-writer.cc
     model/topology/eps-topology-builder.cc
@@ -19,6 +21,8 @@ build_lib(
     model/config/experiment-config.h
     model/config/output-config.h
     model/config/simulation-config.h
+    model/observer/traffic-matrix.h
+    model/observer/traffic-observer.h
     model/results/csv-schema.h
     model/results/result-writer.h
     model/topology/eps-topology-builder.h
@@ -39,5 +43,6 @@ build_lib(
     test/tl-ocs-eps-topology-test-suite.cc
     test/tl-ocs-flow-launcher-test-suite.cc
     test/tl-ocs-result-writer-test-suite.cc
+    test/tl-ocs-traffic-observer-test-suite.cc
     test/tl-ocs-traffic-generator-test-suite.cc
 )

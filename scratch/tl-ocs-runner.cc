@@ -29,6 +29,8 @@ main(int argc, char* argv[])
     bool enableEpsTopology = false;
     bool enableTcpSmoke = false;
     bool enableTrainingTraffic = false;
+    bool enableTrafficObserver = false;
+    bool observerDumpMatrix = false;
     uint32_t spines = 1;
     uint64_t tcpFlowBytes = 1000000;
     uint32_t numFlows = 4;
@@ -54,6 +56,8 @@ main(int argc, char* argv[])
     cmd.AddValue("enableEpsTopology", "Build the minimum EPS topology", enableEpsTopology);
     cmd.AddValue("enableTcpSmoke", "Run one cross-ToR TCP smoke flow", enableTcpSmoke);
     cmd.AddValue("enableTrainingTraffic", "Run generated training traffic flows", enableTrainingTraffic);
+    cmd.AddValue("enableTrafficObserver", "Observe source ToR ingress bytes into W(t)", enableTrafficObserver);
+    cmd.AddValue("observerDumpMatrix", "Print the observed W(t) matrix after the run", observerDumpMatrix);
     cmd.AddValue("spines", "Number of EPS spine nodes", spines);
     cmd.AddValue("tcpFlowBytes", "Maximum bytes sent by the TCP smoke flow", tcpFlowBytes);
     cmd.AddValue("numFlows", "Number of generated training traffic flows", numFlows);
@@ -105,6 +109,11 @@ main(int argc, char* argv[])
         std::cerr << "Training traffic smoke requires --enableEpsTopology=true" << std::endl;
         return 1;
     }
+    if (enableTrafficObserver && !enableTrainingTraffic)
+    {
+        std::cerr << "Traffic observer smoke requires --enableTrainingTraffic=true" << std::endl;
+        return 1;
+    }
     if (enableTrainingTraffic && enableTcpSmoke)
     {
         std::cerr << "Use either --enableTrainingTraffic=true or --enableTcpSmoke=true" << std::endl;
@@ -131,6 +140,7 @@ main(int argc, char* argv[])
     std::string status = "smoke_ok";
     std::optional<uint64_t> receivedBytes;
     std::optional<uint32_t> installedFlows;
+    std::optional<uint64_t> observedMatrixBytes;
 
     if (enableEpsTopology)
     {
@@ -139,6 +149,14 @@ main(int argc, char* argv[])
         std::cout << "TL-OCS EPS topology: tors=" << index.GetTorCount()
                   << ", servers=" << index.GetServerCount() << ", spines=" << index.GetSpineCount()
                   << std::endl;
+
+        std::unique_ptr<TrafficObserver> observer;
+        if (enableTrafficObserver)
+        {
+            observer = std::make_unique<TrafficObserver>(config.GetNumTors(),
+                                                         config.GetObserverWindow());
+            observer->AttachToTopology(index);
+        }
 
         if (enableTrainingTraffic)
         {
@@ -178,11 +196,22 @@ main(int argc, char* argv[])
 
             installedFlows = launchResult.installedFlows;
             receivedBytes = launchResult.GetTotalReceivedBytes();
-            status = "training_traffic_smoke_ok";
+            status = enableTrafficObserver ? "observer_smoke_ok" : "training_traffic_smoke_ok";
             std::cout << "TL-OCS training traffic installed flows: "
                       << installedFlows.value() << std::endl;
             std::cout << "TL-OCS training traffic received bytes: " << receivedBytes.value()
                       << std::endl;
+            if (observer)
+            {
+                TrafficMatrix observed = observer->SnapshotAndReset();
+                observedMatrixBytes = observed.GetTotalBytes();
+                std::cout << "TL-OCS observed matrix bytes: " << observedMatrixBytes.value()
+                          << std::endl;
+                if (observerDumpMatrix)
+                {
+                    std::cout << "TL-OCS observed W(t): " << observed.ToString() << std::endl;
+                }
+            }
             Simulator::Destroy();
         }
         else if (enableTcpSmoke)
@@ -218,7 +247,13 @@ main(int argc, char* argv[])
 
     ResultWriter writer;
     const auto summaryPath =
-        writer.WriteSmokeSummary(config, experiment, output, status, receivedBytes, installedFlows);
+        writer.WriteSmokeSummary(config,
+                                 experiment,
+                                 output,
+                                 status,
+                                 receivedBytes,
+                                 installedFlows,
+                                 observedMatrixBytes);
     std::cout << "TL-OCS smoke summary: " << summaryPath << std::endl;
     return 0;
 }

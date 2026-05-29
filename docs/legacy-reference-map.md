@@ -45,3 +45,45 @@ Phase 4 used `/home/dyn/sim` as a read-only behavior reference.
 - Thin orchestration entry: `scratch/tl-ocs-runner.cc`.
 
 No old `hybrid-dcn-main.cc` code was copied into the new repository.
+
+## Phase 5 Reference
+
+Additional read-only files reviewed for TrafficObserver:
+
+- `/home/dyn/sim/src/metrics/trace-metrics.h`
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc`
+- `/home/dyn/sim/src/result/structured-result-schema.h`
+- `/home/dyn/sim/src/traffic/traffic-matrix.h`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_smoke_matrix.sh`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_medium_sanity.sh`
+
+Borrowed behavior and naming:
+
+- Legacy `MatrixBulkFlowStats::rxBytes` and `LinkCounter::txBytes` show that
+  byte counters should be collected from ns-3 traces rather than inferred from
+  planned traffic.
+- Legacy names such as `trafficMatrix`, `matrixFlow`, `rxBytes`, and `txBytes`
+  remain useful vocabulary, but Phase 5 uses `observed_matrix_bytes` for the
+  new smoke artifact.
+- Legacy smoke and medium sanity scripts use 4-leaf and 8-leaf engineering
+  validation shapes; Phase 5 keeps those as small smoke and scale-8 sanity
+  shapes.
+
+Not migrated:
+
+- Legacy synthetic `traffic-matrix.h` helpers are not used as controller input
+  or observer output.
+- Legacy per-flow FCT, goodput, completion ratio, route classification, link
+  utilization time series, OCS/WECMP route checks, and structured result schemas
+  are not part of Phase 5.
+- Old `hybrid-dcn-main.cc` matrix-flow orchestration remains a reference only
+  and was not copied.
+
+New implementation:
+
+- `contrib/tl-ocs/model/observer/TrafficObserver` attaches to ToR ingress
+  `MacRx` traces on server-ToR links.
+- `TrafficObserver` maps the IPv4 destination address to a destination ToR using
+  `NodeIndex`, then accumulates directed ToR-pair bytes in `TrafficMatrix`.
+- The runner snapshots the observed matrix after the simulator run and exports
+  only `observed_matrix_bytes` in the smoke summary.

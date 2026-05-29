@@ -58,6 +58,7 @@ EpsTopologyBuilder::Build(const SimulationConfig& config, uint32_t spineCount) c
             NetDeviceContainer devices = serverTorLink.Install(pair);
             Ipv4InterfaceContainer interfaces = ipv4.Assign(devices);
             index.SetServerIpv4Address(torId, serverId, interfaces.GetAddress(0));
+            index.SetTorIngressDevice(torId, serverId, devices.Get(1));
             ipv4.NewNetwork();
         }
     }

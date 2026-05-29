@@ -31,7 +31,8 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 const OutputConfig& output,
                                 const std::string& status,
                                 std::optional<uint64_t> receivedBytes,
-                                std::optional<uint32_t> installedFlows) const
+                                std::optional<uint32_t> installedFlows,
+                                std::optional<uint64_t> observedMatrixBytes) const
 {
     const std::filesystem::path outputDir(output.GetOutputDir());
     std::filesystem::create_directories(outputDir);
@@ -67,6 +68,11 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     if (receivedBytes.has_value())
     {
         stream << receivedBytes.value();
+    }
+    stream << ',';
+    if (observedMatrixBytes.has_value())
+    {
+        stream << observedMatrixBytes.value();
     }
     stream << '\n';
 
