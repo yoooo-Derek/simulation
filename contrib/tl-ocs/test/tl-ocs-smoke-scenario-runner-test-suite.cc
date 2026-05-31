@@ -36,6 +36,7 @@ MakeOptions()
 {
     SmokeScenarioOptions options;
     options.availableSpines = {0, 1};
+    options.enableFlowMetrics = true;
     return options;
 }
 
@@ -66,6 +67,7 @@ class TlOcsEpsEcmpScenarioTestCase : public TestCase
                        MakeOptions());
         NS_TEST_ASSERT_MSG_EQ(result.installedFlows, 4, "EPS-ECMP flow count mismatch");
         NS_TEST_ASSERT_MSG_GT(result.receivedBytes, 0, "EPS-ECMP received no bytes");
+        NS_TEST_ASSERT_MSG_GT(result.flowMetricsSummary->completedFlows, 0, "EPS-ECMP completed no flows");
         Simulator::Destroy();
     }
 };
@@ -130,6 +132,7 @@ class TlOcsTlOcsScenarioTestCase : public TestCase
         NS_TEST_ASSERT_MSG_GT(result.observedMatrixBytes, 0, "TL-OCS observed no bytes");
         NS_TEST_ASSERT_MSG_GT(result.algorithmSelectedEdges, 0, "TL-OCS selected no edges");
         NS_TEST_ASSERT_MSG_GT(result.receivedBytes, 0, "TL-OCS received no bytes");
+        NS_TEST_ASSERT_MSG_GT(result.flowMetricsSummary->completedFlows, 0, "TL-OCS completed no flows");
         Simulator::Destroy();
     }
 };

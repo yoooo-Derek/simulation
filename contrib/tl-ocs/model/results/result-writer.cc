@@ -23,6 +23,15 @@ FormatSeconds(Time value)
     return os.str();
 }
 
+void
+WriteOptionalDouble(std::ostream& stream, const std::optional<double>& value)
+{
+    if (value.has_value())
+    {
+        stream << std::setprecision(12) << value.value();
+    }
+}
+
 } // namespace
 
 std::filesystem::path
@@ -45,7 +54,8 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 std::optional<uint32_t> stage1InstalledFlows,
                                 std::optional<uint32_t> stage2InstalledFlows,
                                 std::optional<uint64_t> stage1ReceivedBytes,
-                                std::optional<uint64_t> stage2ReceivedBytes) const
+                                std::optional<uint64_t> stage2ReceivedBytes,
+                                std::optional<FlowMetricsSummary> flowMetrics) const
 {
     const std::filesystem::path outputDir(output.GetOutputDir());
     std::filesystem::create_directories(outputDir);
@@ -151,6 +161,36 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     if (stage2ReceivedBytes.has_value())
     {
         stream << stage2ReceivedBytes.value();
+    }
+    stream << ',';
+    if (flowMetrics.has_value())
+    {
+        stream << flowMetrics->totalFlows;
+    }
+    stream << ',';
+    if (flowMetrics.has_value())
+    {
+        stream << flowMetrics->completedFlows;
+    }
+    stream << ',';
+    if (flowMetrics.has_value())
+    {
+        stream << flowMetrics->incompleteFlows;
+    }
+    stream << ',';
+    if (flowMetrics.has_value())
+    {
+        WriteOptionalDouble(stream, flowMetrics->avgFctS);
+    }
+    stream << ',';
+    if (flowMetrics.has_value())
+    {
+        WriteOptionalDouble(stream, flowMetrics->p90FctS);
+    }
+    stream << ',';
+    if (flowMetrics.has_value())
+    {
+        WriteOptionalDouble(stream, flowMetrics->p95FctS);
     }
     stream << '\n';
 

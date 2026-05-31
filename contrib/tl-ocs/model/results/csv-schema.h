@@ -9,6 +9,7 @@ namespace tl_ocs
 {
 
 std::string GetSmokeSummaryCsvHeader();
+std::string GetFlowResultCsvHeader();
 std::string EscapeCsvField(const std::string& value);
 
 } // namespace tl_ocs

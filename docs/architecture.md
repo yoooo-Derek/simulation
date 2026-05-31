@@ -210,3 +210,20 @@ The Phase 10 EPS-only paths remain deliberately small: `eps-ecmp` uses ns-3
 global EPS routing and `eps-wecmp` uses the Phase 8 controlled static host-route
 assignment. Neither path implements complete five-tuple ECMP/WECMP behavior.
 Phase 10 does not add paper metrics or large-scale experiment execution.
+
+Phase 11A adds the first real flow-level metrics path. `FlowLauncher` connects a
+separate `PacketSink` `Rx` trace for each installed flow. The trace accumulates
+received application bytes and records `Simulator::Now()` once the sink first
+reaches the flow's configured byte target. `MetricsCollector` converts those
+trace states into `FlowMetricRecord` values and summarizes only completed flows.
+It does not infer received bytes from `FlowSpec`, substitute the simulation stop
+time for incomplete flows, or collect link utilization.
+
+`FlowResultWriter` writes one row per flow with the flow identity, path
+decision, optional selected spine, expected bytes, observed sink bytes, start
+time, completion timestamp, FCT, and completed flag. Summary CSV files may add
+`total_flows`, `completed_flows`, `incomplete_flows`, `avg_fct_s`, `p90_fct_s`,
+and `p95_fct_s`. The percentile implementation uses deterministic nearest-rank
+selection over completed-flow FCT values only. Phase 11A still does not export
+link utilization, OCS reconfiguration count, OCS hit rate, or large-scale
+paper-evaluation results.

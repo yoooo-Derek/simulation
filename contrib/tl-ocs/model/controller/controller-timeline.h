@@ -3,6 +3,7 @@
 
 #include "ns3/baseline-schedulers.h"
 #include "ns3/controller-state.h"
+#include "ns3/flow-metrics.h"
 #include "ns3/flow-path-selector.h"
 #include "ns3/node-index.h"
 #include "ns3/ocs-link-manager.h"
@@ -48,6 +49,7 @@ struct ControllerTimelineResult
     uint32_t epsWecmpSpine1Flows = 0;
     std::string selectedEdgeList;
     std::vector<FlowPathDecision> stage2Decisions;
+    std::vector<FlowMetricSource> metricSources;
 
     uint32_t GetInstalledFlows() const;
     uint64_t GetReceivedBytes() const;

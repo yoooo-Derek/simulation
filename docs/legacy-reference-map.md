@@ -311,6 +311,57 @@ New implementation:
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 10 implementation.
 
+## Phase 11A Reference
+
+Additional read-only files reviewed for flow-level metrics and result export:
+
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc`
+- `/home/dyn/sim/src/metrics/trace-metrics.h`
+- `/home/dyn/sim/src/result/structured-result-schema.h`
+- `/home/dyn/sim/docs/code_map.md`
+- `/home/dyn/sim/docs/tl_ocs_metrics_schema_plan.md`
+- `/home/dyn/sim/docs/tl_ocs_patch1_metrics_validation.md`
+- `/home/dyn/sim/docs/tl_ocs_data_plane_path_validation.md`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/validate_outputs.py`
+
+Borrowed behavior and naming:
+
+- Legacy `MatrixBulkFlowStats` and `MatrixBulkSinkRxTrace` confirm that
+  per-flow received bytes must come from `PacketSink` receive traces.
+- Legacy `rxBytes`, `startTime`, `lastRx`, `completed`, `pathType`,
+  `fctSeconds`, and `frozenSpine` are useful naming references for the new
+  record and CSV fields.
+- Legacy metrics documentation confirms the completed-flow-only FCT summary
+  boundary and deterministic nearest-rank percentile semantics.
+- Legacy structured output separates summary rows from per-flow rows. Phase
+  11A keeps that separation with a smaller fresh schema.
+
+Not migrated:
+
+- The old `hybrid-dcn-main.cc` flow-stat body, structured schema, goodput
+  fields, completion-ratio conventions, tolerance handling, path-attribution
+  assumptions, link counters, link-utilization time series, OCS-byte share,
+  hit-rate metrics, fallback ratios, and result validation matrix were not
+  copied or migrated.
+- Unlike the old compatibility schema, incomplete Phase 11A flows leave
+  completion timestamp and FCT fields empty instead of writing zero.
+- Phase 11A does not add link utilization, OCS reconfiguration count, full OCS
+  hit rate, multi-period control, or large-scale paper experiments.
+
+New implementation:
+
+- `metrics/FlowMetricTrackingState` stores trace-observed bytes and the first
+  completion timestamp.
+- `applications/FlowLauncher` connects one sink `Rx` trace per installed flow
+  and retains `FlowSpec`, `FlowPathDecision`, and tracking metadata.
+- `metrics/MetricsCollector` creates `FlowMetricRecord` rows and completed-only
+  average, p90, and p95 FCT summaries.
+- `results/FlowResultWriter` writes the smaller Phase 11A per-flow CSV.
+- `experiments/SmokeScenarioRunner` returns trace-derived flow records for all
+  five scheme smoke paths.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 11A implementation.
+
 ## Phase 5 Reference
 
 Additional read-only files reviewed for TrafficObserver:

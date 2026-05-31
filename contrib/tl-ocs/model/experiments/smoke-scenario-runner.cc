@@ -81,6 +81,14 @@ CopyTimelineResult(const ControllerTimelineResult& timeline, SmokeScenarioResult
     result.selectedEdgeList = timeline.selectedEdgeList;
 }
 
+void
+CollectFlowMetrics(const std::vector<FlowMetricSource>& sources, SmokeScenarioResult& result)
+{
+    MetricsCollector collector;
+    result.flowMetrics = collector.Collect(sources, result.schemeName);
+    result.flowMetricsSummary = collector.Summarize(result.flowMetrics);
+}
+
 } // namespace
 
 SmokeScenarioResult
@@ -116,6 +124,10 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
             result.receivedBytes = launch.GetTotalReceivedBytes();
             result.epsFallbackFlows = launch.epsFlows;
             CountWecmpDecisions(decisions, result);
+            if (options.enableFlowMetrics)
+            {
+                CollectFlowMetrics(launch.metricSources, result);
+            }
             if (options.printEpsWecmpDecisions)
             {
                 for (const auto& decision : decisions)
@@ -137,6 +149,10 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
             Simulator::Run();
             result.installedFlows = launch.installedFlows;
             result.receivedBytes = launch.GetTotalReceivedBytes();
+            if (options.enableFlowMetrics)
+            {
+                CollectFlowMetrics(launch.metricSources, result);
+            }
             result.status = "scheme_eps_ecmp_smoke_ok";
         }
         return result;
@@ -179,6 +195,10 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
                                   linkManager,
                                   timelineOptions);
     CopyTimelineResult(timelineResult, result);
+    if (options.enableFlowMetrics)
+    {
+        CollectFlowMetrics(timelineResult.metricSources, result);
+    }
     result.status = "scheme_" + scheme.ToString() + "_smoke_ok";
     return result;
 }

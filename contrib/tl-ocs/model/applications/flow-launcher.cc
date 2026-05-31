@@ -3,6 +3,7 @@
 #include "ns3/bulk-send-helper.h"
 #include "ns3/inet-socket-address.h"
 #include "ns3/packet-sink-helper.h"
+#include "ns3/simulator.h"
 #include "ns3/tcp-socket-factory.h"
 #include "ns3/uinteger.h"
 
@@ -12,6 +13,31 @@ namespace ns3
 {
 namespace tl_ocs
 {
+
+namespace
+{
+
+Time
+DelayUntil(Time absoluteTime)
+{
+    return absoluteTime > Simulator::Now() ? absoluteTime - Simulator::Now() : Seconds(0);
+}
+
+void
+SinkRxTrace(std::shared_ptr<FlowMetricTrackingState> tracking,
+            uint64_t expectedBytes,
+            Ptr<const Packet> packet,
+            const Address&)
+{
+    tracking->receivedBytes += packet->GetSize();
+    if (!tracking->completed && tracking->receivedBytes >= expectedBytes)
+    {
+        tracking->completed = true;
+        tracking->completionTime = Simulator::Now();
+    }
+}
+
+} // namespace
 
 uint64_t
 FlowLaunchResult::GetTotalReceivedBytes() const
@@ -78,16 +104,23 @@ FlowLauncher::Install(const std::vector<FlowSpec>& flows,
                                     InetSocketAddress(Ipv4Address::GetAny(), port));
         ApplicationContainer sinkApps = sinkHelper.Install(destination);
         sinkApps.Start(Seconds(0));
-        sinkApps.Stop(stopTime);
+        sinkApps.Stop(DelayUntil(stopTime));
         result.sinkApplications.Add(sinkApps);
-        result.sinks.push_back(DynamicCast<PacketSink>(sinkApps.Get(0)));
+        Ptr<PacketSink> sink = DynamicCast<PacketSink>(sinkApps.Get(0));
+        result.sinks.push_back(sink);
+        auto tracking = std::make_shared<FlowMetricTrackingState>();
+        sink->TraceConnectWithoutContext("Rx",
+                                         MakeBoundCallback(&SinkRxTrace,
+                                                           tracking,
+                                                           flow.GetSizeBytes()));
+        result.metricSources.push_back({flow, decision, tracking});
 
         BulkSendHelper sourceHelper("ns3::TcpSocketFactory",
                                     InetSocketAddress(decision.destinationAddress, port));
         sourceHelper.SetAttribute("MaxBytes", UintegerValue(flow.GetSizeBytes()));
         ApplicationContainer sourceApps = sourceHelper.Install(source);
-        sourceApps.Start(flow.GetStartTime());
-        sourceApps.Stop(stopTime);
+        sourceApps.Start(DelayUntil(flow.GetStartTime()));
+        sourceApps.Stop(DelayUntil(stopTime));
         result.sourceApplications.Add(sourceApps);
         result.installedFlows++;
         if (decision.admittedToOcs)

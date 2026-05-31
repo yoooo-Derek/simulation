@@ -14,7 +14,16 @@ GetSmokeSummaryCsvHeader()
            "ocs_active_edges,ocs_admitted_flows,eps_fallback_flows,eps_wecmp_flows,"
            "eps_wecmp_spine0_flows,eps_wecmp_spine1_flows,timeline_cycles,"
            "stage1_installed_flows,stage2_installed_flows,stage1_received_bytes,"
-           "stage2_received_bytes";
+           "stage2_received_bytes,total_flows,completed_flows,incomplete_flows,"
+           "avg_fct_s,p90_fct_s,p95_fct_s";
+}
+
+std::string
+GetFlowResultCsvHeader()
+{
+    return "experiment,scheme,traffic_pattern,run_id,flow_id,source_tor,source_server,"
+           "destination_tor,destination_server,path_type,selected_spine,size_bytes,"
+           "received_bytes,start_time_s,completion_time_s,fct_s,completed";
 }
 
 std::string

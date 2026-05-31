@@ -2,9 +2,11 @@
 #define TL_OCS_SMOKE_SCENARIO_RUNNER_H
 
 #include "ns3/controller-timeline.h"
+#include "ns3/metrics-collector.h"
 #include "ns3/scheme-config.h"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -19,6 +21,7 @@ struct SmokeScenarioOptions
     std::vector<uint32_t> availableSpines;
     bool printOcsDecisions = false;
     bool printEpsWecmpDecisions = false;
+    bool enableFlowMetrics = false;
 };
 
 struct SmokeScenarioResult
@@ -42,6 +45,8 @@ struct SmokeScenarioResult
     uint64_t stage1ReceivedBytes = 0;
     uint64_t stage2ReceivedBytes = 0;
     std::string selectedEdgeList;
+    std::vector<FlowMetricRecord> flowMetrics;
+    std::optional<FlowMetricsSummary> flowMetricsSummary;
 };
 
 class SmokeScenarioRunner

@@ -16,9 +16,12 @@ build_lib(
     model/controller/controller-timeline.cc
     model/experiments/scheme-config.cc
     model/experiments/smoke-scenario-runner.cc
+    model/metrics/flow-metrics.cc
+    model/metrics/metrics-collector.cc
     model/observer/traffic-matrix.cc
     model/observer/traffic-observer.cc
     model/results/csv-schema.cc
+    model/results/flow-result-writer.cc
     model/results/result-writer.cc
     model/routing/eps-link-state.cc
     model/routing/eps-wecmp-router.cc
@@ -48,9 +51,12 @@ build_lib(
     model/controller/controller-timeline.h
     model/experiments/scheme-config.h
     model/experiments/smoke-scenario-runner.h
+    model/metrics/flow-metrics.h
+    model/metrics/metrics-collector.h
     model/observer/traffic-matrix.h
     model/observer/traffic-observer.h
     model/results/csv-schema.h
+    model/results/flow-result-writer.h
     model/results/result-writer.h
     model/routing/eps-link-state.h
     model/routing/eps-wecmp-router.h
@@ -80,6 +86,9 @@ build_lib(
     test/tl-ocs-eps-link-state-test-suite.cc
     test/tl-ocs-eps-wecmp-router-test-suite.cc
     test/tl-ocs-flow-launcher-test-suite.cc
+    test/tl-ocs-flow-launcher-metrics-test-suite.cc
+    test/tl-ocs-flow-metrics-test-suite.cc
+    test/tl-ocs-flow-result-writer-test-suite.cc
     test/tl-ocs-matrix-processor-test-suite.cc
     test/tl-ocs-ocs-admission-test-suite.cc
     test/tl-ocs-ocs-link-manager-test-suite.cc

@@ -3,6 +3,7 @@
 
 #include "ns3/application-container.h"
 #include "ns3/flow-path-selector.h"
+#include "ns3/flow-metrics.h"
 #include "ns3/flow-spec.h"
 #include "ns3/node-index.h"
 #include "ns3/nstime.h"
@@ -24,6 +25,7 @@ struct FlowLaunchResult
     ApplicationContainer sourceApplications;
     ApplicationContainer sinkApplications;
     std::vector<Ptr<PacketSink>> sinks;
+    std::vector<FlowMetricSource> metricSources;
 
     uint64_t GetTotalReceivedBytes() const;
 };

@@ -51,6 +51,7 @@ main(int argc, char* argv[])
     std::string trafficPattern = "none";
     std::string outputDir = "results/raw";
     std::string summaryFile = "summary.csv";
+    std::string flowResultFile;
     bool overwrite = true;
     bool enableEpsTopology = false;
     bool enableTcpSmoke = false;
@@ -62,6 +63,7 @@ main(int argc, char* argv[])
     bool enableEpsWecmp = false;
     bool enableControllerTimeline = false;
     bool enableSchemeRunner = false;
+    bool enableFlowMetrics = false;
     bool observerDumpMatrix = false;
     bool printOcsDecisions = false;
     bool printEpsWecmpDecisions = false;
@@ -95,6 +97,7 @@ main(int argc, char* argv[])
     cmd.AddValue("trafficPattern", "Traffic pattern recorded in the smoke summary", trafficPattern);
     cmd.AddValue("outputDir", "Directory for TL-OCS smoke artifacts", outputDir);
     cmd.AddValue("summaryFile", "Summary CSV file name", summaryFile);
+    cmd.AddValue("flowResultFile", "Per-flow CSV file name; defaults to <experimentName>-flows.csv", flowResultFile);
     cmd.AddValue("overwrite", "Overwrite summary CSV before writing", overwrite);
     cmd.AddValue("enableEpsTopology", "Build the minimum EPS topology", enableEpsTopology);
     cmd.AddValue("enableTcpSmoke", "Run one cross-ToR TCP smoke flow", enableTcpSmoke);
@@ -106,6 +109,7 @@ main(int argc, char* argv[])
     cmd.AddValue("enableEpsWecmp", "Route OCS fallback flows through controlled EPS-WECMP static routes", enableEpsWecmp);
     cmd.AddValue("enableControllerTimeline", "Run the reusable single-cycle controller timeline smoke", enableControllerTimeline);
     cmd.AddValue("enableSchemeRunner", "Run a unified Phase 10 baseline or TL-OCS scheme smoke", enableSchemeRunner);
+    cmd.AddValue("enableFlowMetrics", "Write real flow-level metrics for the scheme runner", enableFlowMetrics);
     cmd.AddValue("observerDumpMatrix", "Print the observed W(t) matrix after the run", observerDumpMatrix);
     cmd.AddValue("printOcsDecisions", "Print per-flow OCS/EPS path decisions", printOcsDecisions);
     cmd.AddValue("printEpsWecmpDecisions", "Print per-flow EPS-WECMP residual path decisions", printEpsWecmpDecisions);
@@ -233,6 +237,11 @@ main(int argc, char* argv[])
         std::cerr << "Use either --enableTrainingTraffic=true or --enableTcpSmoke=true" << std::endl;
         return 1;
     }
+    if (enableFlowMetrics && !enableSchemeRunner)
+    {
+        std::cerr << "Flow metrics require --enableSchemeRunner=true" << std::endl;
+        return 1;
+    }
     if (enableTrainingTraffic && (numFlows == 0 || flowSizeBytes == 0 ||
                                   !Seconds(flowStartIntervalSeconds).IsPositive()))
     {
@@ -286,6 +295,8 @@ main(int argc, char* argv[])
     std::optional<uint32_t> stage2InstalledFlows;
     std::optional<uint64_t> stage1ReceivedBytes;
     std::optional<uint64_t> stage2ReceivedBytes;
+    std::optional<FlowMetricsSummary> flowMetricsSummary;
+    std::vector<FlowMetricRecord> flowMetrics;
 
     if (enableEpsTopology)
     {
@@ -351,6 +362,7 @@ main(int argc, char* argv[])
                 scenarioOptions.timelineStageGap = Seconds(timelineStageGapSeconds);
                 scenarioOptions.printOcsDecisions = printOcsDecisions;
                 scenarioOptions.printEpsWecmpDecisions = printEpsWecmpDecisions;
+                scenarioOptions.enableFlowMetrics = enableFlowMetrics;
                 for (uint32_t spineId = 0; spineId < spines; ++spineId)
                 {
                     scenarioOptions.availableSpines.push_back(spineId);
@@ -392,6 +404,8 @@ main(int argc, char* argv[])
                     epsWecmpSpine1Flows = scenarioResult.epsWecmpSpine1Flows;
                 }
                 status = scenarioResult.status;
+                flowMetrics = scenarioResult.flowMetrics;
+                flowMetricsSummary = scenarioResult.flowMetricsSummary;
 
                 std::cout << "TL-OCS scheme runner: scheme=" << scenarioResult.schemeName
                           << ", status=" << scenarioResult.status
@@ -400,6 +414,31 @@ main(int argc, char* argv[])
                           << ", epsFallback=" << scenarioResult.epsFallbackFlows
                           << ", epsWecmp=" << scenarioResult.epsWecmpFlows
                           << ", receivedBytes=" << scenarioResult.receivedBytes << std::endl;
+                if (flowMetricsSummary.has_value())
+                {
+                    std::cout << "TL-OCS flow metrics: totalFlows="
+                              << flowMetricsSummary->totalFlows
+                              << ", completedFlows=" << flowMetricsSummary->completedFlows
+                              << ", avgFctS=";
+                    if (flowMetricsSummary->avgFctS.has_value())
+                    {
+                        std::cout << flowMetricsSummary->avgFctS.value();
+                    }
+                    else
+                    {
+                        std::cout << "N/A";
+                    }
+                    std::cout << ", p95FctS=";
+                    if (flowMetricsSummary->p95FctS.has_value())
+                    {
+                        std::cout << flowMetricsSummary->p95FctS.value();
+                    }
+                    else
+                    {
+                        std::cout << "N/A";
+                    }
+                    std::cout << std::endl;
+                }
             }
             else if (enableControllerTimeline)
             {
@@ -733,7 +772,18 @@ main(int argc, char* argv[])
                                  stage1InstalledFlows,
                                  stage2InstalledFlows,
                                  stage1ReceivedBytes,
-                                 stage2ReceivedBytes);
+                                 stage2ReceivedBytes,
+                                 flowMetricsSummary);
     std::cout << "TL-OCS smoke summary: " << summaryPath << std::endl;
+    if (enableFlowMetrics)
+    {
+        if (flowResultFile.empty())
+        {
+            flowResultFile = experimentName + "-flows.csv";
+        }
+        FlowResultWriter flowWriter;
+        const auto flowPath = flowWriter.Write(experiment, output, flowResultFile, flowMetrics);
+        std::cout << "TL-OCS flow metrics CSV: " << flowPath << std::endl;
+    }
     return 0;
 }

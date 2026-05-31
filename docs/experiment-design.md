@@ -41,3 +41,27 @@ The EPS-WECMP path is a controlled static-route smoke and is not complete
 five-tuple WECMP. The OCS schemes run a single two-stage controller cycle and do
 not reroute already-running stage-1 flows. The scripts do not aggregate,
 plot, or launch large-scale experiments.
+
+## Flow Metrics Smoke
+
+Phase 11A adds a separate five-scheme metrics smoke matrix:
+
+```bash
+./experiments/scripts/run-all-metrics-smokes.sh
+```
+
+Each run writes:
+
+- `results/raw/phase11a-<scheme>.csv`
+- `results/raw/phase11a-<scheme>-flows.csv`
+
+The per-flow CSV uses `PacketSink` `Rx` traces. `received_bytes` is the observed
+sink byte count. `completion_time_s` is the absolute simulation time when the
+sink first reaches the configured flow size. `fct_s` is
+`completion_time_s - start_time_s`. Incomplete flows leave completion and FCT
+fields empty.
+
+Summary `avg_fct_s`, `p90_fct_s`, and `p95_fct_s` include completed flows only.
+Percentiles use deterministic nearest-rank selection. These artifacts do not
+include link utilization, OCS hit rate, confidence intervals, or large-scale
+paper experiment claims.

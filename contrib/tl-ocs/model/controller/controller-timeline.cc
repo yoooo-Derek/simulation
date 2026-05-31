@@ -92,6 +92,9 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
 
     result.stage1InstalledFlows = stage1Launch.installedFlows;
     result.stage1ReceivedBytes = stage1Launch.GetTotalReceivedBytes();
+    result.metricSources.insert(result.metricSources.end(),
+                                stage1Launch.metricSources.begin(),
+                                stage1Launch.metricSources.end());
 
     const TrafficMatrix observed = observer.SnapshotAndReset();
     result.observedMatrixBytes = observed.GetTotalBytes();
@@ -160,6 +163,9 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
                          simulation.GetStopTime(),
                          static_cast<uint16_t>(10000 + stage1Flows.size()));
     result.stage2InstalledFlows = stage2Launch.installedFlows;
+    result.metricSources.insert(result.metricSources.end(),
+                                stage2Launch.metricSources.begin(),
+                                stage2Launch.metricSources.end());
     result.ocsAdmittedFlows = stage2Launch.admittedOcsFlows;
     result.epsFallbackFlows = stage2Launch.epsFlows;
 
@@ -194,7 +200,7 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
         }
     }
 
-    Simulator::Stop(simulation.GetStopTime());
+    Simulator::Stop(simulation.GetStopTime() - Simulator::Now());
     Simulator::Run();
     result.stage2ReceivedBytes = stage2Launch.GetTotalReceivedBytes();
     return result;
