@@ -204,6 +204,55 @@ New implementation:
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 8 implementation.
 
+## Phase 9 Reference
+
+Additional read-only files reviewed for controller timeline extraction:
+
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc`
+- `/home/dyn/sim/src/ocs/ocs-state.h`
+- `/home/dyn/sim/src/eps/eps-wecmp-state.h`
+- `/home/dyn/sim/src/metrics/trace-metrics.h`
+- `/home/dyn/sim/docs/architecture.md`
+- `/home/dyn/sim/docs/tl_ocs_patch4c_later_flow_selected_spine_validation.md`
+- `/home/dyn/sim/docs/tl_ocs_patch3_1_timeseries_robustness_audit.md`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_smoke_matrix.sh`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_medium_sanity.sh`
+
+Borrowed behavior and naming:
+
+- Controller state is passed from one control epoch to the next, including
+  previous EWMA traffic state and previous selected OCS edges.
+- OCS selection, admission, residual EPS-WECMP choice, route binding, and
+  application launch are distinct orchestration stages.
+- The old later-flow proof schedules a routing decision for a later new flow
+  without rerouting already-running early flows. Phase 9 keeps this new-flow
+  boundary in a simpler two-stage smoke.
+- Names such as `epoch`, `previousAbar`, `selectedOcsEdges`, `selectedSpine`,
+  `route binding`, and `later flow` remain useful controller vocabulary.
+
+Not migrated:
+
+- The old `hybrid-dcn-main.cc` orchestration body, synthetic matrix controller
+  input, multi-period loop, config update gate, hold-time gate, OCS edge ages,
+  admission thresholds, measured-utilization sampling, later measured-WECMP
+  callback, baselines, structured result schema, and paper metrics were not
+  copied or migrated.
+- Phase 9 does not dynamically delete old static routes and does not implement
+  a complex periodic controller. It runs one reusable two-stage smoke cycle.
+
+New implementation:
+
+- `ControllerState` stores current `Abar`, previous active OCS edges, latest
+  selected edges, observed byte count, algorithm edge counts, and cycle index
+  without operating on ns-3 runtime objects.
+- `ControllerTimeline` owns the one-cycle two-stage orchestration across
+  `TrafficObserver`, `TlOcsAlgorithm`, `OcsLinkManager`, `OcsAdmission`,
+  `FlowPathSelector`, `EpsWecmpRouter`, route installation, and `FlowLauncher`.
+- The scratch runner prepares topology, generated flow vectors, options, and
+  summary export only for the Phase 9 timeline path.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 9 implementation.
+
 ## Phase 5 Reference
 
 Additional read-only files reviewed for TrafficObserver:

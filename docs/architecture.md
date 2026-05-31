@@ -168,3 +168,25 @@ flows.
 Phase 8 may write `eps_wecmp_flows`, `eps_wecmp_spine0_flows`, and
 `eps_wecmp_spine1_flows`. These are smoke path-assignment counts, not measured
 link utilization, throughput, FCT, p95, or OCS hit-rate metrics.
+
+Phase 9 adds the first reusable `controller` implementation. `ControllerState`
+stores the previous `Abar`, previous active OCS edges, last selected edges,
+latest observed-matrix byte count, algorithm edge counts, and current cycle
+index without modifying ns-3 runtime objects. `ControllerTimeline` runs one
+two-stage smoke cycle: install stage-1 flows, run to the observation boundary,
+snapshot `W(t-1)`, invoke `TlOcsAlgorithm`, activate selected OCS edges, select
+OCS or EPS-WECMP paths for stage-2 new flows, install static routes, launch
+stage-2 applications, and run to the final stop time. It does not build
+topology, generate traffic patterns, write CSV, reroute stage-1 flows, or
+implement a multi-cycle controller.
+
+For Phase 9, the runner constructs configs, topology, generated flows,
+`TrafficObserver`, algorithm parameters, and `OcsLinkManager`, then delegates
+the closed-loop smoke to `ControllerTimeline`. It may write timeline summary
+fields after the module returns, but it no longer embeds the timeline
+snapshot/algorithm/admission/WECMP routing loop.
+
+Phase 9 may write `timeline_cycles`, `stage1_installed_flows`,
+`stage2_installed_flows`, `stage1_received_bytes`, and
+`stage2_received_bytes`. These remain directly produced smoke counts and byte
+counters, not paper metrics.

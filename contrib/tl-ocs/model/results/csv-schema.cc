@@ -12,7 +12,9 @@ GetSmokeSummaryCsvHeader()
            "observer_window_s,ocs_period_s,stop_time_s,status,installed_flows,received_bytes,"
            "observed_matrix_bytes,algorithm_candidate_edges,algorithm_selected_edges,"
            "ocs_active_edges,ocs_admitted_flows,eps_fallback_flows,eps_wecmp_flows,"
-           "eps_wecmp_spine0_flows,eps_wecmp_spine1_flows";
+           "eps_wecmp_spine0_flows,eps_wecmp_spine1_flows,timeline_cycles,"
+           "stage1_installed_flows,stage2_installed_flows,stage1_received_bytes,"
+           "stage2_received_bytes";
 }
 
 std::string

@@ -59,12 +59,14 @@ main(int argc, char* argv[])
     bool enableOcsLinks = false;
     bool enableOcsAdmissionSmoke = false;
     bool enableEpsWecmp = false;
+    bool enableControllerTimeline = false;
     bool observerDumpMatrix = false;
     bool printOcsDecisions = false;
     bool printEpsWecmpDecisions = false;
     uint32_t spines = 1;
     std::string ocsDataRate = "100Gbps";
     double ocsDelaySeconds = 0.000005;
+    double timelineStageGapSeconds = 0.001;
     uint64_t tcpFlowBytes = 1000000;
     uint32_t numFlows = 4;
     uint64_t flowSizeBytes = 1000000;
@@ -100,12 +102,14 @@ main(int argc, char* argv[])
     cmd.AddValue("enableOcsLinks", "Precreate candidate ToR-ToR OCS links", enableOcsLinks);
     cmd.AddValue("enableOcsAdmissionSmoke", "Run new-flow OCS admission smoke after algorithm selection", enableOcsAdmissionSmoke);
     cmd.AddValue("enableEpsWecmp", "Route OCS fallback flows through controlled EPS-WECMP static routes", enableEpsWecmp);
+    cmd.AddValue("enableControllerTimeline", "Run the reusable single-cycle controller timeline smoke", enableControllerTimeline);
     cmd.AddValue("observerDumpMatrix", "Print the observed W(t) matrix after the run", observerDumpMatrix);
     cmd.AddValue("printOcsDecisions", "Print per-flow OCS/EPS path decisions", printOcsDecisions);
     cmd.AddValue("printEpsWecmpDecisions", "Print per-flow EPS-WECMP residual path decisions", printEpsWecmpDecisions);
     cmd.AddValue("spines", "Number of EPS spine nodes", spines);
     cmd.AddValue("ocsDataRate", "OCS candidate link data rate", ocsDataRate);
     cmd.AddValue("ocsDelay", "OCS candidate link delay in seconds", ocsDelaySeconds);
+    cmd.AddValue("timelineStageGap", "Gap between controller timeline stages in seconds", timelineStageGapSeconds);
     cmd.AddValue("tcpFlowBytes", "Maximum bytes sent by the TCP smoke flow", tcpFlowBytes);
     cmd.AddValue("numFlows", "Number of generated training traffic flows", numFlows);
     cmd.AddValue("flowSizeBytes", "Bytes per generated training traffic flow", flowSizeBytes);
@@ -192,6 +196,14 @@ main(int argc, char* argv[])
         std::cerr << "EPS-WECMP smoke requires --enableOcsAdmissionSmoke=true" << std::endl;
         return 1;
     }
+    if (enableControllerTimeline &&
+        (!enableTrainingTraffic || !enableTrafficObserver || !enableAlgorithmSmoke))
+    {
+        std::cerr << "Controller timeline smoke requires --enableTrainingTraffic=true, "
+                     "--enableTrafficObserver=true, and --enableAlgorithmSmoke=true"
+                  << std::endl;
+        return 1;
+    }
     if (enableTrainingTraffic && enableTcpSmoke)
     {
         std::cerr << "Use either --enableTrainingTraffic=true or --enableTcpSmoke=true" << std::endl;
@@ -222,6 +234,12 @@ main(int argc, char* argv[])
                   << std::endl;
         return 1;
     }
+    if (enableControllerTimeline && !Seconds(timelineStageGapSeconds).IsPositive())
+    {
+        std::cerr << "Invalid controller timeline configuration: timelineStageGap must be positive"
+                  << std::endl;
+        return 1;
+    }
 
     std::cout << "TL-OCS smoke configuration: " << config.GetSummary() << std::endl;
     std::cout << "TL-OCS experiment configuration: " << experiment.GetSummary() << std::endl;
@@ -239,6 +257,11 @@ main(int argc, char* argv[])
     std::optional<uint32_t> epsWecmpFlows;
     std::optional<uint32_t> epsWecmpSpine0Flows;
     std::optional<uint32_t> epsWecmpSpine1Flows;
+    std::optional<uint32_t> timelineCycles;
+    std::optional<uint32_t> stage1InstalledFlows;
+    std::optional<uint32_t> stage2InstalledFlows;
+    std::optional<uint64_t> stage1ReceivedBytes;
+    std::optional<uint64_t> stage2ReceivedBytes;
 
     if (enableEpsTopology)
     {
@@ -290,23 +313,102 @@ main(int argc, char* argv[])
             }
 
             const std::vector<FlowSpec> flows = generator->Generate(config, trafficConfig);
-            FlowLauncher launcher;
-            FlowLaunchResult launchResult = launcher.Install(flows, index, config.GetStopTime());
-
-            const Time firstStageStop =
-                enableOcsAdmissionSmoke ? Seconds(stopTimeSeconds * 0.5) : config.GetStopTime();
-            Simulator::Stop(firstStageStop);
-            Simulator::Run();
-
-            installedFlows = launchResult.installedFlows;
-            receivedBytes = launchResult.GetTotalReceivedBytes();
-            status = enableTrafficObserver ? "observer_smoke_ok" : "training_traffic_smoke_ok";
-            std::cout << "TL-OCS training traffic installed flows: "
-                      << installedFlows.value() << std::endl;
-            std::cout << "TL-OCS training traffic received bytes: " << receivedBytes.value()
-                      << std::endl;
-            if (observer)
+            if (enableControllerTimeline)
             {
+                TlOcsAlgorithmParameters algorithmParameters;
+                algorithmParameters.beta = beta;
+                algorithmParameters.thetaF = thetaF;
+                algorithmParameters.eta = eta;
+                algorithmParameters.alpha = alpha;
+                algorithmParameters.lambda = lambda;
+                algorithmParameters.opticalPortsPerTor = opticalPortsPerTor;
+
+                ControllerTimelineOptions timelineOptions;
+                timelineOptions.enableOcsAdmission = enableOcsAdmissionSmoke;
+                timelineOptions.enableEpsWecmp = enableEpsWecmp;
+                timelineOptions.printOcsDecisions = printOcsDecisions;
+                timelineOptions.printEpsWecmpDecisions = printEpsWecmpDecisions;
+                timelineOptions.stage1Stop = Seconds(stopTimeSeconds * 0.5);
+                timelineOptions.stageGap = Seconds(timelineStageGapSeconds);
+                for (uint32_t spineId = 0; spineId < spines; ++spineId)
+                {
+                    timelineOptions.availableSpines.push_back(spineId);
+                }
+
+                const std::vector<FlowSpec> stage2Flows =
+                    OffsetFlows(flows, static_cast<uint32_t>(flows.size()), Seconds(0));
+                ControllerState controllerState;
+                ControllerTimeline timeline(controllerState);
+                OcsLinkManager linkManager;
+                const ControllerTimelineResult timelineResult =
+                    timeline.RunTwoStageSmoke(index,
+                                              config,
+                                              flows,
+                                              stage2Flows,
+                                              *observer,
+                                              algorithmParameters,
+                                              linkManager,
+                                              timelineOptions);
+
+                installedFlows = timelineResult.GetInstalledFlows();
+                receivedBytes = timelineResult.GetReceivedBytes();
+                observedMatrixBytes = timelineResult.observedMatrixBytes;
+                algorithmCandidateEdges = timelineResult.algorithmCandidateEdges;
+                algorithmSelectedEdges = timelineResult.algorithmSelectedEdges;
+                ocsActiveEdges = timelineResult.ocsActiveEdges;
+                ocsAdmittedFlows = timelineResult.ocsAdmittedFlows;
+                epsFallbackFlows = timelineResult.epsFallbackFlows;
+                epsWecmpFlows = timelineResult.epsWecmpFlows;
+                epsWecmpSpine0Flows = timelineResult.epsWecmpSpine0Flows;
+                epsWecmpSpine1Flows = timelineResult.epsWecmpSpine1Flows;
+                timelineCycles = timelineResult.timelineCycles;
+                stage1InstalledFlows = timelineResult.stage1InstalledFlows;
+                stage2InstalledFlows = timelineResult.stage2InstalledFlows;
+                stage1ReceivedBytes = timelineResult.stage1ReceivedBytes;
+                stage2ReceivedBytes = timelineResult.stage2ReceivedBytes;
+                status = "controller_timeline_smoke_ok";
+
+                std::cout << "TL-OCS controller timeline state: "
+                          << controllerState.GetSummary() << std::endl;
+                std::cout << "TL-OCS controller timeline selected edge list: "
+                          << timelineResult.selectedEdgeList << std::endl;
+                std::cout << "TL-OCS controller timeline OCS active edges: "
+                          << timelineResult.ocsActiveEdges << std::endl;
+                std::cout << "TL-OCS controller timeline OCS admitted flows: "
+                          << timelineResult.ocsAdmittedFlows << std::endl;
+                std::cout << "TL-OCS controller timeline EPS fallback flows: "
+                          << timelineResult.epsFallbackFlows << std::endl;
+                std::cout << "TL-OCS controller timeline EPS-WECMP routed flows: "
+                          << timelineResult.epsWecmpFlows << std::endl;
+                std::cout << "TL-OCS controller timeline EPS-WECMP spine0 flows: "
+                          << timelineResult.epsWecmpSpine0Flows << std::endl;
+                std::cout << "TL-OCS controller timeline EPS-WECMP spine1 flows: "
+                          << timelineResult.epsWecmpSpine1Flows << std::endl;
+                std::cout << "TL-OCS controller timeline stage1 received bytes: "
+                          << timelineResult.stage1ReceivedBytes << std::endl;
+                std::cout << "TL-OCS controller timeline stage2 received bytes: "
+                          << timelineResult.stage2ReceivedBytes << std::endl;
+            }
+            else
+            {
+                FlowLauncher launcher;
+                FlowLaunchResult launchResult =
+                    launcher.Install(flows, index, config.GetStopTime());
+
+                const Time firstStageStop =
+                    enableOcsAdmissionSmoke ? Seconds(stopTimeSeconds * 0.5) : config.GetStopTime();
+                Simulator::Stop(firstStageStop);
+                Simulator::Run();
+
+                installedFlows = launchResult.installedFlows;
+                receivedBytes = launchResult.GetTotalReceivedBytes();
+                status = enableTrafficObserver ? "observer_smoke_ok" : "training_traffic_smoke_ok";
+                std::cout << "TL-OCS training traffic installed flows: "
+                          << installedFlows.value() << std::endl;
+                std::cout << "TL-OCS training traffic received bytes: " << receivedBytes.value()
+                          << std::endl;
+                if (observer)
+                {
                 TrafficMatrix observed = observer->SnapshotAndReset();
                 observedMatrixBytes = observed.GetTotalBytes();
                 std::cout << "TL-OCS observed matrix bytes: " << observedMatrixBytes.value()
@@ -487,6 +589,7 @@ main(int argc, char* argv[])
                                   << receivedBytes.value() << std::endl;
                     }
                 }
+                }
             }
             Simulator::Destroy();
         }
@@ -537,7 +640,12 @@ main(int argc, char* argv[])
                                  epsFallbackFlows,
                                  epsWecmpFlows,
                                  epsWecmpSpine0Flows,
-                                 epsWecmpSpine1Flows);
+                                 epsWecmpSpine1Flows,
+                                 timelineCycles,
+                                 stage1InstalledFlows,
+                                 stage2InstalledFlows,
+                                 stage1ReceivedBytes,
+                                 stage2ReceivedBytes);
     std::cout << "TL-OCS smoke summary: " << summaryPath << std::endl;
     return 0;
 }

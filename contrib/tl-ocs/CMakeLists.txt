@@ -11,6 +11,8 @@ build_lib(
     model/config/experiment-config.cc
     model/config/output-config.cc
     model/config/simulation-config.cc
+    model/controller/controller-state.cc
+    model/controller/controller-timeline.cc
     model/observer/traffic-matrix.cc
     model/observer/traffic-observer.cc
     model/results/csv-schema.cc
@@ -38,6 +40,8 @@ build_lib(
     model/config/experiment-config.h
     model/config/output-config.h
     model/config/simulation-config.h
+    model/controller/controller-state.h
+    model/controller/controller-timeline.h
     model/observer/traffic-matrix.h
     model/observer/traffic-observer.h
     model/results/csv-schema.h
@@ -63,6 +67,8 @@ build_lib(
   TEST_SOURCES
     test/tl-ocs-algorithm-test-suite.cc
     test/tl-ocs-config-test-suite.cc
+    test/tl-ocs-controller-state-test-suite.cc
+    test/tl-ocs-controller-timeline-test-suite.cc
     test/tl-ocs-eps-topology-test-suite.cc
     test/tl-ocs-eps-link-state-test-suite.cc
     test/tl-ocs-eps-wecmp-router-test-suite.cc

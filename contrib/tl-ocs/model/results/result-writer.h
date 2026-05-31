@@ -32,7 +32,12 @@ class ResultWriter
                                             std::optional<uint32_t> epsFallbackFlows = std::nullopt,
                                             std::optional<uint32_t> epsWecmpFlows = std::nullopt,
                                             std::optional<uint32_t> epsWecmpSpine0Flows = std::nullopt,
-                                            std::optional<uint32_t> epsWecmpSpine1Flows = std::nullopt) const;
+                                            std::optional<uint32_t> epsWecmpSpine1Flows = std::nullopt,
+                                            std::optional<uint32_t> timelineCycles = std::nullopt,
+                                            std::optional<uint32_t> stage1InstalledFlows = std::nullopt,
+                                            std::optional<uint32_t> stage2InstalledFlows = std::nullopt,
+                                            std::optional<uint64_t> stage1ReceivedBytes = std::nullopt,
+                                            std::optional<uint64_t> stage2ReceivedBytes = std::nullopt) const;
 };
 
 } // namespace tl_ocs

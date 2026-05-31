@@ -40,7 +40,12 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 std::optional<uint32_t> epsFallbackFlows,
                                 std::optional<uint32_t> epsWecmpFlows,
                                 std::optional<uint32_t> epsWecmpSpine0Flows,
-                                std::optional<uint32_t> epsWecmpSpine1Flows) const
+                                std::optional<uint32_t> epsWecmpSpine1Flows,
+                                std::optional<uint32_t> timelineCycles,
+                                std::optional<uint32_t> stage1InstalledFlows,
+                                std::optional<uint32_t> stage2InstalledFlows,
+                                std::optional<uint64_t> stage1ReceivedBytes,
+                                std::optional<uint64_t> stage2ReceivedBytes) const
 {
     const std::filesystem::path outputDir(output.GetOutputDir());
     std::filesystem::create_directories(outputDir);
@@ -121,6 +126,31 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     if (epsWecmpSpine1Flows.has_value())
     {
         stream << epsWecmpSpine1Flows.value();
+    }
+    stream << ',';
+    if (timelineCycles.has_value())
+    {
+        stream << timelineCycles.value();
+    }
+    stream << ',';
+    if (stage1InstalledFlows.has_value())
+    {
+        stream << stage1InstalledFlows.value();
+    }
+    stream << ',';
+    if (stage2InstalledFlows.has_value())
+    {
+        stream << stage2InstalledFlows.value();
+    }
+    stream << ',';
+    if (stage1ReceivedBytes.has_value())
+    {
+        stream << stage1ReceivedBytes.value();
+    }
+    stream << ',';
+    if (stage2ReceivedBytes.has_value())
+    {
+        stream << stage2ReceivedBytes.value();
     }
     stream << '\n';
 
