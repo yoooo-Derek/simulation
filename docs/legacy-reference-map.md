@@ -403,3 +403,52 @@ New implementation:
   `NodeIndex`, then accumulates directed ToR-pair bytes in `TrafficMatrix`.
 - The runner snapshots the observed matrix after the simulator run and exports
   only `observed_matrix_bytes` in the smoke summary.
+
+## Phase 11B Reference
+
+Additional read-only files reviewed for measured link and OCS metrics:
+
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc`
+- `/home/dyn/sim/src/metrics/trace-metrics.h`
+- `/home/dyn/sim/src/result/structured-result-schema.h`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/validate_outputs.py`
+- `/home/dyn/sim/docs/code_map.md`
+- `/home/dyn/sim/docs/tl_ocs_metrics_schema_plan.md`
+- `/home/dyn/sim/docs/tl_ocs_patch2_6_route_fix_validation.md`
+- `/home/dyn/sim/docs/tl_ocs_patch3_link_timeseries_validation.md`
+- `/home/dyn/sim/docs/tl_ocs_patch4a_wecmp_measured_utilization_design.md`
+
+Borrowed behavior and naming:
+
+- Legacy direction-level `LinkCounter` and `LinkTxTrace` confirm that measured
+  link bytes should be collected from `PointToPointNetDevice` `MacTx` traces.
+- Legacy `txBytes`, `linkType`, `linkId`, `capacityGbps`, and
+  `utilizationApprox` are useful naming references for a smaller fresh
+  whole-run aggregate schema.
+- Legacy route-fix validation confirms that EPS and OCS counters must be bound
+  to their actual data-plane devices and kept distinct from control-plane
+  residual load.
+- Legacy documentation explicitly separates measured post-run utilization
+  from EPS-WECMP assigned or estimated load. Phase 11B preserves that boundary.
+
+Not migrated:
+
+- The old `hybrid-dcn-main.cc` metric body, structured links schema, link
+  time-series sampler, measured WECMP snapshots, runtime WECMP feedback,
+  multi-period reconfiguration accounting, validation matrix, and plotting
+  preparation were not copied or migrated.
+- Phase 11B does not export per-link CSV or time-series CSV. It adds whole-run
+  summary metrics only.
+
+New implementation:
+
+- `topology/NodeIndex` enumerates ToR-spine and OCS candidate links already
+  created by the topology builder.
+- `metrics/LinkMetricsCollector` attaches directional `MacTx` counters before
+  simulation and computes whole-run device-level utilization afterward.
+- `metrics/OcsMetrics` computes completed-flow OCS hit rates from Phase 11A
+  records and reports the single-cycle non-empty active-set application count.
+- `experiments/SmokeScenarioRunner` conditionally collects these metrics for
+  the five Phase 11B scheme smokes without moving metrics logic into scratch.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 11B implementation.

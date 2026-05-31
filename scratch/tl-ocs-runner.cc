@@ -64,6 +64,8 @@ main(int argc, char* argv[])
     bool enableControllerTimeline = false;
     bool enableSchemeRunner = false;
     bool enableFlowMetrics = false;
+    bool enableLinkMetrics = false;
+    bool enableOcsMetrics = false;
     bool observerDumpMatrix = false;
     bool printOcsDecisions = false;
     bool printEpsWecmpDecisions = false;
@@ -110,6 +112,8 @@ main(int argc, char* argv[])
     cmd.AddValue("enableControllerTimeline", "Run the reusable single-cycle controller timeline smoke", enableControllerTimeline);
     cmd.AddValue("enableSchemeRunner", "Run a unified Phase 10 baseline or TL-OCS scheme smoke", enableSchemeRunner);
     cmd.AddValue("enableFlowMetrics", "Write real flow-level metrics for the scheme runner", enableFlowMetrics);
+    cmd.AddValue("enableLinkMetrics", "Write measured aggregate link utilization for the scheme runner", enableLinkMetrics);
+    cmd.AddValue("enableOcsMetrics", "Write completed-flow OCS metrics for the scheme runner", enableOcsMetrics);
     cmd.AddValue("observerDumpMatrix", "Print the observed W(t) matrix after the run", observerDumpMatrix);
     cmd.AddValue("printOcsDecisions", "Print per-flow OCS/EPS path decisions", printOcsDecisions);
     cmd.AddValue("printEpsWecmpDecisions", "Print per-flow EPS-WECMP residual path decisions", printEpsWecmpDecisions);
@@ -242,6 +246,17 @@ main(int argc, char* argv[])
         std::cerr << "Flow metrics require --enableSchemeRunner=true" << std::endl;
         return 1;
     }
+    if (enableLinkMetrics && !enableSchemeRunner)
+    {
+        std::cerr << "Link metrics require --enableSchemeRunner=true" << std::endl;
+        return 1;
+    }
+    if (enableOcsMetrics && (!enableSchemeRunner || !enableFlowMetrics))
+    {
+        std::cerr << "OCS metrics require --enableSchemeRunner=true and --enableFlowMetrics=true"
+                  << std::endl;
+        return 1;
+    }
     if (enableTrainingTraffic && (numFlows == 0 || flowSizeBytes == 0 ||
                                   !Seconds(flowStartIntervalSeconds).IsPositive()))
     {
@@ -296,6 +311,8 @@ main(int argc, char* argv[])
     std::optional<uint64_t> stage1ReceivedBytes;
     std::optional<uint64_t> stage2ReceivedBytes;
     std::optional<FlowMetricsSummary> flowMetricsSummary;
+    std::optional<LinkUtilizationSummary> linkUtilizationSummary;
+    std::optional<OcsMetricsSummary> ocsMetricsSummary;
     std::vector<FlowMetricRecord> flowMetrics;
 
     if (enableEpsTopology)
@@ -363,6 +380,8 @@ main(int argc, char* argv[])
                 scenarioOptions.printOcsDecisions = printOcsDecisions;
                 scenarioOptions.printEpsWecmpDecisions = printEpsWecmpDecisions;
                 scenarioOptions.enableFlowMetrics = enableFlowMetrics;
+                scenarioOptions.enableLinkMetrics = enableLinkMetrics;
+                scenarioOptions.enableOcsMetrics = enableOcsMetrics;
                 for (uint32_t spineId = 0; spineId < spines; ++spineId)
                 {
                     scenarioOptions.availableSpines.push_back(spineId);
@@ -406,6 +425,8 @@ main(int argc, char* argv[])
                 status = scenarioResult.status;
                 flowMetrics = scenarioResult.flowMetrics;
                 flowMetricsSummary = scenarioResult.flowMetricsSummary;
+                linkUtilizationSummary = scenarioResult.linkUtilizationSummary;
+                ocsMetricsSummary = scenarioResult.ocsMetricsSummary;
 
                 std::cout << "TL-OCS scheme runner: scheme=" << scenarioResult.schemeName
                           << ", status=" << scenarioResult.status
@@ -438,6 +459,69 @@ main(int argc, char* argv[])
                         std::cout << "N/A";
                     }
                     std::cout << std::endl;
+                }
+                if (linkUtilizationSummary.has_value())
+                {
+                    std::cout << "TL-OCS link metrics: epsAvg=";
+                    if (linkUtilizationSummary->epsAvgLinkUtilization.has_value())
+                    {
+                        std::cout << linkUtilizationSummary->epsAvgLinkUtilization.value();
+                    }
+                    else
+                    {
+                        std::cout << "N/A";
+                    }
+                    std::cout << ", epsMax=";
+                    if (linkUtilizationSummary->epsMaxLinkUtilization.has_value())
+                    {
+                        std::cout << linkUtilizationSummary->epsMaxLinkUtilization.value();
+                    }
+                    else
+                    {
+                        std::cout << "N/A";
+                    }
+                    std::cout << ", ocsAvg=";
+                    if (linkUtilizationSummary->ocsAvgLinkUtilization.has_value())
+                    {
+                        std::cout << linkUtilizationSummary->ocsAvgLinkUtilization.value();
+                    }
+                    else
+                    {
+                        std::cout << "N/A";
+                    }
+                    std::cout << ", ocsMax=";
+                    if (linkUtilizationSummary->ocsMaxLinkUtilization.has_value())
+                    {
+                        std::cout << linkUtilizationSummary->ocsMaxLinkUtilization.value();
+                    }
+                    else
+                    {
+                        std::cout << "N/A";
+                    }
+                    std::cout << std::endl;
+                }
+                if (ocsMetricsSummary.has_value())
+                {
+                    std::cout << "TL-OCS OCS metrics: flowHitRate=";
+                    if (ocsMetricsSummary->ocsFlowHitRate.has_value())
+                    {
+                        std::cout << ocsMetricsSummary->ocsFlowHitRate.value();
+                    }
+                    else
+                    {
+                        std::cout << "N/A";
+                    }
+                    std::cout << ", byteHitRate=";
+                    if (ocsMetricsSummary->ocsByteHitRate.has_value())
+                    {
+                        std::cout << ocsMetricsSummary->ocsByteHitRate.value();
+                    }
+                    else
+                    {
+                        std::cout << "N/A";
+                    }
+                    std::cout << ", reconfigurations="
+                              << ocsMetricsSummary->ocsReconfigurationCount << std::endl;
                 }
             }
             else if (enableControllerTimeline)
@@ -773,7 +857,9 @@ main(int argc, char* argv[])
                                  stage2InstalledFlows,
                                  stage1ReceivedBytes,
                                  stage2ReceivedBytes,
-                                 flowMetricsSummary);
+                                 flowMetricsSummary,
+                                 linkUtilizationSummary,
+                                 ocsMetricsSummary);
     std::cout << "TL-OCS smoke summary: " << summaryPath << std::endl;
     if (enableFlowMetrics)
     {

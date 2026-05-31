@@ -21,10 +21,14 @@ class NodeIndex
   public:
     struct ServerLinkInfo
     {
+        uint32_t torId = 0;
+        uint32_t serverId = 0;
         Ipv4Address serverAddress;
         Ipv4Address torAddress;
         uint32_t serverInterfaceIndex = 0;
         uint32_t torInterfaceIndex = 0;
+        Ptr<NetDevice> serverDevice;
+        Ptr<NetDevice> torDevice;
     };
 
     struct OcsLinkInfo
@@ -65,6 +69,7 @@ class NodeIndex
     Ptr<Node> GetSpine(uint32_t spineId) const;
     Ipv4Address GetServerIpv4Address(uint32_t torId, uint32_t serverId) const;
     ServerLinkInfo GetServerLinkInfo(uint32_t torId, uint32_t serverId) const;
+    std::vector<ServerLinkInfo> GetServerLinks() const;
     Ptr<NetDevice> GetTorIngressDevice(uint32_t torId, uint32_t serverId) const;
     bool GetTorIdForServerIpv4Address(Ipv4Address address, uint32_t& torId) const;
     bool GetTorIdForServer(Ptr<const Node> server, uint32_t& torId) const;
@@ -72,6 +77,8 @@ class NodeIndex
     TorSpineLinkInfo GetTorSpineLink(uint32_t torId, uint32_t spineId) const;
     bool HasOcsLink(uint32_t torA, uint32_t torB) const;
     OcsLinkInfo GetOcsLink(uint32_t torA, uint32_t torB) const;
+    std::vector<TorSpineLinkInfo> GetTorSpineLinks() const;
+    std::vector<OcsLinkInfo> GetOcsLinks() const;
     Ipv4Address GetOcsPeerAddress(uint32_t sourceTor, uint32_t destinationTor) const;
     uint32_t GetOcsInterfaceIndex(uint32_t sourceTor, uint32_t destinationTor) const;
 

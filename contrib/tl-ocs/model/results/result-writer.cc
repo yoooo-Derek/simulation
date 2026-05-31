@@ -55,7 +55,9 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 std::optional<uint32_t> stage2InstalledFlows,
                                 std::optional<uint64_t> stage1ReceivedBytes,
                                 std::optional<uint64_t> stage2ReceivedBytes,
-                                std::optional<FlowMetricsSummary> flowMetrics) const
+                                std::optional<FlowMetricsSummary> flowMetrics,
+                                std::optional<LinkUtilizationSummary> linkMetrics,
+                                std::optional<OcsMetricsSummary> ocsMetrics) const
 {
     const std::filesystem::path outputDir(output.GetOutputDir());
     std::filesystem::create_directories(outputDir);
@@ -191,6 +193,41 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     if (flowMetrics.has_value())
     {
         WriteOptionalDouble(stream, flowMetrics->p95FctS);
+    }
+    stream << ',';
+    if (linkMetrics.has_value())
+    {
+        WriteOptionalDouble(stream, linkMetrics->epsAvgLinkUtilization);
+    }
+    stream << ',';
+    if (linkMetrics.has_value())
+    {
+        WriteOptionalDouble(stream, linkMetrics->epsMaxLinkUtilization);
+    }
+    stream << ',';
+    if (linkMetrics.has_value())
+    {
+        WriteOptionalDouble(stream, linkMetrics->ocsAvgLinkUtilization);
+    }
+    stream << ',';
+    if (linkMetrics.has_value())
+    {
+        WriteOptionalDouble(stream, linkMetrics->ocsMaxLinkUtilization);
+    }
+    stream << ',';
+    if (ocsMetrics.has_value())
+    {
+        WriteOptionalDouble(stream, ocsMetrics->ocsFlowHitRate);
+    }
+    stream << ',';
+    if (ocsMetrics.has_value())
+    {
+        WriteOptionalDouble(stream, ocsMetrics->ocsByteHitRate);
+    }
+    stream << ',';
+    if (ocsMetrics.has_value())
+    {
+        stream << ocsMetrics->ocsReconfigurationCount;
     }
     stream << '\n';
 

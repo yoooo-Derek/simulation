@@ -3,6 +3,8 @@
 
 #include "ns3/experiment-config.h"
 #include "ns3/flow-metrics.h"
+#include "ns3/link-utilization-metrics.h"
+#include "ns3/ocs-metrics.h"
 #include "ns3/output-config.h"
 #include "ns3/simulation-config.h"
 
@@ -39,7 +41,9 @@ class ResultWriter
                                             std::optional<uint32_t> stage2InstalledFlows = std::nullopt,
                                             std::optional<uint64_t> stage1ReceivedBytes = std::nullopt,
                                             std::optional<uint64_t> stage2ReceivedBytes = std::nullopt,
-                                            std::optional<FlowMetricsSummary> flowMetrics = std::nullopt) const;
+                                            std::optional<FlowMetricsSummary> flowMetrics = std::nullopt,
+                                            std::optional<LinkUtilizationSummary> linkMetrics = std::nullopt,
+                                            std::optional<OcsMetricsSummary> ocsMetrics = std::nullopt) const;
 };
 
 } // namespace tl_ocs

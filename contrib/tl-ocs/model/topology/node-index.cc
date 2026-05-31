@@ -135,6 +135,17 @@ NodeIndex::GetServerLinkInfo(uint32_t torId, uint32_t serverId) const
     return m_serverLinksByTor[torId][serverId];
 }
 
+std::vector<NodeIndex::ServerLinkInfo>
+NodeIndex::GetServerLinks() const
+{
+    std::vector<ServerLinkInfo> links;
+    for (const auto& torLinks : m_serverLinksByTor)
+    {
+        links.insert(links.end(), torLinks.begin(), torLinks.end());
+    }
+    return links;
+}
+
 Ptr<NetDevice>
 NodeIndex::GetTorIngressDevice(uint32_t torId, uint32_t serverId) const
 {
@@ -178,6 +189,30 @@ NodeIndex::GetOcsLink(uint32_t torA, uint32_t torB) const
         throw std::out_of_range("TL-OCS OCS link does not exist for ToR pair");
     }
     return match->second;
+}
+
+std::vector<NodeIndex::TorSpineLinkInfo>
+NodeIndex::GetTorSpineLinks() const
+{
+    std::vector<TorSpineLinkInfo> links;
+    links.reserve(m_torSpineLinks.size());
+    for (const auto& [key, link] : m_torSpineLinks)
+    {
+        links.push_back(link);
+    }
+    return links;
+}
+
+std::vector<NodeIndex::OcsLinkInfo>
+NodeIndex::GetOcsLinks() const
+{
+    std::vector<OcsLinkInfo> links;
+    links.reserve(m_ocsLinks.size());
+    for (const auto& [key, link] : m_ocsLinks)
+    {
+        links.push_back(link);
+    }
+    return links;
 }
 
 Ipv4Address

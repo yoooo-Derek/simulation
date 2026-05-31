@@ -37,6 +37,8 @@ MakeOptions()
     SmokeScenarioOptions options;
     options.availableSpines = {0, 1};
     options.enableFlowMetrics = true;
+    options.enableLinkMetrics = true;
+    options.enableOcsMetrics = true;
     return options;
 }
 
@@ -68,6 +70,12 @@ class TlOcsEpsEcmpScenarioTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(result.installedFlows, 4, "EPS-ECMP flow count mismatch");
         NS_TEST_ASSERT_MSG_GT(result.receivedBytes, 0, "EPS-ECMP received no bytes");
         NS_TEST_ASSERT_MSG_GT(result.flowMetricsSummary->completedFlows, 0, "EPS-ECMP completed no flows");
+        NS_TEST_ASSERT_MSG_GT(result.linkUtilizationSummary->epsMaxLinkUtilization.value(),
+                              0.0,
+                              "EPS-ECMP has no measured EPS utilization");
+        NS_TEST_ASSERT_MSG_EQ(result.ocsMetricsSummary->ocsFlowHitRate.value(),
+                              0.0,
+                              "EPS-ECMP unexpectedly has OCS hits");
         Simulator::Destroy();
     }
 };
@@ -133,6 +141,18 @@ class TlOcsTlOcsScenarioTestCase : public TestCase
         NS_TEST_ASSERT_MSG_GT(result.algorithmSelectedEdges, 0, "TL-OCS selected no edges");
         NS_TEST_ASSERT_MSG_GT(result.receivedBytes, 0, "TL-OCS received no bytes");
         NS_TEST_ASSERT_MSG_GT(result.flowMetricsSummary->completedFlows, 0, "TL-OCS completed no flows");
+        NS_TEST_ASSERT_MSG_GT(result.linkUtilizationSummary->epsMaxLinkUtilization.value(),
+                              0.0,
+                              "TL-OCS has no measured EPS utilization");
+        NS_TEST_ASSERT_MSG_GT(result.linkUtilizationSummary->ocsMaxLinkUtilization.value(),
+                              0.0,
+                              "TL-OCS has no measured OCS utilization");
+        NS_TEST_ASSERT_MSG_GT(result.ocsMetricsSummary->ocsFlowHitRate.value(),
+                              0.0,
+                              "TL-OCS has no completed OCS hits");
+        NS_TEST_ASSERT_MSG_EQ(result.ocsMetricsSummary->ocsReconfigurationCount,
+                              1,
+                              "TL-OCS single-cycle reconfiguration count mismatch");
         Simulator::Destroy();
     }
 };

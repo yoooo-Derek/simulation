@@ -227,3 +227,25 @@ and `p95_fct_s`. The percentile implementation uses deterministic nearest-rank
 selection over completed-flow FCT values only. Phase 11A still does not export
 link utilization, OCS reconfiguration count, OCS hit rate, or large-scale
 paper-evaluation results.
+
+Phase 11B adds whole-run aggregate link and OCS metrics. `LinkMetricsCollector`
+attaches to the `MacTx` trace on both directional `PointToPointNetDevice`
+endpoints for every ToR-spine EPS link and every precreated OCS candidate link.
+Its `txBytes` values are measured device-level packet bytes, including protocol
+overhead above application payload. EPS average and maximum utilization cover
+directional ToR-spine links only. OCS average and maximum utilization cover
+directional OCS candidate links with measured Tx bytes only. These are
+post-run observations; they do not feed EPS-WECMP decisions.
+
+`NodeIndex` exposes server-ToR, ToR-spine, and OCS candidate link enumeration
+with both endpoint devices. Phase 11B retains the server-ToR enumeration for
+topology completeness but deliberately excludes it from EPS utilization
+summary fields.
+
+`OcsMetrics` derives hit rates from completed `FlowMetricRecord` rows only:
+`pathType=ocs` determines OCS flows and trace-observed `receivedBytes`
+determines OCS byte share. In the single-cycle smoke,
+`ocs_reconfiguration_count=1` means one non-empty active set was applied. It is
+not a multi-period optical reconfiguration count. Phase 11B still does not add
+link time series, measured-utilization-driven WECMP, complete five-tuple WECMP,
+multi-cycle control, or large-scale paper experiments.

@@ -65,3 +65,24 @@ Summary `avg_fct_s`, `p90_fct_s`, and `p95_fct_s` include completed flows only.
 Percentiles use deterministic nearest-rank selection. These artifacts do not
 include link utilization, OCS hit rate, confidence intervals, or large-scale
 paper experiment claims.
+
+## Link And OCS Metrics Smoke
+
+Phase 11B adds a separate five-scheme utilization smoke matrix:
+
+```bash
+./experiments/scripts/run-all-util-smokes.sh
+```
+
+Each run writes `results/raw/phase11b-<scheme>.csv` and the corresponding
+`phase11b-<scheme>-flows.csv`. Summary EPS utilization is the whole-run average
+and maximum across directional ToR-spine `MacTx` counters. Summary OCS
+utilization is the whole-run average and maximum across directional OCS
+candidate links with measured Tx bytes. Device-level bytes include protocol
+overhead and are not application throughput.
+
+OCS flow and byte hit rates use completed per-flow rows only. OCS schemes also
+report the active-edge count already produced by the controller and a
+single-cycle reconfiguration count: one when a non-empty active set was
+applied, otherwise zero. These utilization values are post-run metrics. They do
+not replace EPS-WECMP assigned-byte state or drive path selection.

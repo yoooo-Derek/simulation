@@ -17,7 +17,10 @@ build_lib(
     model/experiments/scheme-config.cc
     model/experiments/smoke-scenario-runner.cc
     model/metrics/flow-metrics.cc
+    model/metrics/link-metrics-collector.cc
+    model/metrics/link-utilization-metrics.cc
     model/metrics/metrics-collector.cc
+    model/metrics/ocs-metrics.cc
     model/observer/traffic-matrix.cc
     model/observer/traffic-observer.cc
     model/results/csv-schema.cc
@@ -52,7 +55,10 @@ build_lib(
     model/experiments/scheme-config.h
     model/experiments/smoke-scenario-runner.h
     model/metrics/flow-metrics.h
+    model/metrics/link-metrics-collector.h
+    model/metrics/link-utilization-metrics.h
     model/metrics/metrics-collector.h
+    model/metrics/ocs-metrics.h
     model/observer/traffic-matrix.h
     model/observer/traffic-observer.h
     model/results/csv-schema.h
@@ -89,9 +95,12 @@ build_lib(
     test/tl-ocs-flow-launcher-metrics-test-suite.cc
     test/tl-ocs-flow-metrics-test-suite.cc
     test/tl-ocs-flow-result-writer-test-suite.cc
+    test/tl-ocs-link-metrics-collector-test-suite.cc
+    test/tl-ocs-link-utilization-metrics-test-suite.cc
     test/tl-ocs-matrix-processor-test-suite.cc
     test/tl-ocs-ocs-admission-test-suite.cc
     test/tl-ocs-ocs-link-manager-test-suite.cc
+    test/tl-ocs-ocs-metrics-test-suite.cc
     test/tl-ocs-flow-path-selector-test-suite.cc
     test/tl-ocs-result-writer-test-suite.cc
     test/tl-ocs-scheme-config-test-suite.cc

@@ -52,7 +52,7 @@ EpsTopologyBuilder::Build(const SimulationConfig& config,
     serverTorLink.SetChannelAttribute("Delay", StringValue("10us"));
 
     PointToPointHelper torSpineLink;
-    torSpineLink.SetDeviceAttribute("DataRate", StringValue("25Gbps"));
+    torSpineLink.SetDeviceAttribute("DataRate", StringValue(config.GetEpsDataRate()));
     torSpineLink.SetChannelAttribute("Delay", StringValue("20us"));
 
     Ipv4AddressHelper ipv4;
@@ -67,10 +67,14 @@ EpsTopologyBuilder::Build(const SimulationConfig& config,
             Ipv4InterfaceContainer interfaces = ipv4.Assign(devices);
             index.SetServerLinkInfo(torId,
                                     serverId,
-                                    {interfaces.GetAddress(0),
+                                    {torId,
+                                     serverId,
+                                     interfaces.GetAddress(0),
                                      interfaces.GetAddress(1),
                                      interfaces.Get(0).second,
-                                     interfaces.Get(1).second});
+                                     interfaces.Get(1).second,
+                                     devices.Get(0),
+                                     devices.Get(1)});
             index.SetTorIngressDevice(torId, serverId, devices.Get(1));
             ipv4.NewNetwork();
         }

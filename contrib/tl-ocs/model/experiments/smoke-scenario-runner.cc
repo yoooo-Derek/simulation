@@ -4,11 +4,13 @@
 #include "ns3/eps-wecmp-router.h"
 #include "ns3/flow-launcher.h"
 #include "ns3/flow-path-selector.h"
+#include "ns3/link-metrics-collector.h"
 #include "ns3/ocs-admission.h"
 #include "ns3/ocs-link-manager.h"
 #include "ns3/simulator.h"
 
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 
 namespace ns3
@@ -89,6 +91,24 @@ CollectFlowMetrics(const std::vector<FlowMetricSource>& sources, SmokeScenarioRe
     result.flowMetricsSummary = collector.Summarize(result.flowMetrics);
 }
 
+void
+CollectPostRunMetrics(const SmokeScenarioOptions& options,
+                      LinkMetricsCollector* linkMetricsCollector,
+                      SmokeScenarioResult& result)
+{
+    if (linkMetricsCollector != nullptr)
+    {
+        result.linkUtilizationSummary = linkMetricsCollector->Summarize();
+    }
+    if (options.enableOcsMetrics)
+    {
+        result.ocsMetricsSummary =
+            SummarizeOcsMetrics(result.flowMetrics,
+                                result.ocsActiveEdges,
+                                result.timelineCycles > 0 && result.ocsActiveEdges > 0);
+    }
+}
+
 } // namespace
 
 SmokeScenarioResult
@@ -102,6 +122,12 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
 {
     SmokeScenarioResult result;
     result.schemeName = scheme.ToString();
+    std::unique_ptr<LinkMetricsCollector> linkMetricsCollector;
+    if (options.enableLinkMetrics)
+    {
+        linkMetricsCollector = std::make_unique<LinkMetricsCollector>();
+        linkMetricsCollector->AttachToTopology(nodeIndex, simulation);
+    }
 
     if (!scheme.EnableAlgorithm())
     {
@@ -128,6 +154,7 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
             {
                 CollectFlowMetrics(launch.metricSources, result);
             }
+            CollectPostRunMetrics(options, linkMetricsCollector.get(), result);
             if (options.printEpsWecmpDecisions)
             {
                 for (const auto& decision : decisions)
@@ -153,6 +180,7 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
             {
                 CollectFlowMetrics(launch.metricSources, result);
             }
+            CollectPostRunMetrics(options, linkMetricsCollector.get(), result);
             result.status = "scheme_eps_ecmp_smoke_ok";
         }
         return result;
@@ -199,6 +227,7 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
     {
         CollectFlowMetrics(timelineResult.metricSources, result);
     }
+    CollectPostRunMetrics(options, linkMetricsCollector.get(), result);
     result.status = "scheme_" + scheme.ToString() + "_smoke_ok";
     return result;
 }

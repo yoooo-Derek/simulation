@@ -2,7 +2,9 @@
 #define TL_OCS_SMOKE_SCENARIO_RUNNER_H
 
 #include "ns3/controller-timeline.h"
+#include "ns3/link-utilization-metrics.h"
 #include "ns3/metrics-collector.h"
+#include "ns3/ocs-metrics.h"
 #include "ns3/scheme-config.h"
 
 #include <cstdint>
@@ -22,6 +24,8 @@ struct SmokeScenarioOptions
     bool printOcsDecisions = false;
     bool printEpsWecmpDecisions = false;
     bool enableFlowMetrics = false;
+    bool enableLinkMetrics = false;
+    bool enableOcsMetrics = false;
 };
 
 struct SmokeScenarioResult
@@ -47,6 +51,8 @@ struct SmokeScenarioResult
     std::string selectedEdgeList;
     std::vector<FlowMetricRecord> flowMetrics;
     std::optional<FlowMetricsSummary> flowMetricsSummary;
+    std::optional<LinkUtilizationSummary> linkUtilizationSummary;
+    std::optional<OcsMetricsSummary> ocsMetricsSummary;
 };
 
 class SmokeScenarioRunner
