@@ -1,6 +1,7 @@
 #ifndef TL_OCS_CONTROLLER_TIMELINE_H
 #define TL_OCS_CONTROLLER_TIMELINE_H
 
+#include "ns3/baseline-schedulers.h"
 #include "ns3/controller-state.h"
 #include "ns3/flow-path-selector.h"
 #include "ns3/node-index.h"
@@ -19,6 +20,7 @@ namespace tl_ocs
 
 struct ControllerTimelineOptions
 {
+    OpticalSchedulingMode schedulingMode = OpticalSchedulingMode::TL_OCS;
     bool enableOcsAdmission = true;
     bool enableEpsWecmp = false;
     bool printOcsDecisions = false;

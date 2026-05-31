@@ -2,6 +2,7 @@ build_lib(
   LIBNAME tl-ocs
   SOURCE_FILES
     model/algorithm/community-detector.cc
+    model/algorithm/baseline-schedulers.cc
     model/algorithm/matrix-processor.cc
     model/algorithm/null-model.cc
     model/algorithm/optical-scheduler.cc
@@ -13,6 +14,8 @@ build_lib(
     model/config/simulation-config.cc
     model/controller/controller-state.cc
     model/controller/controller-timeline.cc
+    model/experiments/scheme-config.cc
+    model/experiments/smoke-scenario-runner.cc
     model/observer/traffic-matrix.cc
     model/observer/traffic-observer.cc
     model/results/csv-schema.cc
@@ -31,6 +34,7 @@ build_lib(
     model/traffic/uniform-traffic-generator.cc
   HEADER_FILES
     model/algorithm/community-detector.h
+    model/algorithm/baseline-schedulers.h
     model/algorithm/matrix-processor.h
     model/algorithm/null-model.h
     model/algorithm/optical-scheduler.h
@@ -42,6 +46,8 @@ build_lib(
     model/config/simulation-config.h
     model/controller/controller-state.h
     model/controller/controller-timeline.h
+    model/experiments/scheme-config.h
+    model/experiments/smoke-scenario-runner.h
     model/observer/traffic-matrix.h
     model/observer/traffic-observer.h
     model/results/csv-schema.h
@@ -66,6 +72,7 @@ build_lib(
     ${libpoint-to-point}
   TEST_SOURCES
     test/tl-ocs-algorithm-test-suite.cc
+    test/tl-ocs-baseline-schedulers-test-suite.cc
     test/tl-ocs-config-test-suite.cc
     test/tl-ocs-controller-state-test-suite.cc
     test/tl-ocs-controller-timeline-test-suite.cc
@@ -78,6 +85,8 @@ build_lib(
     test/tl-ocs-ocs-link-manager-test-suite.cc
     test/tl-ocs-flow-path-selector-test-suite.cc
     test/tl-ocs-result-writer-test-suite.cc
+    test/tl-ocs-scheme-config-test-suite.cc
+    test/tl-ocs-smoke-scenario-runner-test-suite.cc
     test/tl-ocs-traffic-observer-test-suite.cc
     test/tl-ocs-traffic-generator-test-suite.cc
 )

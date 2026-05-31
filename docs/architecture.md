@@ -190,3 +190,23 @@ Phase 9 may write `timeline_cycles`, `stage1_installed_flows`,
 `stage2_installed_flows`, `stage1_received_bytes`, and
 `stage2_received_bytes`. These remain directly produced smoke counts and byte
 counters, not paper metrics.
+
+Phase 10 adds `experiments` as a module boundary for unified scheme-level smoke
+assembly. `SchemeConfig` recognizes `eps-ecmp`, `eps-wecmp`, `ocs-volume`,
+`ocs-community`, and `tl-ocs` without silently falling back for unknown names.
+`SmokeScenarioRunner` owns the scheme-level choice between a one-stage EPS
+smoke and a two-stage controller smoke, while topology construction, traffic
+pattern generation, and CSV writing remain outside the module.
+
+`VolumeScheduler` selects port-constrained OCS edges by descending observed
+undirected volume `A_ij = W_ij + W_ji`. `CommunityScheduler` computes the
+null-model gain and lightweight community labels before applying the existing
+community-aware optical scheduler without TL-OCS EWMA or previous-active state.
+These are Phase 10 smoke baseline paths, not final paper baseline
+implementations. `tl-ocs` continues to use the current `TlOcsAlgorithm` path
+with EWMA and previous-active inputs.
+
+The Phase 10 EPS-only paths remain deliberately small: `eps-ecmp` uses ns-3
+global EPS routing and `eps-wecmp` uses the Phase 8 controlled static host-route
+assignment. Neither path implements complete five-tuple ECMP/WECMP behavior.
+Phase 10 does not add paper metrics or large-scale experiment execution.

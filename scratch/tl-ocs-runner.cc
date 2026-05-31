@@ -5,6 +5,7 @@
 #include <memory>
 #include <optional>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -60,6 +61,7 @@ main(int argc, char* argv[])
     bool enableOcsAdmissionSmoke = false;
     bool enableEpsWecmp = false;
     bool enableControllerTimeline = false;
+    bool enableSchemeRunner = false;
     bool observerDumpMatrix = false;
     bool printOcsDecisions = false;
     bool printEpsWecmpDecisions = false;
@@ -103,6 +105,7 @@ main(int argc, char* argv[])
     cmd.AddValue("enableOcsAdmissionSmoke", "Run new-flow OCS admission smoke after algorithm selection", enableOcsAdmissionSmoke);
     cmd.AddValue("enableEpsWecmp", "Route OCS fallback flows through controlled EPS-WECMP static routes", enableEpsWecmp);
     cmd.AddValue("enableControllerTimeline", "Run the reusable single-cycle controller timeline smoke", enableControllerTimeline);
+    cmd.AddValue("enableSchemeRunner", "Run a unified Phase 10 baseline or TL-OCS scheme smoke", enableSchemeRunner);
     cmd.AddValue("observerDumpMatrix", "Print the observed W(t) matrix after the run", observerDumpMatrix);
     cmd.AddValue("printOcsDecisions", "Print per-flow OCS/EPS path decisions", printOcsDecisions);
     cmd.AddValue("printEpsWecmpDecisions", "Print per-flow EPS-WECMP residual path decisions", printEpsWecmpDecisions);
@@ -123,6 +126,27 @@ main(int argc, char* argv[])
     cmd.AddValue("lambda", "Previous-active optical edge score bonus", lambda);
     cmd.AddValue("opticalPortsPerTor", "Optical port limit per ToR for pure scheduling", opticalPortsPerTor);
     cmd.Parse(argc, argv);
+
+    std::optional<SchemeConfig> scheme;
+    if (enableSchemeRunner)
+    {
+        try
+        {
+            scheme = SchemeConfig::FromString(schemeName);
+        }
+        catch (const std::runtime_error& error)
+        {
+            std::cerr << error.what() << std::endl;
+            return 1;
+        }
+        enableEpsTopology = true;
+        enableTrainingTraffic = true;
+        enableOcsLinks = scheme->EnableOcsLinks();
+        enableTrafficObserver = scheme->EnableTrafficObserver();
+        enableAlgorithmSmoke = scheme->EnableAlgorithm();
+        enableOcsAdmissionSmoke = scheme->EnableOcsAdmission();
+        enableEpsWecmp = scheme->EnableEpsWecmp();
+    }
 
     SimulationConfig config;
     config.SetNumTors(numTors);
@@ -191,7 +215,7 @@ main(int argc, char* argv[])
                   << std::endl;
         return 1;
     }
-    if (enableEpsWecmp && !enableOcsAdmissionSmoke)
+    if (enableEpsWecmp && !enableOcsAdmissionSmoke && !enableSchemeRunner)
     {
         std::cerr << "EPS-WECMP smoke requires --enableOcsAdmissionSmoke=true" << std::endl;
         return 1;
@@ -313,7 +337,71 @@ main(int argc, char* argv[])
             }
 
             const std::vector<FlowSpec> flows = generator->Generate(config, trafficConfig);
-            if (enableControllerTimeline)
+            if (enableSchemeRunner)
+            {
+                TlOcsAlgorithmParameters algorithmParameters;
+                algorithmParameters.beta = beta;
+                algorithmParameters.thetaF = thetaF;
+                algorithmParameters.eta = eta;
+                algorithmParameters.alpha = alpha;
+                algorithmParameters.lambda = lambda;
+                algorithmParameters.opticalPortsPerTor = opticalPortsPerTor;
+
+                SmokeScenarioOptions scenarioOptions;
+                scenarioOptions.timelineStageGap = Seconds(timelineStageGapSeconds);
+                scenarioOptions.printOcsDecisions = printOcsDecisions;
+                scenarioOptions.printEpsWecmpDecisions = printEpsWecmpDecisions;
+                for (uint32_t spineId = 0; spineId < spines; ++spineId)
+                {
+                    scenarioOptions.availableSpines.push_back(spineId);
+                }
+
+                SmokeScenarioRunner scenarioRunner;
+                const SmokeScenarioResult scenarioResult =
+                    scenarioRunner.Run(config,
+                                       scheme.value(),
+                                       index,
+                                       flows,
+                                       observer.get(),
+                                       algorithmParameters,
+                                       scenarioOptions);
+                installedFlows = scenarioResult.installedFlows;
+                receivedBytes = scenarioResult.receivedBytes;
+                if (scheme->EnableTrafficObserver())
+                {
+                    observedMatrixBytes = scenarioResult.observedMatrixBytes;
+                    algorithmCandidateEdges = scenarioResult.algorithmCandidateEdges;
+                    algorithmSelectedEdges = scenarioResult.algorithmSelectedEdges;
+                    timelineCycles = scenarioResult.timelineCycles;
+                    stage1InstalledFlows = scenarioResult.stage1InstalledFlows;
+                    stage2InstalledFlows = scenarioResult.stage2InstalledFlows;
+                    stage1ReceivedBytes = scenarioResult.stage1ReceivedBytes;
+                    stage2ReceivedBytes = scenarioResult.stage2ReceivedBytes;
+                }
+                if (scheme->EnableOcsAdmission())
+                {
+                    ocsActiveEdges = scenarioResult.ocsActiveEdges;
+                    ocsAdmittedFlows = scenarioResult.ocsAdmittedFlows;
+                    epsFallbackFlows = scenarioResult.epsFallbackFlows;
+                }
+                if (scheme->EnableEpsWecmp())
+                {
+                    epsFallbackFlows = scenarioResult.epsFallbackFlows;
+                    epsWecmpFlows = scenarioResult.epsWecmpFlows;
+                    epsWecmpSpine0Flows = scenarioResult.epsWecmpSpine0Flows;
+                    epsWecmpSpine1Flows = scenarioResult.epsWecmpSpine1Flows;
+                }
+                status = scenarioResult.status;
+
+                std::cout << "TL-OCS scheme runner: scheme=" << scenarioResult.schemeName
+                          << ", status=" << scenarioResult.status
+                          << ", selectedEdges=" << scenarioResult.selectedEdgeList
+                          << ", admitted=" << scenarioResult.ocsAdmittedFlows
+                          << ", epsFallback=" << scenarioResult.epsFallbackFlows
+                          << ", epsWecmp=" << scenarioResult.epsWecmpFlows
+                          << ", receivedBytes=" << scenarioResult.receivedBytes << std::endl;
+            }
+            else if (enableControllerTimeline)
             {
                 TlOcsAlgorithmParameters algorithmParameters;
                 algorithmParameters.beta = beta;

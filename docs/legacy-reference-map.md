@@ -253,6 +253,64 @@ New implementation:
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 9 implementation.
 
+## Phase 10 Reference
+
+Additional read-only files reviewed for baseline and experiment smoke framing:
+
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc`
+- `/home/dyn/sim/src/traffic/traffic-matrix.h`
+- `/home/dyn/sim/src/model/louvain.h`
+- `/home/dyn/sim/src/ocs/ocs-state.h`
+- `/home/dyn/sim/src/eps/eps-wecmp-state.h`
+- `/home/dyn/sim/src/result/structured-result-schema.h`
+- `/home/dyn/sim/docs/architecture.md`
+- `/home/dyn/sim/docs/algorithm_mapping.md`
+- `/home/dyn/sim/docs/tl_ocs_data_plane_path_validation.md`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_smoke_matrix.sh`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_medium_sanity.sh`
+
+Borrowed behavior and naming:
+
+- Legacy `presetScenario`, `selectionMetric`, `communityMode`, `routeMode`, and
+  EPS-WECMP flags confirm that scheme selection, OCS selection policy, route
+  binding, and experiment scripts should remain distinct boundaries.
+- Legacy `selectionMetric=absolute` is a useful behavior reference for the new
+  observed-volume smoke scheduler. Legacy `community-excess` is a useful
+  behavior reference for separating community-aware scheduling from the full
+  TL-OCS path.
+- The old scripts show a useful small scenario matrix pattern: run named
+  scenarios through one entry point, stop on errors, and write per-scenario
+  artifacts.
+- Legacy docs distinguish control-plane residual assignment from measured link
+  utilization. Phase 10 retains the `assignedBytes` smoke semantics for
+  EPS-WECMP.
+
+Not migrated:
+
+- The old `hybrid-dcn-main.cc` preset branches, synthetic controller matrix,
+  route-binding body, multi-period controller, config gates, hold-time gates,
+  admission thresholds, measured telemetry callbacks, structured result
+  schema, validation matrix, FCT/goodput metrics, hit-rate metrics, and
+  utilization time series were not copied or migrated.
+- The old smoke scripts' manifest generation, output aggregation, plotting
+  preparation, and large scenario combinations remain out of scope.
+- Phase 10 does not claim final paper baselines. It only provides comparable
+  small smoke execution paths.
+
+New implementation:
+
+- `experiments/SchemeConfig` parses the five new scheme names and exposes
+  explicit flags without silent fallback.
+- `algorithm/VolumeScheduler` selects port-feasible OCS edges from observed
+  `W(t)` volume. `algorithm/CommunityScheduler` reuses the new null model,
+  lightweight community detector, and optical scheduler without TL-OCS state.
+- `experiments/SmokeScenarioRunner` owns scheme-level assembly across
+  `FlowLauncher`, `ControllerTimeline`, OCS admission, and residual EPS-WECMP.
+- `experiments/configs` and `experiments/scripts` provide one small properties
+  file per scheme and simple one-scheme/all-scheme smoke entry points.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 10 implementation.
+
 ## Phase 5 Reference
 
 Additional read-only files reviewed for TrafficObserver:

@@ -96,12 +96,26 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
     const TrafficMatrix observed = observer.SnapshotAndReset();
     result.observedMatrixBytes = observed.GetTotalBytes();
 
-    TlOcsAlgorithm algorithm;
-    const TlOcsAlgorithmResult algorithmResult =
-        algorithm.Run(observed,
-                      m_state.GetPreviousAbar(),
-                      m_state.GetPreviousActiveEdges(),
-                      algorithmParameters);
+    TlOcsAlgorithmResult algorithmResult;
+    if (options.schedulingMode == OpticalSchedulingMode::VOLUME)
+    {
+        VolumeScheduler scheduler;
+        algorithmResult = scheduler.Run(observed, algorithmParameters.opticalPortsPerTor);
+    }
+    else if (options.schedulingMode == OpticalSchedulingMode::COMMUNITY)
+    {
+        CommunityScheduler scheduler;
+        algorithmResult = scheduler.Run(observed, algorithmParameters);
+    }
+    else
+    {
+        TlOcsAlgorithm algorithm;
+        algorithmResult =
+            algorithm.Run(observed,
+                          m_state.GetPreviousAbar(),
+                          m_state.GetPreviousActiveEdges(),
+                          algorithmParameters);
+    }
     m_state.UpdateFromAlgorithmResult(algorithmResult, result.observedMatrixBytes);
 
     result.timelineCycles = m_state.GetCurrentCycleIndex();
