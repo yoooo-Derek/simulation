@@ -26,6 +26,7 @@ struct OpticalSchedulerParameters
 {
     double alpha = 0.5;
     bool enableCommunityFactor = true;
+    // Holding is an optional stability mechanism layered on core edge scoring.
     double lambda = 0.0;
     double replacementThreshold = 0.0;
     bool holdActiveEdges = false;

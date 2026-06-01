@@ -15,6 +15,8 @@ struct TlOcsAlgorithmParameters
     double thetaF = 0.0;
     double eta = 1.0;
     double alpha = 0.5;
+    // Optional stability controls. The TL-OCS core path is matrix processing,
+    // null-model correction, community detection, and community-aware scheduling.
     double lambda = 0.0;
     double replacementThreshold = 0.0;
     bool enableNullModel = true;
@@ -33,6 +35,7 @@ struct TlOcsAlgorithmParameters
 
 struct TlOcsAlgorithmResult
 {
+    // Core pipeline artifacts: W -> A -> Abar -> B -> communities -> OCS edges.
     DenseMatrix A;
     DenseMatrix Abar;
     DenseMatrix B;

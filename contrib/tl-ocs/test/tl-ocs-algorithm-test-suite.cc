@@ -24,6 +24,19 @@ ContainsEdge(const std::vector<OpticalEdge>& edges, uint32_t sourceTor, uint32_t
     return false;
 }
 
+const OpticalEdge*
+FindEdge(const std::vector<OpticalEdge>& edges, uint32_t sourceTor, uint32_t destinationTor)
+{
+    for (const auto& edge : edges)
+    {
+        if (edge.sourceTor == sourceTor && edge.destinationTor == destinationTor)
+        {
+            return &edge;
+        }
+    }
+    return nullptr;
+}
+
 } // namespace
 
 class TlOcsAlgorithmSelectionTestCase : public TestCase
@@ -36,7 +49,7 @@ class TlOcsAlgorithmSelectionTestCase : public TestCase
 };
 
 TlOcsAlgorithmSelectionTestCase::TlOcsAlgorithmSelectionTestCase()
-    : TestCase("TL-OCS algorithm selects positive-gain edges under port constraints")
+    : TestCase("TL-OCS core pipeline maps community-local traffic to intra-community OCS edges")
 {
 }
 
@@ -63,6 +76,17 @@ TlOcsAlgorithmSelectionTestCase::DoRun()
     TlOcsAlgorithm algorithm;
     TlOcsAlgorithmResult result = algorithm.Run(observed, DenseMatrix(), {}, parameters);
 
+    NS_TEST_ASSERT_MSG_EQ_TOL(result.A.Get(0, 1), 200.0, 1e-12, "unexpected A(0,1)");
+    NS_TEST_ASSERT_MSG_EQ_TOL(result.A.Get(2, 3), 160.0, 1e-12, "unexpected A(2,3)");
+    NS_TEST_ASSERT_MSG_EQ_TOL(result.Abar.Get(0, 1),
+                              result.A.Get(0, 1),
+                              1e-12,
+                              "first-cycle Abar should equal A");
+    NS_TEST_ASSERT_MSG_GT(result.B.Get(0, 1), 0.0, "community-local B(0,1) should be positive");
+    NS_TEST_ASSERT_MSG_GT(result.B.Get(2, 3), 0.0, "community-local B(2,3) should be positive");
+    NS_TEST_ASSERT_MSG_LT(result.B.Get(0, 2),
+                          result.B.Get(0, 1),
+                          "weak cross-community edge should have lower structural gain");
     NS_TEST_ASSERT_MSG_GT(result.candidateEdges.size(), 0, "expected candidate edges");
     NS_TEST_ASSERT_MSG_EQ(result.selectedEdges.size(), 2, "expected both strong community edges");
     NS_TEST_ASSERT_MSG_EQ(result.communityLabels[0],
@@ -75,6 +99,16 @@ TlOcsAlgorithmSelectionTestCase::DoRun()
                           result.communityLabels[2],
                           "strong groups should remain separate");
     NS_TEST_ASSERT_MSG_GT(result.communityLevelCount, 0, "expected community detection level");
+    const OpticalEdge* edge01 = FindEdge(result.candidateEdges, 0, 1);
+    const OpticalEdge* edge23 = FindEdge(result.candidateEdges, 2, 3);
+    NS_TEST_ASSERT_MSG_NE(edge01, nullptr, "expected candidate edge 0-1");
+    NS_TEST_ASSERT_MSG_NE(edge23, nullptr, "expected candidate edge 2-3");
+    if (edge01 == nullptr || edge23 == nullptr)
+    {
+        return;
+    }
+    NS_TEST_ASSERT_MSG_EQ(edge01->sameCommunity, true, "edge 0-1 should be intra-community");
+    NS_TEST_ASSERT_MSG_EQ(edge23->sameCommunity, true, "edge 2-3 should be intra-community");
 
     std::vector<uint32_t> selectedDegree(4, 0);
     bool selected01 = false;
@@ -280,17 +314,18 @@ class TlOcsAlgorithmNullModelRankingTestCase : public TestCase
 };
 
 TlOcsAlgorithmNullModelRankingTestCase::TlOcsAlgorithmNullModelRankingTestCase()
-    : TestCase("TL-OCS null model changes edge ranking relative to absolute volume")
+    : TestCase("TL-OCS null model corrects high-degree aggregation-node volume bias")
 {
 }
 
 void
 TlOcsAlgorithmNullModelRankingTestCase::DoRun()
 {
-    TrafficMatrix observed(4);
+    TrafficMatrix observed(5);
     observed.AddBytes(0, 1, 10);
     observed.AddBytes(0, 2, 9);
     observed.AddBytes(1, 3, 10);
+    observed.AddBytes(1, 4, 10);
 
     TlOcsAlgorithmParameters volumeScore;
     volumeScore.enableEwma = false;
@@ -305,6 +340,8 @@ TlOcsAlgorithmNullModelRankingTestCase::DoRun()
     const auto volume = TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, volumeScore);
     const auto excess = TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, excessScore);
 
+    // Node 1 communicates with 0, 3, and 4. Its higher degree makes the
+    // absolute-volume 0-1 edge less structurally surprising than edge 0-2.
     NS_TEST_ASSERT_MSG_GT(volume.B.Get(0, 1),
                           volume.B.Get(0, 2),
                           "absolute score should prefer the higher-volume edge");
