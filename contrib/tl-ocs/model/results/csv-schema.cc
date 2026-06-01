@@ -17,7 +17,7 @@ GetSmokeSummaryCsvHeader()
            "stage2_received_bytes,total_flows,completed_flows,incomplete_flows,"
            "avg_fct_s,p90_fct_s,p95_fct_s,eps_avg_link_utilization,"
            "eps_max_link_utilization,ocs_avg_link_utilization,ocs_max_link_utilization,"
-           "ocs_flow_hit_rate,ocs_byte_hit_rate,ocs_reconfiguration_count";
+           "ocs_flow_hit_rate,ocs_byte_hit_rate,ocs_reconfiguration_count,spines";
 }
 
 std::string

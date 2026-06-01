@@ -57,7 +57,8 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 std::optional<uint64_t> stage2ReceivedBytes,
                                 std::optional<FlowMetricsSummary> flowMetrics,
                                 std::optional<LinkUtilizationSummary> linkMetrics,
-                                std::optional<OcsMetricsSummary> ocsMetrics) const
+                                std::optional<OcsMetricsSummary> ocsMetrics,
+                                std::optional<uint32_t> spines) const
 {
     const std::filesystem::path outputDir(output.GetOutputDir());
     std::filesystem::create_directories(outputDir);
@@ -228,6 +229,11 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     if (ocsMetrics.has_value())
     {
         stream << ocsMetrics->ocsReconfigurationCount;
+    }
+    stream << ',';
+    if (spines.has_value())
+    {
+        stream << spines.value();
     }
     stream << '\n';
 

@@ -86,3 +86,17 @@ report the active-edge count already produced by the controller and a
 single-cycle reconfiguration count: one when a non-empty active set was
 applied, otherwise zero. These utilization values are post-run metrics. They do
 not replace EPS-WECMP assigned-byte state or drive path selection.
+
+## Scale Sanity
+
+Phase 12A adds script-level schema validation, aggregation, and deliberately
+small scale sanity runs:
+
+```bash
+./experiments/scripts/run-all-sanity.sh
+```
+
+The script runs one 8-ToR TL-OCS case and five 16-ToR scheme cases, validates
+their summary and per-flow CSV files, then writes
+`results/tables/sanity-summary.csv`. These are engineering sanity artifacts,
+not paper results. No plotting or statistical analysis is performed.

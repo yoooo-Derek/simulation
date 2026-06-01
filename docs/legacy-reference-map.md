@@ -452,3 +452,48 @@ New implementation:
   the five Phase 11B scheme smokes without moving metrics logic into scratch.
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 11B implementation.
+
+## Phase 12A Reference
+
+Additional read-only files reviewed for experiment execution, validation, and
+aggregation:
+
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_smoke_matrix.sh`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_medium_sanity.sh`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/validate_outputs.py`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/collect_summary.py`
+- `/home/dyn/sim/docs/code_map.md`
+- `/home/dyn/sim/docs/tl_ocs_patch5c_medium_sanity_validation.md`
+- `/home/dyn/sim/src/result/structured-result-schema.h`
+
+Borrowed behavior and naming:
+
+- Legacy smoke and medium-sanity scripts confirm the useful sequence: run
+  named scenarios, stop on failures, validate emitted CSV artifacts, then
+  aggregate a comparison table.
+- Legacy validation checks confirm that required schema fields should fail
+  loudly and numeric invariants should be checked without inventing defaults.
+- Legacy aggregation keeps scenario identity and scale metadata beside metric
+  fields. Phase 12A appends `spines` to the fresh summary schema so the new
+  table retains that topology dimension.
+
+Not migrated:
+
+- The old manifest writer, timestamped run directories, validation matrix,
+  baseline mean report, plotting preparation, time-series checks, measured
+  WECMP checks, route leakage checks, structured schema implementation, and
+  paper-scale scenario combinations were not copied or migrated.
+- The old `hybrid-dcn-main.cc` was not copied or migrated.
+
+New implementation:
+
+- `experiments/scripts/aggregate-results.py` uses Python standard-library CSV
+  handling to select a fixed summary-table schema and preserve empty values.
+- `experiments/scripts/validate-results.py` validates the smaller fresh summary
+  and per-flow schemas plus basic numeric invariants.
+- `experiments/scripts/run-scale-sanity.sh` runs and validates one named
+  8-ToR or 16-ToR properties configuration.
+- `experiments/scripts/run-all-sanity.sh` runs one 8-ToR TL-OCS case and all
+  five 16-ToR schemes before writing `results/tables/sanity-summary.csv`.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 12A implementation.

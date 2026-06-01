@@ -859,7 +859,8 @@ main(int argc, char* argv[])
                                  stage2ReceivedBytes,
                                  flowMetricsSummary,
                                  linkUtilizationSummary,
-                                 ocsMetricsSummary);
+                                 ocsMetricsSummary,
+                                 spines);
     std::cout << "TL-OCS smoke summary: " << summaryPath << std::endl;
     if (enableFlowMetrics)
     {

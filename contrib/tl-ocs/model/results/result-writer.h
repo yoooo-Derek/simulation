@@ -43,7 +43,8 @@ class ResultWriter
                                             std::optional<uint64_t> stage2ReceivedBytes = std::nullopt,
                                             std::optional<FlowMetricsSummary> flowMetrics = std::nullopt,
                                             std::optional<LinkUtilizationSummary> linkMetrics = std::nullopt,
-                                            std::optional<OcsMetricsSummary> ocsMetrics = std::nullopt) const;
+                                            std::optional<OcsMetricsSummary> ocsMetrics = std::nullopt,
+                                            std::optional<uint32_t> spines = std::nullopt) const;
 };
 
 } // namespace tl_ocs

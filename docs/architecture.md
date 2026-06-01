@@ -249,3 +249,12 @@ determines OCS byte share. In the single-cycle smoke,
 not a multi-period optical reconfiguration count. Phase 11B still does not add
 link time series, measured-utilization-driven WECMP, complete five-tuple WECMP,
 multi-cycle control, or large-scale paper experiments.
+
+Phase 12A adds a reproducible script-level experiment boundary under
+`experiments/scripts`. `aggregate-results.py` combines existing summary rows
+into a deterministic table without changing metric semantics.
+`validate-results.py` checks summary and per-flow schemas plus basic numeric
+invariants. The scale-sanity scripts run one 8-ToR TL-OCS case and five 16-ToR
+scheme cases. They do not add algorithms, controller cycles, plotting, or
+paper-scale execution. Summary CSV now appends `spines` so aggregated tables
+retain the EPS topology dimension.
