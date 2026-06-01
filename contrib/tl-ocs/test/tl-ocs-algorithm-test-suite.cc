@@ -56,6 +56,7 @@ TlOcsAlgorithmSelectionTestCase::DoRun()
     NS_TEST_ASSERT_MSG_NE(result.communityLabels[0],
                           result.communityLabels[2],
                           "strong groups should remain separate");
+    NS_TEST_ASSERT_MSG_GT(result.communityLevelCount, 0, "expected community detection level");
 
     std::vector<uint32_t> selectedDegree(4, 0);
     bool selected01 = false;

@@ -93,12 +93,8 @@ GetUnusedCommunityLabel(const std::vector<uint32_t>& labels)
     return labels.empty() ? 0 : *std::max_element(labels.begin(), labels.end()) + 1;
 }
 
-} // namespace
-
 CommunityDetectionResult
-CommunityDetector::DetectDetailed(const DenseMatrix& modularityGain,
-                                  uint32_t maxPasses,
-                                  double minGain) const
+RunLocalMoving(const DenseMatrix& modularityGain, uint32_t maxPasses, double minGain)
 {
     CommunityDetectionResult result;
     result.labels.resize(modularityGain.GetSize());
@@ -171,6 +167,87 @@ CommunityDetector::DetectDetailed(const DenseMatrix& modularityGain,
     NormalizeLabels(result.labels);
     result.score = ComputeScore(modularityGain, result.labels);
     return result;
+}
+
+DenseMatrix
+BuildAggregatedMatrix(const DenseMatrix& modularityGain,
+                      const std::vector<uint32_t>& labels,
+                      uint32_t communityCount)
+{
+    DenseMatrix aggregated(communityCount);
+    for (uint32_t i = 0; i < modularityGain.GetSize(); ++i)
+    {
+        for (uint32_t j = i + 1; j < modularityGain.GetSize(); ++j)
+        {
+            if (labels[i] == labels[j])
+            {
+                continue;
+            }
+            const double gain = modularityGain.Get(i, j);
+            aggregated.Add(labels[i], labels[j], gain);
+            aggregated.Add(labels[j], labels[i], gain);
+        }
+    }
+    // Internal community gain is already fixed at this level. The next local-moving
+    // level only needs cross-community gain, so super-node self loops are omitted.
+    return aggregated;
+}
+
+} // namespace
+
+CommunityDetectionResult
+CommunityDetector::DetectDetailed(const DenseMatrix& modularityGain,
+                                  const CommunityDetectionOptions& options) const
+{
+    CommunityDetectionResult result;
+    result.labels.resize(modularityGain.GetSize());
+    for (uint32_t i = 0; i < modularityGain.GetSize(); ++i)
+    {
+        result.labels[i] = i;
+    }
+
+    DenseMatrix currentGain = modularityGain;
+    for (uint32_t level = 0; level < options.maxLevels && currentGain.GetSize() > 0; ++level)
+    {
+        const CommunityDetectionResult local =
+            RunLocalMoving(currentGain, options.maxPasses, options.minGain);
+        result.passCount += local.passCount;
+        result.movedCount += local.movedCount;
+        result.levelCount++;
+        result.perLevelScores.push_back(local.score);
+
+        std::vector<uint32_t> expandedLabels(result.labels.size());
+        for (uint32_t node = 0; node < result.labels.size(); ++node)
+        {
+            expandedLabels[node] = local.labels[result.labels[node]];
+        }
+        result.labels = expandedLabels;
+
+        const uint32_t currentNodeCount = currentGain.GetSize();
+        const uint32_t localCommunityCount =
+            local.labels.empty() ? 0 : *std::max_element(local.labels.begin(), local.labels.end()) + 1;
+        result.perLevelCommunityCounts.push_back(localCommunityCount);
+        if (!options.enableAggregation || localCommunityCount == currentNodeCount)
+        {
+            break;
+        }
+        currentGain = BuildAggregatedMatrix(currentGain, local.labels, localCommunityCount);
+    }
+
+    NormalizeLabels(result.labels);
+    result.score = ComputeScore(modularityGain, result.labels);
+    return result;
+}
+
+CommunityDetectionResult
+CommunityDetector::DetectDetailed(const DenseMatrix& modularityGain,
+                                  uint32_t maxPasses,
+                                  double minGain) const
+{
+    CommunityDetectionOptions options;
+    options.maxPasses = maxPasses;
+    options.minGain = minGain;
+    return DetectDetailed(modularityGain, options);
 }
 
 std::vector<uint32_t>

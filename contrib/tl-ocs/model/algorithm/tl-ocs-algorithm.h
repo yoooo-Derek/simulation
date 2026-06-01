@@ -22,6 +22,8 @@ struct TlOcsAlgorithmParameters
     uint32_t maxReplacements = 0;
     uint32_t opticalPortsPerTor = 1;
     uint32_t maxPasses = 4;
+    uint32_t maxLevels = 4;
+    bool enableCommunityAggregation = true;
 };
 
 struct TlOcsAlgorithmResult
@@ -34,6 +36,7 @@ struct TlOcsAlgorithmResult
     double communityScore = 0.0;
     uint32_t communityPassCount = 0;
     uint32_t communityMovedCount = 0;
+    uint32_t communityLevelCount = 0;
     std::vector<OpticalEdge> candidateEdges;
     std::vector<OpticalEdge> selectedEdges;
     uint32_t retainedEdgeCount = 0;

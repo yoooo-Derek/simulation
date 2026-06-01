@@ -634,3 +634,31 @@ New implementation:
   retained edges, and threshold-controlled replacement.
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 13C implementation.
+
+## Phase 13D Reference
+
+Additional read-only algorithm file reviewed for multi-level community
+detection:
+
+- `/home/dyn/sim/src/model/louvain.h`
+
+Borrowed behavior and naming:
+
+- A local-moving level can be followed by deterministic graph folding when it
+  reduces the community graph.
+- Original-node labels are carried through each folded graph and normalized
+  after expansion.
+
+Not migrated:
+
+- The old modularity-Q implementation, old weighted-matrix helpers, level
+  diagnostics, preview modes, implementation code, and old main orchestration
+  were not copied or migrated.
+
+New implementation:
+
+- `algorithm/CommunityDetector` runs deterministic local moving on raw
+  modularity-gain matrices, folds cross-community gains into super-nodes
+  without self loops, and expands final labels back to the original ToRs.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 13D implementation.
