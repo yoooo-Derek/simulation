@@ -605,3 +605,32 @@ New implementation:
   exceeds their scores by the configured threshold.
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 13B implementation.
+
+## Phase 13C Reference
+
+Additional read-only algorithm-state files reviewed for two-cycle state
+evolution:
+
+- `/home/dyn/sim/src/ocs/ocs-state.h`
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc` previous-active, controller-epoch,
+  and hold-time fragments
+
+Borrowed behavior and naming:
+
+- The next controller cycle consumes the previous smoothed matrix and selected
+  optical edge set as explicit algorithm state.
+- Cycle advancement remains separate from ns-3 data-plane execution.
+
+Not migrated:
+
+- The old edge-age state, runtime epoch scheduler, multi-period controller,
+  hold-cycle gate, diagnostics, and old main orchestration were not copied or
+  migrated.
+
+New implementation:
+
+- `tl-ocs-controller-state` composes the existing pure `TlOcsAlgorithm` and
+  `ControllerState` APIs across two cycles to validate EWMA state propagation,
+  retained edges, and threshold-controlled replacement.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 13C implementation.
