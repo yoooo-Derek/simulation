@@ -3,12 +3,14 @@
 #include "ns3/eps-topology-builder.h"
 #include "ns3/flow-launcher.h"
 #include "ns3/flow-spec.h"
+#include "ns3/metrics-collector.h"
 #include "ns3/simulation-config.h"
 #include "ns3/simulator.h"
 #include "ns3/test.h"
 #include "ns3/tl-ocs-algorithm.h"
 #include "ns3/traffic-matrix.h"
 #include "ns3/traffic-observer.h"
+#include "ns3/uniform-traffic-generator.h"
 
 #include <vector>
 
@@ -180,6 +182,56 @@ TlOcsObservedCommunityLocalAlgorithmTestCase::DoRun()
                           "TL-OCS should select observed intra-community edge 2-3");
 }
 
+class TlOcsObservedUniformReadinessTestCase : public TestCase
+{
+  public:
+    TlOcsObservedUniformReadinessTestCase()
+        : TestCase("TL-OCS data-plane uniform background produces observed matrix and flow metrics")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(4);
+        simulation.SetServersPerTor(1);
+        simulation.SetStopTime(MilliSeconds(60));
+
+        TrafficGenerationConfig traffic;
+        traffic.numFlows = 8;
+        traffic.flowSizeBytes = 10000;
+        const std::vector<FlowSpec> flows = UniformTrafficGenerator().Generate(simulation, traffic);
+
+        NodeIndex index = EpsTopologyBuilder().Build(simulation, 1);
+        TrafficObserver observer(simulation.GetNumTors(), simulation.GetObserverWindow());
+        observer.AttachToTopology(index);
+        const FlowLaunchResult launch =
+            FlowLauncher().Install(flows, index, simulation.GetStopTime());
+
+        Simulator::Stop(simulation.GetStopTime());
+        Simulator::Run();
+        const TrafficMatrix observed = observer.SnapshotAndReset();
+        const auto metrics = MetricsCollector().Collect(launch.metricSources, "tl-ocs");
+        Simulator::Destroy();
+
+        NS_TEST_ASSERT_MSG_GT(observed.GetTotalBytes(),
+                              0,
+                              "uniform observer snapshot must contain data-plane bytes");
+        const TlOcsAlgorithmResult result =
+            TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, TlOcsAlgorithmParameters());
+        NS_TEST_ASSERT_MSG_GT(result.selectedEdges.size(),
+                              0,
+                              "uniform observed matrix should yield schedulable OCS edges");
+        NS_TEST_ASSERT_MSG_EQ(metrics.size(), flows.size(), "uniform metric record count mismatch");
+        for (const auto& metric : metrics)
+        {
+            NS_TEST_ASSERT_MSG_EQ(metric.completed, true, "uniform TCP flow did not complete");
+            NS_TEST_ASSERT_MSG_GT(metric.receivedBytes, 0, "uniform flow metric has no received bytes");
+        }
+    }
+};
+
 class TlOcsObservedAggregationAlgorithmTestCase : public TestCase
 {
   public:
@@ -241,6 +293,9 @@ TlOcsObservedAggregationAlgorithmTestCase::DoRun()
     NS_TEST_ASSERT_MSG_GT(tlOcs.B.Get(0, 1),
                           0.0,
                           "aggregation edge should retain positive structural gain");
+    NS_TEST_ASSERT_MSG_GT(tlOcs.selectedEdges.size(),
+                          0,
+                          "aggregation observed matrix should yield schedulable OCS edges");
 }
 
 class TlOcsTrafficObserverTestSuite : public TestSuite
@@ -254,6 +309,7 @@ TlOcsTrafficObserverTestSuite::TlOcsTrafficObserverTestSuite()
 {
     AddTestCase(new TlOcsTrafficMatrixTestCase);
     AddTestCase(new TlOcsTrafficObserverDataPlaneTestCase);
+    AddTestCase(new TlOcsObservedUniformReadinessTestCase);
     AddTestCase(new TlOcsObservedCommunityLocalAlgorithmTestCase);
     AddTestCase(new TlOcsObservedAggregationAlgorithmTestCase);
 }

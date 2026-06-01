@@ -1,3 +1,4 @@
+#include "ns3/aggregation-traffic-generator.h"
 #include "ns3/controller-state.h"
 #include "ns3/controller-timeline.h"
 #include "ns3/eps-topology-builder.h"
@@ -7,6 +8,7 @@
 #include "ns3/simulator.h"
 #include "ns3/test.h"
 #include "ns3/traffic-observer.h"
+#include "ns3/uniform-traffic-generator.h"
 
 #include <algorithm>
 
@@ -109,6 +111,86 @@ RunSchemeDifferentiation(OpticalSchedulingMode schedulingMode)
     result.metrics = MetricsCollector().Collect(result.timeline.metricSources, "timeline-test");
     Simulator::Destroy();
     return result;
+}
+
+std::vector<FlowSpec>
+OffsetFlowIds(const std::vector<FlowSpec>& flows, uint32_t offset)
+{
+    std::vector<FlowSpec> shifted;
+    shifted.reserve(flows.size());
+    for (const auto& flow : flows)
+    {
+        shifted.emplace_back(flow.GetFlowId() + offset,
+                             flow.GetSourceTorId(),
+                             flow.GetSourceServerId(),
+                             flow.GetDestinationTorId(),
+                             flow.GetDestinationServerId(),
+                             flow.GetSizeBytes(),
+                             flow.GetStartTime(),
+                             flow.GetPatternName());
+    }
+    return shifted;
+}
+
+struct GeneratedScenarioResult
+{
+    ControllerTimelineResult timeline;
+    std::vector<FlowMetricRecord> metrics;
+};
+
+GeneratedScenarioResult
+RunGeneratedScenario(const SimulationConfig& simulation, const std::vector<FlowSpec>& stage1Flows)
+{
+    EpsTopologyBuilder::BuildOptions buildOptions;
+    buildOptions.enableOcsLinks = true;
+    NodeIndex index = EpsTopologyBuilder().Build(simulation, 2, buildOptions);
+    TrafficObserver observer(simulation.GetNumTors(), simulation.GetObserverWindow());
+    observer.AttachToTopology(index);
+
+    TlOcsAlgorithmParameters parameters;
+    parameters.enableEwma = false;
+    parameters.opticalPortsPerTor = 1;
+
+    ControllerTimelineOptions options;
+    options.enableOcsAdmission = true;
+    options.stage1Stop = MilliSeconds(60);
+    options.stageGap = MilliSeconds(1);
+
+    ControllerState state;
+    ControllerTimeline timeline(state);
+    OcsLinkManager linkManager;
+    GeneratedScenarioResult result;
+    result.timeline = timeline.RunTwoStageSmoke(index,
+                                                simulation,
+                                                stage1Flows,
+                                                OffsetFlowIds(stage1Flows, 100),
+                                                observer,
+                                                parameters,
+                                                linkManager,
+                                                options);
+    result.metrics = MetricsCollector().Collect(result.timeline.metricSources, "tl-ocs");
+    Simulator::Destroy();
+    return result;
+}
+
+bool
+HasValidStage2Metrics(const GeneratedScenarioResult& result, uint32_t expectedStageFlows)
+{
+    uint32_t stage2Metrics = 0;
+    for (const auto& metric : result.metrics)
+    {
+        if (metric.flowId < 100)
+        {
+            continue;
+        }
+        stage2Metrics++;
+        if (!metric.completed || metric.receivedBytes == 0 ||
+            (metric.pathType != "ocs" && metric.pathType != "eps"))
+        {
+            return false;
+        }
+    }
+    return stage2Metrics == expectedStageFlows;
 }
 
 } // namespace
@@ -271,6 +353,97 @@ class TlOcsControllerTimelineSchemeDifferentiationTestCase : public TestCase
     }
 };
 
+class TlOcsControllerTimelineUniformReadinessTestCase : public TestCase
+{
+  public:
+    TlOcsControllerTimelineUniformReadinessTestCase()
+        : TestCase("TL-OCS two-stage uniform background scenario is runnable")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(4);
+        simulation.SetServersPerTor(1);
+        simulation.SetStopTime(MilliSeconds(120));
+        TrafficGenerationConfig traffic;
+        traffic.numFlows = 8;
+        traffic.flowSizeBytes = 10000;
+        const GeneratedScenarioResult result =
+            RunGeneratedScenario(simulation, UniformTrafficGenerator().Generate(simulation, traffic));
+        NS_TEST_ASSERT_MSG_GT(result.timeline.observedMatrixBytes, 0, "uniform observer snapshot is empty");
+        NS_TEST_ASSERT_MSG_GT(result.timeline.algorithmSelectedEdges, 0, "uniform selected no OCS edges");
+        NS_TEST_ASSERT_MSG_EQ(result.timeline.ocsActiveEdges,
+                              result.timeline.algorithmSelectedEdges,
+                              "uniform active edge count mismatch");
+        NS_TEST_ASSERT_MSG_EQ(result.timeline.stage1InstalledFlows,
+                              traffic.numFlows,
+                              "uniform stage-1 flow count mismatch");
+        NS_TEST_ASSERT_MSG_EQ(result.timeline.stage2InstalledFlows,
+                              traffic.numFlows,
+                              "uniform stage-2 flow count mismatch");
+        NS_TEST_ASSERT_MSG_GT(result.timeline.stage2ReceivedBytes, 0, "uniform stage-2 received no bytes");
+        NS_TEST_ASSERT_MSG_GT(result.timeline.ocsAdmittedFlows, 0, "uniform admitted no OCS flows");
+        NS_TEST_ASSERT_MSG_EQ(HasValidStage2Metrics(result, traffic.numFlows),
+                              true,
+                              "uniform stage-2 metrics are invalid");
+    }
+};
+
+class TlOcsControllerTimelineAggregationReadinessTestCase : public TestCase
+{
+  public:
+    TlOcsControllerTimelineAggregationReadinessTestCase()
+        : TestCase("TL-OCS two-stage parameter-aggregation scenario is runnable")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(5);
+        simulation.SetServersPerTor(1);
+        simulation.SetStopTime(MilliSeconds(120));
+        TrafficGenerationConfig traffic;
+        traffic.numFlows = 8;
+        traffic.flowSizeBytes = 10000;
+        traffic.aggregatorTor = 0;
+        const GeneratedScenarioResult result =
+            RunGeneratedScenario(simulation,
+                                 AggregationTrafficGenerator().Generate(simulation, traffic));
+        NS_TEST_ASSERT_MSG_GT(result.timeline.observedMatrixBytes,
+                              0,
+                              "aggregation observer snapshot is empty");
+        NS_TEST_ASSERT_MSG_GT(result.timeline.algorithmSelectedEdges,
+                              0,
+                              "aggregation selected no OCS edges");
+        NS_TEST_ASSERT_MSG_EQ(result.timeline.ocsActiveEdges,
+                              result.timeline.algorithmSelectedEdges,
+                              "aggregation active edge count mismatch");
+        NS_TEST_ASSERT_MSG_EQ(result.timeline.stage1InstalledFlows,
+                              traffic.numFlows,
+                              "aggregation stage-1 flow count mismatch");
+        NS_TEST_ASSERT_MSG_EQ(result.timeline.stage2InstalledFlows,
+                              traffic.numFlows,
+                              "aggregation stage-2 flow count mismatch");
+        NS_TEST_ASSERT_MSG_GT(result.timeline.stage2ReceivedBytes,
+                              0,
+                              "aggregation stage-2 received no bytes");
+        NS_TEST_ASSERT_MSG_GT(result.timeline.ocsAdmittedFlows,
+                              0,
+                              "aggregation admitted no OCS flows");
+        NS_TEST_ASSERT_MSG_EQ(HasValidStage2Metrics(result, traffic.numFlows),
+                              true,
+                              "aggregation stage-2 metrics are invalid");
+        NS_TEST_ASSERT_MSG_GT(result.timeline.epsFallbackFlows,
+                              0,
+                              "aggregation residual traffic should retain EPS fallback");
+    }
+};
+
 class TlOcsControllerTimelineTestSuite : public TestSuite
 {
   public:
@@ -282,6 +455,8 @@ TlOcsControllerTimelineTestSuite::TlOcsControllerTimelineTestSuite()
 {
     AddTestCase(new TlOcsControllerTimelineTestCase);
     AddTestCase(new TlOcsControllerTimelineSchemeDifferentiationTestCase);
+    AddTestCase(new TlOcsControllerTimelineUniformReadinessTestCase);
+    AddTestCase(new TlOcsControllerTimelineAggregationReadinessTestCase);
 }
 
 static TlOcsControllerTimelineTestSuite g_tlOcsControllerTimelineTestSuite;

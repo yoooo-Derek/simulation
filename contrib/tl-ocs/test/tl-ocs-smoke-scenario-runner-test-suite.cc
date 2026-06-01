@@ -1,3 +1,4 @@
+#include "ns3/community-traffic-generator.h"
 #include "ns3/eps-topology-builder.h"
 #include "ns3/scheme-config.h"
 #include "ns3/simulation-config.h"
@@ -23,12 +24,13 @@ MakeSimulation()
 }
 
 std::vector<FlowSpec>
-MakeFlows()
+MakeFlows(const SimulationConfig& simulation)
 {
-    return {{0, 0, 0, 1, 0, 10000, MilliSeconds(1), "scenario-test"},
-            {1, 1, 0, 0, 0, 10000, MilliSeconds(2), "scenario-test"},
-            {2, 2, 0, 3, 0, 10000, MilliSeconds(3), "scenario-test"},
-            {3, 3, 0, 2, 0, 10000, MilliSeconds(4), "scenario-test"}};
+    TrafficGenerationConfig traffic;
+    traffic.numFlows = 4;
+    traffic.flowSizeBytes = 10000;
+    traffic.communityCount = 2;
+    return CommunityTrafficGenerator().Generate(simulation, traffic);
 }
 
 SmokeScenarioOptions
@@ -63,7 +65,7 @@ class TlOcsEpsEcmpScenarioTestCase : public TestCase
             runner.Run(simulation,
                        SchemeConfig::FromString("eps-ecmp"),
                        index,
-                       MakeFlows(),
+                       MakeFlows(simulation),
                        nullptr,
                        TlOcsAlgorithmParameters(),
                        MakeOptions());
@@ -99,7 +101,7 @@ class TlOcsEpsWecmpScenarioTestCase : public TestCase
             runner.Run(simulation,
                        SchemeConfig::FromString("eps-wecmp"),
                        index,
-                       MakeFlows(),
+                       MakeFlows(simulation),
                        nullptr,
                        TlOcsAlgorithmParameters(),
                        MakeOptions());
@@ -133,7 +135,7 @@ class TlOcsTlOcsScenarioTestCase : public TestCase
             runner.Run(simulation,
                        SchemeConfig::FromString("tl-ocs"),
                        index,
-                       MakeFlows(),
+                       MakeFlows(simulation),
                        &observer,
                        TlOcsAlgorithmParameters(),
                        MakeOptions());
@@ -157,6 +159,49 @@ class TlOcsTlOcsScenarioTestCase : public TestCase
     }
 };
 
+class TlOcsOcsBaselineScenarioTestCase : public TestCase
+{
+  public:
+    explicit TlOcsOcsBaselineScenarioTestCase(const std::string& schemeName)
+        : TestCase("TL-OCS scheme runner executes " + schemeName + " closed-loop smoke"),
+          m_schemeName(schemeName)
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        const SimulationConfig simulation = MakeSimulation();
+        EpsTopologyBuilder::BuildOptions buildOptions;
+        buildOptions.enableOcsLinks = true;
+        NodeIndex index = EpsTopologyBuilder().Build(simulation, 2, buildOptions);
+        TrafficObserver observer(simulation.GetNumTors(), simulation.GetObserverWindow());
+        observer.AttachToTopology(index);
+
+        const SmokeScenarioResult result =
+            SmokeScenarioRunner().Run(simulation,
+                                      SchemeConfig::FromString(m_schemeName),
+                                      index,
+                                      MakeFlows(simulation),
+                                      &observer,
+                                      TlOcsAlgorithmParameters(),
+                                      MakeOptions());
+        NS_TEST_ASSERT_MSG_GT(result.observedMatrixBytes, 0, "OCS baseline observed no bytes");
+        NS_TEST_ASSERT_MSG_GT(result.algorithmSelectedEdges, 0, "OCS baseline selected no edges");
+        NS_TEST_ASSERT_MSG_EQ(result.ocsActiveEdges,
+                              result.algorithmSelectedEdges,
+                              "OCS baseline active edge count mismatch");
+        NS_TEST_ASSERT_MSG_GT(result.ocsAdmittedFlows, 0, "OCS baseline admitted no flows");
+        NS_TEST_ASSERT_MSG_GT(result.receivedBytes, 0, "OCS baseline received no bytes");
+        NS_TEST_ASSERT_MSG_GT(result.flowMetricsSummary->completedFlows,
+                              0,
+                              "OCS baseline completed no flows");
+        Simulator::Destroy();
+    }
+
+    std::string m_schemeName;
+};
+
 class TlOcsSmokeScenarioRunnerTestSuite : public TestSuite
 {
   public:
@@ -165,6 +210,8 @@ class TlOcsSmokeScenarioRunnerTestSuite : public TestSuite
     {
         AddTestCase(new TlOcsEpsEcmpScenarioTestCase);
         AddTestCase(new TlOcsEpsWecmpScenarioTestCase);
+        AddTestCase(new TlOcsOcsBaselineScenarioTestCase("ocs-volume"));
+        AddTestCase(new TlOcsOcsBaselineScenarioTestCase("ocs-community"));
         AddTestCase(new TlOcsTlOcsScenarioTestCase);
     }
 };
