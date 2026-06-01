@@ -102,6 +102,7 @@ build_lib(
     test/tl-ocs-ocs-admission-test-suite.cc
     test/tl-ocs-ocs-link-manager-test-suite.cc
     test/tl-ocs-ocs-metrics-test-suite.cc
+    test/tl-ocs-optical-scheduler-test-suite.cc
     test/tl-ocs-flow-path-selector-test-suite.cc
     test/tl-ocs-result-writer-test-suite.cc
     test/tl-ocs-scheme-config-test-suite.cc

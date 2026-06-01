@@ -34,11 +34,19 @@ TlOcsAlgorithm::Run(const TrafficMatrix& observedW,
     OpticalSchedulerParameters schedulerParameters;
     schedulerParameters.alpha = parameters.alpha;
     schedulerParameters.lambda = parameters.lambda;
+    schedulerParameters.replacementThreshold = parameters.replacementThreshold;
+    schedulerParameters.holdActiveEdges = parameters.holdActiveEdges;
+    schedulerParameters.minActiveEdgeScore = parameters.minActiveEdgeScore;
+    schedulerParameters.maxReplacements = parameters.maxReplacements;
     schedulerParameters.opticalPortsPerTor = parameters.opticalPortsPerTor;
     const OpticalScheduleResult schedule =
         scheduler.SelectEdges(result.B, result.communityLabels, previousActiveEdges, schedulerParameters);
     result.candidateEdges = schedule.candidateEdges;
     result.selectedEdges = schedule.selectedEdges;
+    result.retainedEdgeCount = schedule.retainedCount;
+    result.replacementCount = schedule.replacementCount;
+    result.droppedPreviousEdgeCount = schedule.droppedPreviousCount;
+    result.newSelectedEdgeCount = schedule.newSelectedCount;
     return result;
 }
 

@@ -60,8 +60,10 @@ single-level Louvain-style node moves to optimize the sum of raw internal
 `B_ij` values; it is not a full multi-level Louvain implementation.
 `OpticalScheduler` scores
 candidate ToR pairs and greedily selects OCS candidate edges under per-ToR port
-constraints. The algorithm output is only a candidate optical edge set; Phase 6
-does not install OCS links or change data-plane routing.
+constraints. It can optionally retain eligible previous-active edges and
+require a replacement-score threshold before a conflicting new edge displaces
+them. The algorithm output is only a candidate optical edge set; Phase 6 does
+not install OCS links or change data-plane routing.
 
 Phase 7 adds the first minimal `routing` implementation. The topology builder
 can optionally precreate a full mesh of ToR-ToR point-to-point OCS candidate

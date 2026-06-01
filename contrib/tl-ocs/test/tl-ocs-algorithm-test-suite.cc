@@ -130,6 +130,48 @@ TlOcsAlgorithmPreviousActiveTestCase::DoRun()
     NS_TEST_ASSERT_MSG_GT(boostedScore, baselineScore, "lambda should raise previous edge score");
 }
 
+class TlOcsAlgorithmStabilityParametersTestCase : public TestCase
+{
+  public:
+    TlOcsAlgorithmStabilityParametersTestCase();
+
+  private:
+    void DoRun() override;
+};
+
+TlOcsAlgorithmStabilityParametersTestCase::TlOcsAlgorithmStabilityParametersTestCase()
+    : TestCase("TL-OCS algorithm forwards optical stability parameters")
+{
+}
+
+void
+TlOcsAlgorithmStabilityParametersTestCase::DoRun()
+{
+    TrafficMatrix observed(3);
+    observed.AddBytes(0, 1, 10);
+    observed.AddBytes(1, 0, 10);
+    observed.AddBytes(0, 2, 14);
+    observed.AddBytes(2, 0, 14);
+
+    TlOcsAlgorithmParameters parameters;
+    parameters.beta = 0.0;
+    parameters.eta = 0.0;
+    parameters.alpha = 1.0;
+    parameters.holdActiveEdges = true;
+    parameters.replacementThreshold = 10.0;
+    parameters.opticalPortsPerTor = 1;
+
+    const auto result = TlOcsAlgorithm().Run(observed, DenseMatrix(), {{0, 1}}, parameters);
+
+    NS_TEST_ASSERT_MSG_EQ(result.selectedEdges.size(), 1, "expected one selected edge");
+    NS_TEST_ASSERT_MSG_EQ(result.selectedEdges[0].sourceTor, 0, "retained edge source mismatch");
+    NS_TEST_ASSERT_MSG_EQ(result.selectedEdges[0].destinationTor,
+                          1,
+                          "retained edge destination mismatch");
+    NS_TEST_ASSERT_MSG_EQ(result.retainedEdgeCount, 1, "retained count mismatch");
+    NS_TEST_ASSERT_MSG_EQ(result.replacementCount, 0, "threshold should suppress replacement");
+}
+
 class TlOcsAlgorithmTestSuite : public TestSuite
 {
   public:
@@ -141,6 +183,7 @@ TlOcsAlgorithmTestSuite::TlOcsAlgorithmTestSuite()
 {
     AddTestCase(new TlOcsAlgorithmSelectionTestCase);
     AddTestCase(new TlOcsAlgorithmPreviousActiveTestCase);
+    AddTestCase(new TlOcsAlgorithmStabilityParametersTestCase);
 }
 
 static TlOcsAlgorithmTestSuite g_tlOcsAlgorithmTestSuite;

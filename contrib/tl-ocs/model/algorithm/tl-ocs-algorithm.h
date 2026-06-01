@@ -16,6 +16,10 @@ struct TlOcsAlgorithmParameters
     double eta = 1.0;
     double alpha = 0.5;
     double lambda = 0.0;
+    double replacementThreshold = 0.0;
+    bool holdActiveEdges = false;
+    double minActiveEdgeScore = 0.0;
+    uint32_t maxReplacements = 0;
     uint32_t opticalPortsPerTor = 1;
     uint32_t maxPasses = 4;
 };
@@ -32,6 +36,10 @@ struct TlOcsAlgorithmResult
     uint32_t communityMovedCount = 0;
     std::vector<OpticalEdge> candidateEdges;
     std::vector<OpticalEdge> selectedEdges;
+    uint32_t retainedEdgeCount = 0;
+    uint32_t replacementCount = 0;
+    uint32_t droppedPreviousEdgeCount = 0;
+    uint32_t newSelectedEdgeCount = 0;
 };
 
 class TlOcsAlgorithm

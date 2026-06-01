@@ -576,3 +576,32 @@ New implementation:
   labels, score, pass count, and move count.
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 13A implementation.
+
+## Phase 13B Reference
+
+Additional read-only algorithm files reviewed for optical-selection stability:
+
+- `/home/dyn/sim/src/ocs/ocs-state.h`
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc` previous-active, state-holding,
+  hold-time, reconfiguration, and selection-score fragments
+
+Borrowed behavior and naming:
+
+- Previous-active optical edges remain explicit algorithm state, distinct from
+  newly scored candidate edges.
+- Stable selection may reserve ports for retained edges before filling
+  remaining capacity, while score improvement gates unnecessary replacement.
+
+Not migrated:
+
+- The old edge-age matrix, runtime hold-cycle gate, configuration-score gate,
+  reconfiguration penalty, multi-period controller, diagnostics, and old main
+  orchestration were not copied or migrated.
+
+New implementation:
+
+- `algorithm/OpticalScheduler` optionally retains eligible previous-active
+  edges and permits a conflicting new edge to replace them only when its score
+  exceeds their scores by the configured threshold.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 13B implementation.

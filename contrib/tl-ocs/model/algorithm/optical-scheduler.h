@@ -26,6 +26,10 @@ struct OpticalSchedulerParameters
 {
     double alpha = 0.5;
     double lambda = 0.0;
+    double replacementThreshold = 0.0;
+    bool holdActiveEdges = false;
+    double minActiveEdgeScore = 0.0;
+    uint32_t maxReplacements = 0;
     uint32_t opticalPortsPerTor = 1;
 };
 
@@ -33,6 +37,10 @@ struct OpticalScheduleResult
 {
     std::vector<OpticalEdge> candidateEdges;
     std::vector<OpticalEdge> selectedEdges;
+    uint32_t retainedCount = 0;
+    uint32_t replacementCount = 0;
+    uint32_t droppedPreviousCount = 0;
+    uint32_t newSelectedCount = 0;
 };
 
 class OpticalScheduler
