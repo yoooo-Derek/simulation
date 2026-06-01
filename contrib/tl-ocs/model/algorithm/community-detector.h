@@ -10,10 +10,23 @@ namespace ns3
 namespace tl_ocs
 {
 
+struct CommunityDetectionResult
+{
+    std::vector<uint32_t> labels;
+    double score = 0.0;
+    uint32_t passCount = 0;
+    uint32_t movedCount = 0;
+};
+
 class CommunityDetector
 {
   public:
-    std::vector<uint32_t> Detect(const DenseMatrix& modularityGain, uint32_t maxPasses) const;
+    CommunityDetectionResult DetectDetailed(const DenseMatrix& modularityGain,
+                                            uint32_t maxPasses,
+                                            double minGain = 1e-12) const;
+    std::vector<uint32_t> Detect(const DenseMatrix& modularityGain,
+                                 uint32_t maxPasses,
+                                 double minGain = 1e-12) const;
 };
 
 } // namespace tl_ocs

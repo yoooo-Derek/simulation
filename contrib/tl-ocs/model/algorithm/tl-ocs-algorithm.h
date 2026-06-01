@@ -27,6 +27,9 @@ struct TlOcsAlgorithmResult
     DenseMatrix B;
     TrafficGraph trafficGraph;
     std::vector<uint32_t> communityLabels;
+    double communityScore = 0.0;
+    uint32_t communityPassCount = 0;
+    uint32_t communityMovedCount = 0;
     std::vector<OpticalEdge> candidateEdges;
     std::vector<OpticalEdge> selectedEdges;
 };

@@ -55,9 +55,10 @@ Phase 6 adds the first pure `algorithm` implementation. `MatrixProcessor`
 converts the observed directed matrix `W(t)` into undirected `A(t)`, applies
 EWMA into `Abar(t)`, and derives the sparse traffic graph `G_f(t)`.
 `NullModel` computes node degree, effective total traffic, random-background
-expectation, and modularity gain `B_ij`. `CommunityDetector` currently uses a
-deterministic lightweight Louvain-like merge over positive `B_ij` edges; it is
-not a full multi-level Louvain implementation. `OpticalScheduler` scores
+expectation, and modularity gain `B_ij`. `CommunityDetector` uses deterministic
+single-level Louvain-style node moves to optimize the sum of raw internal
+`B_ij` values; it is not a full multi-level Louvain implementation.
+`OpticalScheduler` scores
 candidate ToR pairs and greedily selects OCS candidate edges under per-ToR port
 constraints. The algorithm output is only a candidate optical edge set; Phase 6
 does not install OCS links or change data-plane routing.

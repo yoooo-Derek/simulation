@@ -25,7 +25,11 @@ TlOcsAlgorithm::Run(const TrafficMatrix& observedW,
     result.Abar = processor.ApplyEwma(result.A, previousAbar, parameters.beta);
     result.trafficGraph = processor.Sparsify(result.Abar, parameters.thetaF);
     result.B = nullModel.ComputeModularityGain(result.Abar, parameters.eta);
-    result.communityLabels = detector.Detect(result.B, parameters.maxPasses);
+    const CommunityDetectionResult communities = detector.DetectDetailed(result.B, parameters.maxPasses);
+    result.communityLabels = communities.labels;
+    result.communityScore = communities.score;
+    result.communityPassCount = communities.passCount;
+    result.communityMovedCount = communities.movedCount;
 
     OpticalSchedulerParameters schedulerParameters;
     schedulerParameters.alpha = parameters.alpha;

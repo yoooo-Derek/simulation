@@ -88,6 +88,7 @@ build_lib(
     test/tl-ocs-config-test-suite.cc
     test/tl-ocs-controller-state-test-suite.cc
     test/tl-ocs-controller-timeline-test-suite.cc
+    test/tl-ocs-community-detector-test-suite.cc
     test/tl-ocs-eps-topology-test-suite.cc
     test/tl-ocs-eps-link-state-test-suite.cc
     test/tl-ocs-eps-wecmp-router-test-suite.cc

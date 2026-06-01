@@ -545,3 +545,34 @@ New implementation:
   executing ns-3.
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 12B implementation.
+
+## Phase 13A Reference
+
+Additional read-only algorithm files reviewed for deterministic community
+detection:
+
+- `/home/dyn/sim/src/model/louvain.h`
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc` community, modularity, and
+  Louvain-related fragments
+
+Borrowed behavior and naming:
+
+- Community detection starts with one community per node, evaluates local node
+  moves in node-id order, uses an explicit positive gain threshold, and
+  normalizes final labels.
+- Deterministic candidate ordering and raw modularity-gain semantics remain
+  separate from the optical scheduler's non-negative candidate-edge utility.
+
+Not migrated:
+
+- The old multi-level graph folding, preview modes, controller presets,
+  diagnostic output body, old main orchestration, and old implementation code
+  were not copied or migrated.
+
+New implementation:
+
+- `algorithm/CommunityDetector` performs deterministic single-level local
+  moving against the raw `B_ij` internal-community objective and reports its
+  labels, score, pass count, and move count.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 13A implementation.

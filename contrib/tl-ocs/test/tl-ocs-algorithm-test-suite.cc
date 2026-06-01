@@ -46,15 +46,30 @@ TlOcsAlgorithmSelectionTestCase::DoRun()
     TlOcsAlgorithmResult result = algorithm.Run(observed, DenseMatrix(), {}, parameters);
 
     NS_TEST_ASSERT_MSG_GT(result.candidateEdges.size(), 0, "expected candidate edges");
-    NS_TEST_ASSERT_MSG_GT(result.selectedEdges.size(), 0, "expected selected edges");
+    NS_TEST_ASSERT_MSG_EQ(result.selectedEdges.size(), 2, "expected both strong community edges");
+    NS_TEST_ASSERT_MSG_EQ(result.communityLabels[0],
+                          result.communityLabels[1],
+                          "0 and 1 should share a community");
+    NS_TEST_ASSERT_MSG_EQ(result.communityLabels[2],
+                          result.communityLabels[3],
+                          "2 and 3 should share a community");
+    NS_TEST_ASSERT_MSG_NE(result.communityLabels[0],
+                          result.communityLabels[2],
+                          "strong groups should remain separate");
 
     std::vector<uint32_t> selectedDegree(4, 0);
+    bool selected01 = false;
+    bool selected23 = false;
     for (const auto& edge : result.selectedEdges)
     {
         selectedDegree[edge.sourceTor]++;
         selectedDegree[edge.destinationTor]++;
         NS_TEST_ASSERT_MSG_GT(edge.score, 0.0, "selected edge score must be positive");
+        selected01 = selected01 || (edge.sourceTor == 0 && edge.destinationTor == 1);
+        selected23 = selected23 || (edge.sourceTor == 2 && edge.destinationTor == 3);
     }
+    NS_TEST_ASSERT_MSG_EQ(selected01, true, "expected selected edge 0-1");
+    NS_TEST_ASSERT_MSG_EQ(selected23, true, "expected selected edge 2-3");
     for (uint32_t degree : selectedDegree)
     {
         NS_TEST_ASSERT_MSG_EQ(degree <= 1, true, "optical port constraint violated");

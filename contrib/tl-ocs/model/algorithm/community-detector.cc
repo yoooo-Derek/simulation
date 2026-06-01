@@ -1,6 +1,7 @@
 #include "community-detector.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace ns3
 {
@@ -31,77 +32,151 @@ NormalizeLabels(std::vector<uint32_t>& labels)
 }
 
 double
-PositiveGainBetweenCommunities(const DenseMatrix& modularityGain,
-                               const std::vector<uint32_t>& labels,
-                               uint32_t communityA,
-                               uint32_t communityB)
+GetPairGain(const DenseMatrix& modularityGain, uint32_t a, uint32_t b)
 {
-    double gain = 0.0;
+    return modularityGain.Get(std::min(a, b), std::max(a, b));
+}
+
+double
+ComputeScore(const DenseMatrix& modularityGain, const std::vector<uint32_t>& labels)
+{
+    double score = 0.0;
     for (uint32_t i = 0; i < modularityGain.GetSize(); ++i)
     {
-        if (labels[i] != communityA)
+        for (uint32_t j = i + 1; j < modularityGain.GetSize(); ++j)
         {
-            continue;
-        }
-        for (uint32_t j = 0; j < modularityGain.GetSize(); ++j)
-        {
-            if (labels[j] == communityB)
+            if (labels[i] == labels[j])
             {
-                gain += std::max(modularityGain.Get(i, j), 0.0);
+                score += modularityGain.Get(i, j);
             }
         }
     }
-    return gain;
+    return score;
+}
+
+double
+ComputeMoveGain(const DenseMatrix& modularityGain,
+                const std::vector<uint32_t>& labels,
+                uint32_t node,
+                uint32_t targetCommunity)
+{
+    const uint32_t oldCommunity = labels[node];
+    double removedGain = 0.0;
+    double addedGain = 0.0;
+    for (uint32_t other = 0; other < modularityGain.GetSize(); ++other)
+    {
+        if (other == node)
+        {
+            continue;
+        }
+        if (labels[other] == oldCommunity)
+        {
+            removedGain += GetPairGain(modularityGain, node, other);
+        }
+        if (labels[other] == targetCommunity)
+        {
+            addedGain += GetPairGain(modularityGain, node, other);
+        }
+    }
+    return addedGain - removedGain;
+}
+
+uint32_t
+CountNodesInCommunity(const std::vector<uint32_t>& labels, uint32_t community)
+{
+    return static_cast<uint32_t>(std::count(labels.begin(), labels.end(), community));
+}
+
+uint32_t
+GetUnusedCommunityLabel(const std::vector<uint32_t>& labels)
+{
+    return labels.empty() ? 0 : *std::max_element(labels.begin(), labels.end()) + 1;
 }
 
 } // namespace
 
-std::vector<uint32_t>
-CommunityDetector::Detect(const DenseMatrix& modularityGain, uint32_t maxPasses) const
+CommunityDetectionResult
+CommunityDetector::DetectDetailed(const DenseMatrix& modularityGain,
+                                  uint32_t maxPasses,
+                                  double minGain) const
 {
-    std::vector<uint32_t> labels(modularityGain.GetSize());
+    CommunityDetectionResult result;
+    result.labels.resize(modularityGain.GetSize());
     for (uint32_t i = 0; i < modularityGain.GetSize(); ++i)
     {
-        labels[i] = i;
+        result.labels[i] = i;
     }
 
     for (uint32_t pass = 0; pass < maxPasses; ++pass)
     {
-        bool merged = false;
-        NormalizeLabels(labels);
-        for (uint32_t i = 0; i < modularityGain.GetSize(); ++i)
+        bool passMoved = false;
+        for (uint32_t node = 0; node < modularityGain.GetSize(); ++node)
         {
-            for (uint32_t j = i + 1; j < modularityGain.GetSize(); ++j)
+            const uint32_t oldCommunity = result.labels[node];
+            std::vector<uint32_t> candidateCommunities{oldCommunity};
+            for (uint32_t neighbor = 0; neighbor < modularityGain.GetSize(); ++neighbor)
             {
-                if (labels[i] == labels[j] || modularityGain.Get(i, j) <= 0.0)
+                if (neighbor == node || GetPairGain(modularityGain, node, neighbor) == 0.0)
                 {
                     continue;
                 }
-                const uint32_t target = std::min(labels[i], labels[j]);
-                const uint32_t source = std::max(labels[i], labels[j]);
-                if (PositiveGainBetweenCommunities(modularityGain, labels, target, source) <= 0.0)
+                const uint32_t neighborCommunity = result.labels[neighbor];
+                if (std::find(candidateCommunities.begin(),
+                              candidateCommunities.end(),
+                              neighborCommunity) == candidateCommunities.end())
+                {
+                    candidateCommunities.push_back(neighborCommunity);
+                }
+            }
+            std::sort(candidateCommunities.begin(), candidateCommunities.end());
+            if (CountNodesInCommunity(result.labels, oldCommunity) > 1)
+            {
+                candidateCommunities.push_back(GetUnusedCommunityLabel(result.labels));
+            }
+
+            uint32_t bestCommunity = oldCommunity;
+            double bestGain = 0.0;
+            for (uint32_t candidateCommunity : candidateCommunities)
+            {
+                if (candidateCommunity == oldCommunity)
                 {
                     continue;
                 }
-                for (uint32_t& label : labels)
+                const double moveGain =
+                    ComputeMoveGain(modularityGain, result.labels, node, candidateCommunity);
+                if (moveGain > minGain &&
+                    (bestCommunity == oldCommunity || moveGain > bestGain + minGain ||
+                     (std::abs(moveGain - bestGain) <= minGain &&
+                      candidateCommunity < bestCommunity)))
                 {
-                    if (label == source)
-                    {
-                        label = target;
-                    }
+                    bestCommunity = candidateCommunity;
+                    bestGain = moveGain;
                 }
-                merged = true;
-                NormalizeLabels(labels);
+            }
+
+            if (bestCommunity != oldCommunity)
+            {
+                result.labels[node] = bestCommunity;
+                result.movedCount++;
+                passMoved = true;
             }
         }
-        if (!merged)
+        result.passCount = pass + 1;
+        if (!passMoved)
         {
             break;
         }
     }
 
-    NormalizeLabels(labels);
-    return labels;
+    NormalizeLabels(result.labels);
+    result.score = ComputeScore(modularityGain, result.labels);
+    return result;
+}
+
+std::vector<uint32_t>
+CommunityDetector::Detect(const DenseMatrix& modularityGain, uint32_t maxPasses, double minGain) const
+{
+    return DetectDetailed(modularityGain, maxPasses, minGain).labels;
 }
 
 } // namespace tl_ocs

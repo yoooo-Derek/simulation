@@ -88,7 +88,11 @@ CommunityScheduler::Run(const TrafficMatrix& observedW,
     result.Abar = result.A;
     result.trafficGraph = processor.Sparsify(result.A, parameters.thetaF);
     result.B = nullModel.ComputeModularityGain(result.A, parameters.eta);
-    result.communityLabels = detector.Detect(result.B, parameters.maxPasses);
+    const CommunityDetectionResult communities = detector.DetectDetailed(result.B, parameters.maxPasses);
+    result.communityLabels = communities.labels;
+    result.communityScore = communities.score;
+    result.communityPassCount = communities.passCount;
+    result.communityMovedCount = communities.movedCount;
 
     OpticalSchedulerParameters schedulerParameters;
     schedulerParameters.alpha = parameters.alpha;
