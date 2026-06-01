@@ -58,3 +58,15 @@ completion timestamp and FCT empty.
 `aggregate-results.py` writes a smaller comparison table containing topology,
 flow-summary, utilization, OCS-hit, and reconfiguration columns. It does not
 compute means, confidence intervals, significance tests, or paper conclusions.
+
+## Diagnostic Table
+
+`diagnose-flows.py` writes grouped rows with:
+
+- `input_file`, `scheme`, `path_type`, `source_tor`, `destination_tor`
+- `total_flows`, `completed_flows`, `incomplete_flows`
+- `avg_fct_s`, `p90_fct_s`, `p95_fct_s`
+
+FCT values are still computed from completed rows only. The script does not
+modify per-flow artifacts or replace missing completion values. An explicit
+summary `completion_ratio` field is deferred to a later phase.

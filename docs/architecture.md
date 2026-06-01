@@ -258,3 +258,9 @@ invariants. The scale-sanity scripts run one 8-ToR TL-OCS case and five 16-ToR
 scheme cases. They do not add algorithms, controller cycles, plotting, or
 paper-scale execution. Summary CSV now appends `spines` so aggregated tables
 retain the EPS topology dimension.
+
+Phase 12B adds script-level diagnosis and paper-plan metadata only.
+`diagnose-flows.py` groups incomplete per-flow records without altering source
+CSV files or substituting completion times. `list-paper-plan.py` filters a
+small manifest draft without executing ns-3. Phase 12B does not modify
+algorithms, routes, controller behavior, or result-field semantics.

@@ -1,0 +1,6 @@
+experiment_name,scheme,topology_label,num_tors,servers_per_tor,spines,traffic_pattern,load_label,run_id,random_seed,config_file,default_run
+paper-plan-small-16tor-community-tl-ocs-medium-run1-seed1,tl-ocs,paper-small,16,4,4,community-local,medium,1,1,experiments/configs/paper-plan/paper-small-16tor-community-tl-ocs.properties,false
+paper-plan-small-16tor-community-eps-ecmp-medium-run1-seed1,eps-ecmp,paper-small,16,4,4,community-local,medium,1,1,experiments/configs/paper-plan/paper-small-16tor-community-eps-ecmp.properties,false
+paper-plan-main-32tor-community-tl-ocs-medium-run1-seed1,tl-ocs,paper-main,32,4,8,community-local,medium,1,1,experiments/configs/paper-plan/paper-main-32tor-community-tl-ocs.properties,false
+paper-plan-main-32tor-community-eps-ecmp-medium-run1-seed1,eps-ecmp,paper-main,32,4,8,community-local,medium,1,1,experiments/configs/paper-plan/paper-main-32tor-community-eps-ecmp.properties,false
+paper-plan-main-32tor-aggregation-tl-ocs-medium-run1-seed1,tl-ocs,paper-main,32,4,8,parameter-aggregation,medium,1,1,experiments/configs/paper-plan/paper-main-32tor-aggregation-tl-ocs.properties,false

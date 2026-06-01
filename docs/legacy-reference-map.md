@@ -497,3 +497,51 @@ New implementation:
   five 16-ToR schemes before writing `results/tables/sanity-summary.csv`.
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 12A implementation.
+
+## Phase 12B Reference
+
+Additional read-only files reviewed for paper-matrix planning and incomplete
+flow diagnosis:
+
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_smoke_matrix.sh`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/run_medium_sanity.sh`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/validate_outputs.py`
+- `/home/dyn/sim/scripts/tl_ocs_experiments/make_run_report.py`
+- `/home/dyn/sim/src/result/structured-result-schema.h`
+- `/home/dyn/sim/docs/tl_ocs_patch1_metrics_validation.md`
+- `/home/dyn/sim/docs/tl_ocs_patch5b_smoke_scripts_validation.md`
+- `/home/dyn/sim/docs/tl_ocs_patch5c_medium_sanity_validation.md`
+- `/home/dyn/sim/docs/code_map.md`
+
+Borrowed behavior and naming:
+
+- Legacy structured rows keep `completed`, `completionRatio`, flow start time,
+  and received-byte state distinct. Phase 12B retains that diagnostic
+  separation and never turns incomplete rows into completed rows.
+- Legacy smoke and medium runners record scenario identity, scale, seed, and
+  command metadata in a manifest before considering larger sweeps.
+- Legacy medium-sanity documentation explicitly treats scale validation as an
+  engineering checkpoint rather than a paper-candidate result.
+
+Not migrated:
+
+- The old manifest execution framework, timestamped run layout, compatibility
+  schema, completion tolerance, plotting preparation, validation matrix,
+  paper-candidate execution, and old main orchestration were not copied or
+  migrated.
+- Phase 12B does not add a large-scale runner. Paper-plan configurations are
+  list-only drafts with `default_run=false`.
+
+New implementation:
+
+- `experiments/scripts/diagnose-flows.py` reads fresh per-flow CSV files,
+  reports incomplete-flow groupings, computes completed-only FCT statistics,
+  and optionally checks summary completion counts.
+- `docs/paper-experiment-plan.md` defines topology, traffic-pattern, offered
+  load, repetition, metric, and current-limit drafts.
+- `experiments/configs/paper-plan/manifest.csv` records a small non-default
+  planning subset.
+- `experiments/scripts/list-paper-plan.py` filters the manifest without
+  executing ns-3.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 12B implementation.

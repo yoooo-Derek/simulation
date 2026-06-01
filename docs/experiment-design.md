@@ -100,3 +100,26 @@ The script runs one 8-ToR TL-OCS case and five 16-ToR scheme cases, validates
 their summary and per-flow CSV files, then writes
 `results/tables/sanity-summary.csv`. These are engineering sanity artifacts,
 not paper results. No plotting or statistical analysis is performed.
+
+## Flow Diagnostics And Paper Plan
+
+Phase 12B adds:
+
+```bash
+python3 experiments/scripts/diagnose-flows.py \
+  results/raw/sanity-16tor-ocs-volume-flows.csv \
+  results/raw/sanity-16tor-ocs-community-flows.csv \
+  results/raw/sanity-16tor-tl-ocs-flows.csv \
+  --output results/tables/sanity-flow-diagnostics.csv
+
+python3 experiments/scripts/list-paper-plan.py \
+  experiments/configs/paper-plan/manifest.csv
+```
+
+The 16-ToR OCS sanity diagnosis finds six incomplete stage-2 flows per scheme.
+They start at `0.120` through `0.125` seconds while the scenario stop time is
+`0.12` seconds. This is a timeline configuration finding, not a reason to hide
+incomplete rows or blindly extend the stop time.
+
+The paper-plan manifest is a list-only draft. Its rows have
+`default_run=false`; no paper-scale execution is part of Phase 12B.
