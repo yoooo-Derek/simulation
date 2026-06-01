@@ -25,6 +25,7 @@ struct OpticalEdge
 struct OpticalSchedulerParameters
 {
     double alpha = 0.5;
+    bool enableCommunityFactor = true;
     double lambda = 0.0;
     double replacementThreshold = 0.0;
     bool holdActiveEdges = false;

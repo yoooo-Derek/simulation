@@ -95,7 +95,8 @@ OpticalScheduler::SelectEdges(
         {
             const double baseGain = std::max(modularityGain.Get(i, j), 0.0);
             const bool sameCommunity = communityLabels[i] == communityLabels[j];
-            const double communityFactor = sameCommunity ? 1.0 : parameters.alpha;
+            const double communityFactor =
+                !parameters.enableCommunityFactor || sameCommunity ? 1.0 : parameters.alpha;
             const double gain = baseGain * communityFactor;
             const double hold = ContainsEdge(previousActiveEdges, i, j) ? parameters.lambda : 0.0;
             const double score = gain + hold;

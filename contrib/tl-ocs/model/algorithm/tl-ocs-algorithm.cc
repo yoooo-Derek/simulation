@@ -22,25 +22,39 @@ TlOcsAlgorithm::Run(const TrafficMatrix& observedW,
 
     TlOcsAlgorithmResult result;
     result.A = processor.BuildUndirected(observedW);
-    result.Abar = processor.ApplyEwma(result.A, previousAbar, parameters.beta);
+    result.Abar = parameters.enableEwma ? processor.ApplyEwma(result.A, previousAbar, parameters.beta)
+                                       : result.A;
     result.trafficGraph = processor.Sparsify(result.Abar, parameters.thetaF);
-    result.B = nullModel.ComputeModularityGain(result.Abar, parameters.eta);
-    CommunityDetectionOptions communityOptions;
-    communityOptions.maxPasses = parameters.maxPasses;
-    communityOptions.maxLevels = parameters.maxLevels;
-    communityOptions.enableAggregation = parameters.enableCommunityAggregation;
-    const CommunityDetectionResult communities = detector.DetectDetailed(result.B, communityOptions);
-    result.communityLabels = communities.labels;
-    result.communityScore = communities.score;
-    result.communityPassCount = communities.passCount;
-    result.communityMovedCount = communities.movedCount;
-    result.communityLevelCount = communities.levelCount;
+    result.B = !parameters.enableNullModel || parameters.useVolumeOnlyScore
+                   ? result.Abar
+                   : nullModel.ComputeModularityGain(result.Abar, parameters.eta);
+    if (parameters.useVolumeOnlyScore)
+    {
+        result.communityLabels.resize(result.B.GetSize(), 0);
+    }
+    else
+    {
+        CommunityDetectionOptions communityOptions;
+        communityOptions.maxPasses = parameters.maxPasses;
+        communityOptions.maxLevels = parameters.maxLevels;
+        communityOptions.enableAggregation = parameters.enableCommunityAggregation;
+        const CommunityDetectionResult communities =
+            detector.DetectDetailed(result.B, communityOptions);
+        result.communityLabels = communities.labels;
+        result.communityScore = communities.score;
+        result.communityPassCount = communities.passCount;
+        result.communityMovedCount = communities.movedCount;
+        result.communityLevelCount = communities.levelCount;
+    }
 
     OpticalSchedulerParameters schedulerParameters;
     schedulerParameters.alpha = parameters.alpha;
-    schedulerParameters.lambda = parameters.lambda;
+    schedulerParameters.enableCommunityFactor =
+        parameters.enableCommunityFactor && !parameters.useVolumeOnlyScore;
+    schedulerParameters.lambda = parameters.useVolumeOnlyScore ? 0.0 : parameters.lambda;
     schedulerParameters.replacementThreshold = parameters.replacementThreshold;
-    schedulerParameters.holdActiveEdges = parameters.holdActiveEdges;
+    schedulerParameters.holdActiveEdges =
+        !parameters.useVolumeOnlyScore && parameters.enableHolding && parameters.holdActiveEdges;
     schedulerParameters.minActiveEdgeScore = parameters.minActiveEdgeScore;
     schedulerParameters.maxReplacements = parameters.maxReplacements;
     schedulerParameters.opticalPortsPerTor = parameters.opticalPortsPerTor;

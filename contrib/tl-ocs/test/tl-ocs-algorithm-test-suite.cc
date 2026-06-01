@@ -158,11 +158,14 @@ TlOcsAlgorithmStabilityParametersTestCase::DoRun()
     parameters.beta = 0.0;
     parameters.eta = 0.0;
     parameters.alpha = 1.0;
+    parameters.enableHolding = true;
     parameters.holdActiveEdges = true;
     parameters.replacementThreshold = 10.0;
     parameters.opticalPortsPerTor = 1;
 
     const auto result = TlOcsAlgorithm().Run(observed, DenseMatrix(), {{0, 1}}, parameters);
+    parameters.enableHolding = false;
+    const auto disabledHolding = TlOcsAlgorithm().Run(observed, DenseMatrix(), {{0, 1}}, parameters);
 
     NS_TEST_ASSERT_MSG_EQ(result.selectedEdges.size(), 1, "expected one selected edge");
     NS_TEST_ASSERT_MSG_EQ(result.selectedEdges[0].sourceTor, 0, "retained edge source mismatch");
@@ -171,6 +174,82 @@ TlOcsAlgorithmStabilityParametersTestCase::DoRun()
                           "retained edge destination mismatch");
     NS_TEST_ASSERT_MSG_EQ(result.retainedEdgeCount, 1, "retained count mismatch");
     NS_TEST_ASSERT_MSG_EQ(result.replacementCount, 0, "threshold should suppress replacement");
+    NS_TEST_ASSERT_MSG_EQ(disabledHolding.selectedEdges[0].sourceTor,
+                          0,
+                          "disabled holding source mismatch");
+    NS_TEST_ASSERT_MSG_EQ(disabledHolding.selectedEdges[0].destinationTor,
+                          2,
+                          "disabled holding should restore greedy selection");
+}
+
+class TlOcsAlgorithmEwmaAblationTestCase : public TestCase
+{
+  public:
+    TlOcsAlgorithmEwmaAblationTestCase();
+
+  private:
+    void DoRun() override;
+};
+
+TlOcsAlgorithmEwmaAblationTestCase::TlOcsAlgorithmEwmaAblationTestCase()
+    : TestCase("TL-OCS EWMA ablation ignores previous smoothed traffic")
+{
+}
+
+void
+TlOcsAlgorithmEwmaAblationTestCase::DoRun()
+{
+    TrafficMatrix observed(3);
+    observed.AddBytes(0, 1, 30);
+    DenseMatrix previous(3);
+    previous.Set(0, 1, 100.0);
+    previous.Set(1, 0, 100.0);
+
+    TlOcsAlgorithmParameters parameters;
+    parameters.beta = 0.9;
+    parameters.enableEwma = false;
+
+    const auto result = TlOcsAlgorithm().Run(observed, previous, {}, parameters);
+    NS_TEST_ASSERT_MSG_EQ_TOL(result.Abar.Get(0, 1), 30.0, 1e-12, "Abar must equal current A");
+    NS_TEST_ASSERT_MSG_EQ_TOL(result.Abar.Get(1, 0), 30.0, 1e-12, "Abar must stay symmetric");
+}
+
+class TlOcsAlgorithmNullModelAblationTestCase : public TestCase
+{
+  public:
+    TlOcsAlgorithmNullModelAblationTestCase();
+
+  private:
+    void DoRun() override;
+};
+
+TlOcsAlgorithmNullModelAblationTestCase::TlOcsAlgorithmNullModelAblationTestCase()
+    : TestCase("TL-OCS null-model ablation uses smoothed traffic as score matrix")
+{
+}
+
+void
+TlOcsAlgorithmNullModelAblationTestCase::DoRun()
+{
+    TrafficMatrix observed(3);
+    observed.AddBytes(0, 1, 20);
+    observed.AddBytes(1, 2, 10);
+
+    TlOcsAlgorithmParameters enabled;
+    enabled.enableEwma = false;
+    TlOcsAlgorithmParameters disabled = enabled;
+    disabled.enableNullModel = false;
+
+    const auto withNullModel = TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, enabled);
+    const auto withoutNullModel = TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, disabled);
+
+    NS_TEST_ASSERT_MSG_LT(withNullModel.B.Get(0, 1),
+                          withNullModel.Abar.Get(0, 1),
+                          "null model should subtract expected traffic");
+    NS_TEST_ASSERT_MSG_EQ_TOL(withoutNullModel.B.Get(0, 1),
+                              withoutNullModel.Abar.Get(0, 1),
+                              1e-12,
+                              "disabled null model must expose Abar directly");
 }
 
 class TlOcsAlgorithmTestSuite : public TestSuite
@@ -185,6 +264,8 @@ TlOcsAlgorithmTestSuite::TlOcsAlgorithmTestSuite()
     AddTestCase(new TlOcsAlgorithmSelectionTestCase);
     AddTestCase(new TlOcsAlgorithmPreviousActiveTestCase);
     AddTestCase(new TlOcsAlgorithmStabilityParametersTestCase);
+    AddTestCase(new TlOcsAlgorithmEwmaAblationTestCase);
+    AddTestCase(new TlOcsAlgorithmNullModelAblationTestCase);
 }
 
 static TlOcsAlgorithmTestSuite g_tlOcsAlgorithmTestSuite;

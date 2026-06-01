@@ -57,6 +57,7 @@ BuildStabilityParameters()
     parameters.beta = 0.0;
     parameters.eta = 0.0;
     parameters.alpha = 1.0;
+    parameters.enableHolding = true;
     parameters.holdActiveEdges = true;
     parameters.replacementThreshold = 10.0;
     parameters.opticalPortsPerTor = 1;

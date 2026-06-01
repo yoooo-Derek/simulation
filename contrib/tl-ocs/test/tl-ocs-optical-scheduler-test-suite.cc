@@ -48,6 +48,19 @@ SatisfiesPortConstraint(const std::vector<OpticalEdge>& edges, uint32_t numTors,
     return true;
 }
 
+double
+GetCandidateScore(const std::vector<OpticalEdge>& edges, uint32_t sourceTor, uint32_t destinationTor)
+{
+    for (const auto& edge : edges)
+    {
+        if (edge.sourceTor == sourceTor && edge.destinationTor == destinationTor)
+        {
+            return edge.score;
+        }
+    }
+    return 0.0;
+}
+
 DenseMatrix
 BuildCompetingGain(double newEdgeGain)
 {
@@ -251,6 +264,49 @@ OpticalSchedulerMinimalReplacementTestCase::DoRun()
                           "optical port constraint violated");
 }
 
+class OpticalSchedulerCommunityFactorAblationTestCase : public TestCase
+{
+  public:
+    OpticalSchedulerCommunityFactorAblationTestCase();
+
+  private:
+    void DoRun() override;
+};
+
+OpticalSchedulerCommunityFactorAblationTestCase::OpticalSchedulerCommunityFactorAblationTestCase()
+    : TestCase("disabled community factor removes alpha score scaling")
+{
+}
+
+void
+OpticalSchedulerCommunityFactorAblationTestCase::DoRun()
+{
+    DenseMatrix gain(3);
+    SetSymmetric(gain, 0, 1, 10.0);
+    SetSymmetric(gain, 0, 2, 10.0);
+
+    OpticalSchedulerParameters enabled;
+    enabled.alpha = 0.25;
+    OpticalSchedulerParameters disabled = enabled;
+    disabled.enableCommunityFactor = false;
+
+    const auto scaled = OpticalScheduler().SelectEdges(gain, {0, 0, 1}, {}, enabled);
+    const auto unscaled = OpticalScheduler().SelectEdges(gain, {0, 0, 1}, {}, disabled);
+
+    NS_TEST_ASSERT_MSG_EQ_TOL(GetCandidateScore(scaled.candidateEdges, 0, 1),
+                              10.0,
+                              1e-12,
+                              "same-community edge should retain full score");
+    NS_TEST_ASSERT_MSG_EQ_TOL(GetCandidateScore(scaled.candidateEdges, 0, 2),
+                              2.5,
+                              1e-12,
+                              "cross-community edge should use alpha");
+    NS_TEST_ASSERT_MSG_EQ_TOL(GetCandidateScore(unscaled.candidateEdges, 0, 2),
+                              10.0,
+                              1e-12,
+                              "disabled community factor should ignore alpha");
+}
+
 class OpticalSchedulerTestSuite : public TestSuite
 {
   public:
@@ -265,6 +321,7 @@ OpticalSchedulerTestSuite::OpticalSchedulerTestSuite()
     AddTestCase(new OpticalSchedulerSignificantReplacementTestCase);
     AddTestCase(new OpticalSchedulerGreedyCompatibilityTestCase);
     AddTestCase(new OpticalSchedulerMinimalReplacementTestCase);
+    AddTestCase(new OpticalSchedulerCommunityFactorAblationTestCase);
 }
 
 static OpticalSchedulerTestSuite g_opticalSchedulerTestSuite;

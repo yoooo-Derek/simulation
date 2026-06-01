@@ -101,6 +101,7 @@ CommunityScheduler::Run(const TrafficMatrix& observedW,
 
     OpticalSchedulerParameters schedulerParameters;
     schedulerParameters.alpha = parameters.alpha;
+    schedulerParameters.enableCommunityFactor = true;
     schedulerParameters.opticalPortsPerTor = parameters.opticalPortsPerTor;
     const OpticalScheduleResult schedule =
         scheduler.SelectEdges(result.B, result.communityLabels, {}, schedulerParameters);

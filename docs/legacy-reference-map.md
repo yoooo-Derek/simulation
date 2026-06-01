@@ -662,3 +662,35 @@ New implementation:
   without self loops, and expands final labels back to the original ToRs.
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 13D implementation.
+
+## Phase 13E Reference
+
+Additional read-only algorithm and scheme fragments reviewed for explicit
+ablation semantics:
+
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc` OCS score, community-factor,
+  EWMA, and previous-active holding fragments
+- `/home/dyn/sim/src/ocs/ocs-state.h`
+- `/home/dyn/sim/src/model/louvain.h`
+
+Borrowed behavior and naming:
+
+- Volume, null-model excess, community-aware weighting, EWMA smoothing, and
+  previous-active holding are distinct algorithm concerns.
+- Community weighting and hard holding can be disabled independently from the
+  underlying edge-score matrix and previous-active lambda bonus.
+
+Not migrated:
+
+- The old scheme presets, runtime configuration gates, edge ages, controller
+  loop, diagnostics, old implementation code, and old main orchestration were
+  not copied or migrated.
+
+New implementation:
+
+- `TlOcsAlgorithmParameters` exposes pure-algorithm ablation switches for
+  EWMA, null-model subtraction, community weighting, hard holding, and
+  volume-only scoring. `OpticalScheduler` applies community weighting only
+  when explicitly enabled.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 13E implementation.

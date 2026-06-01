@@ -17,6 +17,11 @@ struct TlOcsAlgorithmParameters
     double alpha = 0.5;
     double lambda = 0.0;
     double replacementThreshold = 0.0;
+    bool enableNullModel = true;
+    bool enableCommunityFactor = true;
+    bool enableEwma = true;
+    bool enableHolding = false;
+    bool useVolumeOnlyScore = false;
     bool holdActiveEdges = false;
     double minActiveEdgeScore = 0.0;
     uint32_t maxReplacements = 0;

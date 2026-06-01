@@ -54,6 +54,27 @@ TlOcsBaselineSchedulersTestCase::DoRun()
     CommunityScheduler community;
     const TlOcsAlgorithmResult communityResult = community.Run(observed, parameters);
     NS_TEST_ASSERT_MSG_GT(communityResult.selectedEdges.size(), 0, "community scheduler selected no edge");
+
+    TlOcsAlgorithmParameters volumeOnly;
+    volumeOnly.enableEwma = false;
+    volumeOnly.enableHolding = false;
+    volumeOnly.useVolumeOnlyScore = true;
+    volumeOnly.lambda = 1000.0;
+    volumeOnly.opticalPortsPerTor = 1;
+    const TlOcsAlgorithmResult tlVolumeResult =
+        TlOcsAlgorithm().Run(observed, DenseMatrix(), {{0, 2}}, volumeOnly);
+    NS_TEST_ASSERT_MSG_EQ(tlVolumeResult.selectedEdges.size(),
+                          volumeResult.selectedEdges.size(),
+                          "volume-only TL path selected a different edge count");
+    for (uint32_t i = 0; i < volumeResult.selectedEdges.size(); ++i)
+    {
+        NS_TEST_ASSERT_MSG_EQ(tlVolumeResult.selectedEdges[i].sourceTor,
+                              volumeResult.selectedEdges[i].sourceTor,
+                              "volume-only source edge mismatch");
+        NS_TEST_ASSERT_MSG_EQ(tlVolumeResult.selectedEdges[i].destinationTor,
+                              volumeResult.selectedEdges[i].destinationTor,
+                              "volume-only destination edge mismatch");
+    }
 }
 
 class TlOcsBaselineSchedulersTestSuite : public TestSuite
