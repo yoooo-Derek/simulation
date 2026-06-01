@@ -8,6 +8,24 @@
 using namespace ns3;
 using namespace ns3::tl_ocs;
 
+namespace
+{
+
+bool
+ContainsEdge(const std::vector<OpticalEdge>& edges, uint32_t sourceTor, uint32_t destinationTor)
+{
+    for (const auto& edge : edges)
+    {
+        if (edge.sourceTor == sourceTor && edge.destinationTor == destinationTor)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
 class TlOcsAlgorithmSelectionTestCase : public TestCase
 {
   public:
@@ -252,6 +270,58 @@ TlOcsAlgorithmNullModelAblationTestCase::DoRun()
                               "disabled null model must expose Abar directly");
 }
 
+class TlOcsAlgorithmNullModelRankingTestCase : public TestCase
+{
+  public:
+    TlOcsAlgorithmNullModelRankingTestCase();
+
+  private:
+    void DoRun() override;
+};
+
+TlOcsAlgorithmNullModelRankingTestCase::TlOcsAlgorithmNullModelRankingTestCase()
+    : TestCase("TL-OCS null model changes edge ranking relative to absolute volume")
+{
+}
+
+void
+TlOcsAlgorithmNullModelRankingTestCase::DoRun()
+{
+    TrafficMatrix observed(4);
+    observed.AddBytes(0, 1, 10);
+    observed.AddBytes(0, 2, 9);
+    observed.AddBytes(1, 3, 10);
+
+    TlOcsAlgorithmParameters volumeScore;
+    volumeScore.enableEwma = false;
+    volumeScore.enableNullModel = false;
+    volumeScore.enableCommunityFactor = false;
+    volumeScore.opticalPortsPerTor = 1;
+
+    TlOcsAlgorithmParameters excessScore = volumeScore;
+    excessScore.enableNullModel = true;
+    excessScore.eta = 1.0;
+
+    const auto volume = TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, volumeScore);
+    const auto excess = TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, excessScore);
+
+    NS_TEST_ASSERT_MSG_GT(volume.B.Get(0, 1),
+                          volume.B.Get(0, 2),
+                          "absolute score should prefer the higher-volume edge");
+    NS_TEST_ASSERT_MSG_LT(excess.B.Get(0, 1),
+                          excess.B.Get(0, 2),
+                          "null model should prefer the lower-degree excess edge");
+    NS_TEST_ASSERT_MSG_EQ(ContainsEdge(volume.selectedEdges, 0, 1),
+                          true,
+                          "volume score should select edge 0-1");
+    NS_TEST_ASSERT_MSG_EQ(ContainsEdge(excess.selectedEdges, 0, 2),
+                          true,
+                          "excess score should select edge 0-2");
+    NS_TEST_ASSERT_MSG_EQ(ContainsEdge(excess.selectedEdges, 0, 1),
+                          false,
+                          "excess score should reject the lower-gain conflicting edge");
+}
+
 class TlOcsAlgorithmTestSuite : public TestSuite
 {
   public:
@@ -266,6 +336,7 @@ TlOcsAlgorithmTestSuite::TlOcsAlgorithmTestSuite()
     AddTestCase(new TlOcsAlgorithmStabilityParametersTestCase);
     AddTestCase(new TlOcsAlgorithmEwmaAblationTestCase);
     AddTestCase(new TlOcsAlgorithmNullModelAblationTestCase);
+    AddTestCase(new TlOcsAlgorithmNullModelRankingTestCase);
 }
 
 static TlOcsAlgorithmTestSuite g_tlOcsAlgorithmTestSuite;

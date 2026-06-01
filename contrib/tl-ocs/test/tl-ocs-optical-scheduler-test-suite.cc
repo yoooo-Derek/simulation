@@ -307,6 +307,51 @@ OpticalSchedulerCommunityFactorAblationTestCase::DoRun()
                               "disabled community factor should ignore alpha");
 }
 
+class OpticalSchedulerSchemeDifferentiationTestCase : public TestCase
+{
+  public:
+    OpticalSchedulerSchemeDifferentiationTestCase();
+
+  private:
+    void DoRun() override;
+};
+
+OpticalSchedulerSchemeDifferentiationTestCase::OpticalSchedulerSchemeDifferentiationTestCase()
+    : TestCase("community-aware score can select a different edge than volume-only score")
+{
+}
+
+void
+OpticalSchedulerSchemeDifferentiationTestCase::DoRun()
+{
+    DenseMatrix gain(4);
+    SetSymmetric(gain, 0, 1, 10.0);
+    SetSymmetric(gain, 0, 2, 11.0);
+
+    OpticalSchedulerParameters volumeOnly;
+    volumeOnly.alpha = 0.5;
+    volumeOnly.enableCommunityFactor = false;
+    volumeOnly.opticalPortsPerTor = 1;
+
+    OpticalSchedulerParameters communityAware = volumeOnly;
+    communityAware.enableCommunityFactor = true;
+
+    const std::vector<uint32_t> labels{0, 0, 1, 2};
+    const auto volume = OpticalScheduler().SelectEdges(gain, labels, {}, volumeOnly);
+    const auto community = OpticalScheduler().SelectEdges(gain, labels, {}, communityAware);
+
+    NS_TEST_ASSERT_MSG_EQ(ContainsEdge(volume.selectedEdges, 0, 2),
+                          true,
+                          "volume-only score should select the larger cross-community edge");
+    NS_TEST_ASSERT_MSG_EQ(ContainsEdge(community.selectedEdges, 0, 1),
+                          true,
+                          "community-aware score should prefer the same-community edge");
+    NS_TEST_ASSERT_MSG_EQ_TOL(GetCandidateScore(community.candidateEdges, 0, 2),
+                              5.5,
+                              1e-12,
+                              "cross-community alpha scaling mismatch");
+}
+
 class OpticalSchedulerTestSuite : public TestSuite
 {
   public:
@@ -322,6 +367,7 @@ OpticalSchedulerTestSuite::OpticalSchedulerTestSuite()
     AddTestCase(new OpticalSchedulerGreedyCompatibilityTestCase);
     AddTestCase(new OpticalSchedulerMinimalReplacementTestCase);
     AddTestCase(new OpticalSchedulerCommunityFactorAblationTestCase);
+    AddTestCase(new OpticalSchedulerSchemeDifferentiationTestCase);
 }
 
 static OpticalSchedulerTestSuite g_opticalSchedulerTestSuite;

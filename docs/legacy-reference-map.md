@@ -694,3 +694,30 @@ New implementation:
   when explicitly enabled.
 
 No old `hybrid-dcn-main.cc` code was copied into the Phase 13E implementation.
+
+## Phase 13F Reference
+
+Additional read-only scheme-scoring fragments reviewed for algorithm-level
+differentiation tests:
+
+- `/home/dyn/sim/src/main/hybrid-dcn-main.cc` absolute-volume, null-model
+  excess, community-factor, and previous-active holding score fragments
+
+Borrowed behavior and naming:
+
+- Volume-only, excess-gain, community-aware, and state-holding selection paths
+  should produce observably different choices on controlled matrices.
+
+Not migrated:
+
+- The old scheme presets, runtime controller branches, diagnostics, old
+  implementation code, and old main orchestration were not copied or
+  migrated.
+
+New implementation:
+
+- Algorithm-level tests use controlled matrices to distinguish volume-only
+  ranking, null-model excess ranking, community-factor ranking, and
+  threshold-controlled holding without changing runtime orchestration.
+
+No old `hybrid-dcn-main.cc` code was copied into the Phase 13F implementation.
