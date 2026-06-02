@@ -33,7 +33,8 @@ OffsetFlowIds(const std::vector<FlowSpec>& flows, uint32_t flowIdOffset)
                              flow.GetDestinationServerId(),
                              flow.GetSizeBytes(),
                              flow.GetStartTime(),
-                             flow.GetPatternName());
+                             flow.GetPatternName(),
+                             flow.GetEstimatedRateBps());
     }
     return shifted;
 }
@@ -137,11 +138,6 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
     {
         timelineOptions.schedulingMode = OpticalSchedulingMode::VOLUME;
     }
-    else if (scheme.GetType() == SchemeType::OCS_COMMUNITY)
-    {
-        timelineOptions.schedulingMode = OpticalSchedulingMode::COMMUNITY;
-    }
-
     ControllerState state;
     ControllerTimeline timeline(state);
     OcsLinkManager linkManager;

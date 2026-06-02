@@ -12,7 +12,6 @@ enum class SchemeType
 {
     EPS_ECMP,
     OCS_VOLUME,
-    OCS_COMMUNITY,
     TL_OCS
 };
 
@@ -29,7 +28,6 @@ class SchemeConfig
     bool EnableTrafficObserver() const;
     bool EnableAlgorithm() const;
     bool EnableOcsAdmission() const;
-    bool UseCommunity() const;
     bool UseVolumeScheduler() const;
 
   private:

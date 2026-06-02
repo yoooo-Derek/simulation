@@ -9,6 +9,7 @@
 #include <map>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace ns3
 {
@@ -21,26 +22,37 @@ struct OcsAdmissionDecision
     uint32_t sourceTor = 0;
     uint32_t destinationTor = 0;
     std::string reason;
-    uint64_t assignedBytesBefore = 0;
+    uint64_t assignedRateBpsBefore = 0;
 };
 
 class OcsAdmission
 {
   public:
     explicit OcsAdmission(const OcsLinkManager& linkManager,
-                          uint64_t assignmentThresholdBytes = std::numeric_limits<uint64_t>::max());
+                          uint64_t assignmentThresholdBps = std::numeric_limits<uint64_t>::max());
 
     OcsAdmissionDecision Decide(const FlowSpec& flow);
 
-    uint64_t GetAssignedBytes(uint32_t sourceTor, uint32_t destinationTor) const;
+    uint64_t GetAssignedRateBps(uint32_t sourceTor,
+                                uint32_t destinationTor,
+                                Time atTime) const;
 
   private:
+    struct RateReservation
+    {
+        uint64_t rateBps;
+        Time releaseTime;
+    };
+
     static std::pair<uint32_t, uint32_t> NormalizeEdge(uint32_t sourceTor,
                                                        uint32_t destinationTor);
 
     const OcsLinkManager& m_linkManager;
-    uint64_t m_assignmentThresholdBytes;
-    std::map<std::pair<uint32_t, uint32_t>, uint64_t> m_assignedBytes;
+    uint64_t GetAssignedRateBps(const std::pair<uint32_t, uint32_t>& edge, Time atTime) const;
+    void ReleaseExpired(const std::pair<uint32_t, uint32_t>& edge, Time atTime);
+
+    uint64_t m_assignmentThresholdBps;
+    std::map<std::pair<uint32_t, uint32_t>, std::vector<RateReservation>> m_reservations;
 };
 
 } // namespace tl_ocs

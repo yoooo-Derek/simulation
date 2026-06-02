@@ -38,7 +38,8 @@ UniformTrafficGenerator::Generate(const SimulationConfig& simulation,
                            destinationServer,
                            traffic.flowSizeBytes,
                            startTimes[flowId],
-                           "uniform");
+                           "uniform",
+                           traffic.estimatedFlowRateBps);
     }
     return flows;
 }

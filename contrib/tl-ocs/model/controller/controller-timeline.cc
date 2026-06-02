@@ -29,7 +29,8 @@ OffsetStartTimes(const std::vector<FlowSpec>& flows, Time startOffset)
                              flow.GetDestinationServerId(),
                              flow.GetSizeBytes(),
                              startOffset + flow.GetStartTime(),
-                             flow.GetPatternName());
+                             flow.GetPatternName(),
+                             flow.GetEstimatedRateBps());
     }
     return shifted;
 }
@@ -132,7 +133,7 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
 
     const std::vector<FlowSpec> shiftedStage2Flows =
         OffsetStartTimes(stage2Flows, Simulator::Now() + options.stageGap);
-    OcsAdmission admission(linkManager, simulation.GetOcsAssignmentThreshold());
+    OcsAdmission admission(linkManager, simulation.GetOcsAssignmentThresholdBps());
     FlowPathSelector selector;
     result.stage2Decisions = selector.Select(shiftedStage2Flows, admission, nodeIndex);
 

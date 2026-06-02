@@ -18,10 +18,6 @@ SchemeConfig::FromString(const std::string& name)
     {
         return SchemeConfig(SchemeType::OCS_VOLUME);
     }
-    if (name == "ocs-community")
-    {
-        return SchemeConfig(SchemeType::OCS_COMMUNITY);
-    }
     if (name == "tl-ocs")
     {
         return SchemeConfig(SchemeType::TL_OCS);
@@ -49,8 +45,6 @@ SchemeConfig::ToString() const
         return "eps-ecmp";
     case SchemeType::OCS_VOLUME:
         return "ocs-volume";
-    case SchemeType::OCS_COMMUNITY:
-        return "ocs-community";
     case SchemeType::TL_OCS:
         return "tl-ocs";
     }
@@ -60,8 +54,7 @@ SchemeConfig::ToString() const
 bool
 SchemeConfig::EnableOcsLinks() const
 {
-    return m_type == SchemeType::OCS_VOLUME || m_type == SchemeType::OCS_COMMUNITY ||
-           m_type == SchemeType::TL_OCS;
+    return m_type == SchemeType::OCS_VOLUME || m_type == SchemeType::TL_OCS;
 }
 
 bool
@@ -80,12 +73,6 @@ bool
 SchemeConfig::EnableOcsAdmission() const
 {
     return EnableOcsLinks();
-}
-
-bool
-SchemeConfig::UseCommunity() const
-{
-    return m_type == SchemeType::OCS_COMMUNITY || m_type == SchemeType::TL_OCS;
 }
 
 bool

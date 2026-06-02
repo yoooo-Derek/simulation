@@ -33,6 +33,7 @@ TlOcsUniformTrafficGeneratorTestCase::DoRun()
     TrafficGenerationConfig traffic;
     traffic.numFlows = 6;
     traffic.flowSizeBytes = 100000;
+    traffic.estimatedFlowRateBps = 250000000;
 
     UniformTrafficGenerator generator;
     const auto flows = generator.Generate(simulation, traffic);
@@ -46,6 +47,9 @@ TlOcsUniformTrafficGeneratorTestCase::DoRun()
         NS_TEST_ASSERT_MSG_LT(flow.GetSourceServerId(), 2, "source server is out of range");
         NS_TEST_ASSERT_MSG_LT(flow.GetDestinationServerId(), 2, "destination server is out of range");
         NS_TEST_ASSERT_MSG_EQ(flow.GetPatternName(), "uniform", "unexpected pattern name");
+        NS_TEST_ASSERT_MSG_EQ(flow.GetEstimatedRateBps(),
+                              traffic.estimatedFlowRateBps,
+                              "generated flow lost its estimated rate");
     }
 }
 

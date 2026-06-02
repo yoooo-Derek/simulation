@@ -38,7 +38,8 @@ AggregationTrafficGenerator::Generate(const SimulationConfig& simulation,
                                    server,
                                    traffic.flowSizeBytes,
                                    startTime,
-                                   "parameter-aggregation");
+                                   "parameter-aggregation",
+                                   traffic.estimatedFlowRateBps);
                 if (traffic.includeAggregationReturnFlows && flows.size() < traffic.numFlows)
                 {
                     flows.emplace_back(static_cast<uint32_t>(flows.size()),
@@ -48,7 +49,8 @@ AggregationTrafficGenerator::Generate(const SimulationConfig& simulation,
                                        server,
                                        traffic.flowSizeBytes,
                                        startTime,
-                                       "parameter-aggregation");
+                                       "parameter-aggregation",
+                                       traffic.estimatedFlowRateBps);
                 }
             }
         }
@@ -69,7 +71,8 @@ AggregationTrafficGenerator::Generate(const SimulationConfig& simulation,
                            destinationServer,
                            traffic.flowSizeBytes,
                            startTimes[flowId],
-                           "parameter-aggregation");
+                           "parameter-aggregation",
+                           traffic.estimatedFlowRateBps);
     }
     return flows;
 }

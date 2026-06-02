@@ -30,9 +30,6 @@ TlOcsSchemeConfigTestCase::DoRun()
     NS_TEST_ASSERT_MSG_EQ(volume.EnableTrafficObserver(), true, "OCS volume requires observer");
     NS_TEST_ASSERT_MSG_EQ(volume.UseVolumeScheduler(), true, "OCS volume should select volume scheduler");
 
-    const SchemeConfig community = SchemeConfig::FromString("ocs-community");
-    NS_TEST_ASSERT_MSG_EQ(community.UseCommunity(), true, "OCS community should use communities");
-
     const SchemeConfig tlOcs = SchemeConfig::FromString("tl-ocs");
     NS_TEST_ASSERT_MSG_EQ(tlOcs.ToString(), "tl-ocs", "TL-OCS string round-trip failed");
     NS_TEST_ASSERT_MSG_EQ(tlOcs.EnableOcsAdmission(), true, "TL-OCS should enable OCS admission");
@@ -47,6 +44,17 @@ TlOcsSchemeConfigTestCase::DoRun()
         threw = true;
     }
     NS_TEST_ASSERT_MSG_EQ(threw, true, "unknown scheme should fail");
+
+    threw = false;
+    try
+    {
+        SchemeConfig::FromString("ocs-community");
+    }
+    catch (const std::runtime_error&)
+    {
+        threw = true;
+    }
+    NS_TEST_ASSERT_MSG_EQ(threw, true, "removed OCS community scheme should fail");
 }
 
 class TlOcsSchemeConfigTestSuite : public TestSuite

@@ -14,7 +14,7 @@ SimulationConfig::SimulationConfig()
       m_serversPerTor(2),
       m_epsDataRate("25Gbps"),
       m_ocsDataRate("100Gbps"),
-      m_ocsAssignmentThreshold(std::numeric_limits<uint64_t>::max()),
+      m_ocsAssignmentThresholdBps(std::numeric_limits<uint64_t>::max()),
       m_stopTime(MilliSeconds(10)),
       m_observerWindow(MilliSeconds(1)),
       m_ocsReconfigurationPeriod(MilliSeconds(5)),
@@ -72,15 +72,15 @@ SimulationConfig::GetOcsDataRate() const
 }
 
 void
-SimulationConfig::SetOcsAssignmentThreshold(uint64_t thresholdBytes)
+SimulationConfig::SetOcsAssignmentThresholdBps(uint64_t thresholdBps)
 {
-    m_ocsAssignmentThreshold = thresholdBytes;
+    m_ocsAssignmentThresholdBps = thresholdBps;
 }
 
 uint64_t
-SimulationConfig::GetOcsAssignmentThreshold() const
+SimulationConfig::GetOcsAssignmentThresholdBps() const
 {
-    return m_ocsAssignmentThreshold;
+    return m_ocsAssignmentThresholdBps;
 }
 
 void
@@ -157,7 +157,7 @@ SimulationConfig::GetSummary() const
     std::ostringstream os;
     os << "numTors=" << m_numTors << ", serversPerTor=" << m_serversPerTor
        << ", epsDataRate=" << m_epsDataRate << ", ocsDataRate=" << m_ocsDataRate
-       << ", ocsAssignmentThreshold=" << m_ocsAssignmentThreshold
+       << ", ocsAssignmentThresholdBps=" << m_ocsAssignmentThresholdBps
        << ", stopTime=" << m_stopTime.As(Time::S)
        << ", observerWindow=" << m_observerWindow.As(Time::S)
        << ", ocsPeriod=" << m_ocsReconfigurationPeriod.As(Time::S)

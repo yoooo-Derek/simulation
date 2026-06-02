@@ -24,6 +24,7 @@ struct TrafficGenerationConfig
 {
     uint32_t numFlows = 4;
     uint64_t flowSizeBytes = 1000000;
+    uint64_t estimatedFlowRateBps = 1000000000;
     Time flowStartInterval = MilliSeconds(1);
     TrafficArrivalMode arrivalMode = TrafficArrivalMode::DETERMINISTIC;
     uint32_t randomSeed = 1;

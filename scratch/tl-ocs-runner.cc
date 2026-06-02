@@ -30,7 +30,8 @@ OffsetFlows(const std::vector<FlowSpec>& flows, uint32_t flowIdOffset, Time star
                              flow.GetDestinationServerId(),
                              flow.GetSizeBytes(),
                              startOffset + flow.GetStartTime(),
-                             flow.GetPatternName());
+                             flow.GetPatternName(),
+                             flow.GetEstimatedRateBps());
     }
     return shifted;
 }
@@ -70,12 +71,13 @@ main(int argc, char* argv[])
     bool printOcsDecisions = false;
     uint32_t spines = 1;
     std::string ocsDataRate = "100Gbps";
-    uint64_t ocsAssignmentThreshold = std::numeric_limits<uint64_t>::max();
+    uint64_t ocsAssignmentThresholdBps = std::numeric_limits<uint64_t>::max();
     double ocsDelaySeconds = 0.000005;
     double timelineStageGapSeconds = 0.001;
     uint64_t tcpFlowBytes = 1000000;
     uint32_t numFlows = 4;
     uint64_t flowSizeBytes = 1000000;
+    uint64_t flowRateBps = 1000000000;
     double flowStartIntervalSeconds = 0.001;
     std::string arrivalMode = "deterministic";
     double poissonMeanInterArrivalSeconds = 0.001;
@@ -122,14 +124,15 @@ main(int argc, char* argv[])
     cmd.AddValue("printOcsDecisions", "Print per-flow OCS/EPS path decisions", printOcsDecisions);
     cmd.AddValue("spines", "Number of EPS spine nodes", spines);
     cmd.AddValue("ocsDataRate", "OCS candidate link data rate", ocsDataRate);
-    cmd.AddValue("ocsAssignmentThreshold",
-                 "Maximum assigned flow bytes per active OCS lightpath",
-                 ocsAssignmentThreshold);
+    cmd.AddValue("ocsAssignmentThresholdBps",
+                 "Maximum assigned flow rate in bps per active OCS lightpath",
+                 ocsAssignmentThresholdBps);
     cmd.AddValue("ocsDelay", "OCS candidate link delay in seconds", ocsDelaySeconds);
     cmd.AddValue("timelineStageGap", "Gap between controller timeline stages in seconds", timelineStageGapSeconds);
     cmd.AddValue("tcpFlowBytes", "Maximum bytes sent by the TCP smoke flow", tcpFlowBytes);
     cmd.AddValue("numFlows", "Number of generated training traffic flows", numFlows);
     cmd.AddValue("flowSizeBytes", "Bytes per generated training traffic flow", flowSizeBytes);
+    cmd.AddValue("flowRateBps", "Estimated rate in bps per generated training traffic flow", flowRateBps);
     cmd.AddValue("flowStartInterval", "Interval between generated flow start times in seconds", flowStartIntervalSeconds);
     cmd.AddValue("arrivalMode", "Training flow arrival mode: deterministic, poisson, or iteration-burst", arrivalMode);
     cmd.AddValue("poissonMeanInterArrival", "Mean Poisson inter-arrival time in seconds", poissonMeanInterArrivalSeconds);
@@ -172,7 +175,7 @@ main(int argc, char* argv[])
     config.SetObserverWindow(Seconds(observerWindowSeconds));
     config.SetOcsReconfigurationPeriod(Seconds(ocsPeriodSeconds));
     config.SetOcsDataRate(ocsDataRate);
-    config.SetOcsAssignmentThreshold(ocsAssignmentThreshold);
+    config.SetOcsAssignmentThresholdBps(ocsAssignmentThresholdBps);
     config.SetStopTime(Seconds(stopTimeSeconds));
     config.SetRandomSeed(randomSeed);
     config.SetRunId(runId);
@@ -264,6 +267,7 @@ main(int argc, char* argv[])
         return 1;
     }
     if (enableTrainingTraffic && (numFlows == 0 || flowSizeBytes == 0 ||
+                                  flowRateBps == 0 ||
                                   !Seconds(flowStartIntervalSeconds).IsPositive()))
     {
         std::cerr << "Invalid training traffic configuration" << std::endl;
@@ -344,6 +348,7 @@ main(int argc, char* argv[])
             TrafficGenerationConfig trafficConfig;
             trafficConfig.numFlows = numFlows;
             trafficConfig.flowSizeBytes = flowSizeBytes;
+            trafficConfig.estimatedFlowRateBps = flowRateBps;
             trafficConfig.flowStartInterval = Seconds(flowStartIntervalSeconds);
             if (arrivalMode == "deterministic" || arrivalMode == "interval")
             {
@@ -681,7 +686,8 @@ main(int argc, char* argv[])
                             OffsetFlows(flows,
                                         static_cast<uint32_t>(flows.size()),
                                         Simulator::Now() + MilliSeconds(1));
-                        OcsAdmission admission(linkManager, config.GetOcsAssignmentThreshold());
+                        OcsAdmission admission(linkManager,
+                                               config.GetOcsAssignmentThresholdBps());
                         FlowPathSelector selector;
                         const std::vector<FlowPathDecision> decisions =
                             selector.Select(admittedFlows, admission, index);

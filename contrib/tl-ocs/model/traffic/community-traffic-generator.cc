@@ -55,7 +55,8 @@ CommunityTrafficGenerator::Generate(const SimulationConfig& simulation,
                            destinationServer,
                            traffic.flowSizeBytes,
                            startTimes[flowId],
-                           "community-local");
+                           "community-local",
+                           traffic.estimatedFlowRateBps);
     }
     return flows;
 }

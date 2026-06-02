@@ -48,7 +48,7 @@ def validate_summary(path, fieldnames, rows):
             require_fields(path,
                            fieldnames,
                            {"eps_avg_link_utilization", "eps_max_link_utilization"})
-            if row.get("scheme", "") in {"ocs-volume", "ocs-community", "tl-ocs"}:
+            if row.get("scheme", "") in {"ocs-volume", "tl-ocs"}:
                 require_fields(path, fieldnames, {"ocs_flow_hit_rate"})
 
         required_numbers = {"installed_flows", "received_bytes"}

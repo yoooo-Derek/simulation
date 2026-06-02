@@ -20,7 +20,6 @@ python3 experiments/scripts/validate-results.py \
 python3 experiments/scripts/aggregate-results.py \
   results/raw/phase11b-eps-ecmp.csv \
   results/raw/phase11b-ocs-volume.csv \
-  results/raw/phase11b-ocs-community.csv \
   results/raw/phase11b-tl-ocs.csv \
   --output results/tables/phase11b-summary.csv
 ```
@@ -44,7 +43,7 @@ Run the complete small sanity set:
 ./experiments/scripts/run-all-sanity.sh
 ```
 
-This runs one 8-ToR TL-OCS case and five 16-ToR scheme cases, then writes
+This runs one 8-ToR TL-OCS case and three 16-ToR scheme cases, then writes
 `results/tables/sanity-summary.csv`.
 
 Diagnose the known Phase 12A 16-ToR OCS incomplete rows:
@@ -52,7 +51,6 @@ Diagnose the known Phase 12A 16-ToR OCS incomplete rows:
 ```bash
 python3 experiments/scripts/diagnose-flows.py \
   results/raw/sanity-16tor-ocs-volume-flows.csv \
-  results/raw/sanity-16tor-ocs-community-flows.csv \
   results/raw/sanity-16tor-tl-ocs-flows.csv \
   --output results/tables/sanity-flow-diagnostics.csv
 ```

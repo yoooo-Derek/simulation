@@ -53,24 +53,58 @@ class TlOcsOcsAdmissionCapacityTestCase : public TestCase
     {
         OcsLinkManager manager;
         manager.ApplySelectedEdges({{0, 1, 1.0, 1.0, true, true}});
-        OcsAdmission assignment(manager, 1500);
+        OcsAdmission assignment(manager, 1000);
 
-        const FlowSpec first(0, 0, 0, 1, 0, 1000, MilliSeconds(1), "test");
-        const FlowSpec second(1, 0, 0, 1, 0, 600, MilliSeconds(1), "test");
-        const FlowSpec reverse(2, 1, 0, 0, 0, 500, MilliSeconds(1), "test");
+        const FlowSpec first(0, 0, 0, 1, 0, 1000, MilliSeconds(1), "test", 400);
+        const FlowSpec second(1, 0, 0, 1, 0, 1000, MilliSeconds(2), "test", 400);
+        const FlowSpec reverse(2, 1, 0, 0, 0, 1000, MilliSeconds(3), "test", 300);
 
         NS_TEST_ASSERT_MSG_EQ(assignment.Decide(first).admitted,
                               true,
-                              "first flow should fit the lightpath capacity");
+                              "first low-rate flow should fit the lightpath capacity");
         NS_TEST_ASSERT_MSG_EQ(assignment.Decide(second).admitted,
-                              false,
-                              "flow exceeding lightpath capacity should use EPS");
-        NS_TEST_ASSERT_MSG_EQ(assignment.Decide(reverse).admitted,
                               true,
-                              "reverse flow should share the remaining undirected capacity");
-        NS_TEST_ASSERT_MSG_EQ(assignment.GetAssignedBytes(0, 1),
-                              1500,
-                              "lightpath assigned byte accounting mismatch");
+                              "second concurrent low-rate flow should fit the lightpath capacity");
+        NS_TEST_ASSERT_MSG_EQ(assignment.Decide(reverse).admitted,
+                              false,
+                              "reverse flow should share the exhausted undirected rate capacity");
+        NS_TEST_ASSERT_MSG_EQ(assignment.GetAssignedRateBps(0, 1, MilliSeconds(3)),
+                              800,
+                              "lightpath assigned rate accounting mismatch");
+    }
+};
+
+class TlOcsOcsAdmissionReleaseTestCase : public TestCase
+{
+  public:
+    TlOcsOcsAdmissionReleaseTestCase()
+        : TestCase("TL-OCS planned lightpath rate release admits later flows")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        OcsLinkManager manager;
+        manager.ApplySelectedEdges({{0, 1, 1.0, 1.0, true, true}});
+        OcsAdmission assignment(manager, 1000);
+
+        const FlowSpec first(0, 0, 0, 1, 0, 1000, MilliSeconds(1), "test", 1000);
+        const FlowSpec tooFast(1, 0, 0, 1, 0, 1000, MilliSeconds(2), "test", 1100);
+        const FlowSpec afterRelease(2, 1, 0, 0, 0, 1000, Seconds(10), "test", 1000);
+
+        NS_TEST_ASSERT_MSG_EQ(assignment.Decide(first).admitted,
+                              true,
+                              "first rate reservation should fit");
+        NS_TEST_ASSERT_MSG_EQ(assignment.Decide(tooFast).admitted,
+                              false,
+                              "single flow above threshold should use EPS");
+        NS_TEST_ASSERT_MSG_EQ(assignment.Decide(afterRelease).admitted,
+                              true,
+                              "flow after planned release should fit");
+        NS_TEST_ASSERT_MSG_EQ(assignment.GetAssignedRateBps(0, 1, Seconds(10)),
+                              1000,
+                              "released reservation should not remain in assigned rate");
     }
 };
 
@@ -85,6 +119,7 @@ TlOcsOcsAdmissionTestSuite::TlOcsOcsAdmissionTestSuite()
 {
     AddTestCase(new TlOcsOcsAdmissionTestCase);
     AddTestCase(new TlOcsOcsAdmissionCapacityTestCase);
+    AddTestCase(new TlOcsOcsAdmissionReleaseTestCase);
 }
 
 static TlOcsOcsAdmissionTestSuite g_tlOcsOcsAdmissionTestSuite;

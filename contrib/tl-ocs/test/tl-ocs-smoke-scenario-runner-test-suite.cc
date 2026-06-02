@@ -193,7 +193,6 @@ class TlOcsSmokeScenarioRunnerTestSuite : public TestSuite
     {
         AddTestCase(new TlOcsEpsEcmpScenarioTestCase);
         AddTestCase(new TlOcsOcsBaselineScenarioTestCase("ocs-volume"));
-        AddTestCase(new TlOcsOcsBaselineScenarioTestCase("ocs-community"));
         AddTestCase(new TlOcsTlOcsScenarioTestCase);
     }
 };

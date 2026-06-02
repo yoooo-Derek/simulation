@@ -14,6 +14,7 @@ FlowSpec::FlowSpec()
       m_destinationTorId(0),
       m_destinationServerId(0),
       m_sizeBytes(0),
+      m_estimatedRateBps(0),
       m_startTime(Seconds(0)),
       m_patternName("none")
 {
@@ -26,13 +27,15 @@ FlowSpec::FlowSpec(uint32_t flowId,
                    uint32_t destinationServerId,
                    uint64_t sizeBytes,
                    Time startTime,
-                   std::string patternName)
+                   std::string patternName,
+                   uint64_t estimatedRateBps)
     : m_flowId(flowId),
       m_sourceTorId(sourceTorId),
       m_sourceServerId(sourceServerId),
       m_destinationTorId(destinationTorId),
       m_destinationServerId(destinationServerId),
       m_sizeBytes(sizeBytes),
+      m_estimatedRateBps(estimatedRateBps),
       m_startTime(startTime),
       m_patternName(std::move(patternName))
 {
@@ -72,6 +75,12 @@ uint64_t
 FlowSpec::GetSizeBytes() const
 {
     return m_sizeBytes;
+}
+
+uint64_t
+FlowSpec::GetEstimatedRateBps() const
+{
+    return m_estimatedRateBps;
 }
 
 Time

@@ -54,8 +54,8 @@ TlOcsFlowPathSelectorTestCase::DoRun()
                           "inactive pair should not be admitted");
 
     OcsAdmission capacityLimited(manager, 1000);
-    const FlowSpec fitting(2, 0, 0, 1, 0, 800, MilliSeconds(1), "test");
-    const FlowSpec exceeding(3, 0, 0, 1, 0, 300, MilliSeconds(1), "test");
+    const FlowSpec fitting(2, 0, 0, 1, 0, 800, MilliSeconds(1), "test", 800);
+    const FlowSpec exceeding(3, 0, 0, 1, 0, 300, MilliSeconds(1), "test", 300);
     NS_TEST_ASSERT_MSG_EQ(selector.Select(fitting, capacityLimited, index).pathType,
                           "ocs",
                           "flow within capacity should use OCS");

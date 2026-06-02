@@ -5,8 +5,8 @@ and does not claim paper results.
 
 ## Goals
 
-The future paper evaluation should compare `tl-ocs` against `eps-ecmp`,
-`ocs-volume`, and `ocs-community`.
+The future paper evaluation should compare `tl-ocs` against `eps-ecmp` and
+`ocs-volume`.
 
 Evaluation fields should include completed-flow average, p90, and p95 FCT;
 received bytes and a later explicitly defined throughput field; EPS average and
@@ -17,7 +17,6 @@ Current `received_bytes` is a trace-derived byte count, not a throughput field.
 
 - `eps-ecmp`
 - `ocs-volume`
-- `ocs-community`
 - `tl-ocs`
 
 ## Topology Matrix Draft
@@ -90,7 +89,6 @@ Use:
 ```bash
 python3 experiments/scripts/diagnose-flows.py \
   results/raw/sanity-16tor-ocs-volume-flows.csv \
-  results/raw/sanity-16tor-ocs-community-flows.csv \
   results/raw/sanity-16tor-tl-ocs-flows.csv \
   --output results/tables/sanity-flow-diagnostics.csv
 ```

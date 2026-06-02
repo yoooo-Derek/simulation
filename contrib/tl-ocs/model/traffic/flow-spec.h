@@ -22,7 +22,8 @@ class FlowSpec
              uint32_t destinationServerId,
              uint64_t sizeBytes,
              Time startTime,
-             std::string patternName);
+             std::string patternName,
+             uint64_t estimatedRateBps = 1000000000);
 
     uint32_t GetFlowId() const;
     uint32_t GetSourceTorId() const;
@@ -30,6 +31,7 @@ class FlowSpec
     uint32_t GetDestinationTorId() const;
     uint32_t GetDestinationServerId() const;
     uint64_t GetSizeBytes() const;
+    uint64_t GetEstimatedRateBps() const;
     Time GetStartTime() const;
     const std::string& GetPatternName() const;
 
@@ -40,6 +42,7 @@ class FlowSpec
     uint32_t m_destinationTorId;
     uint32_t m_destinationServerId;
     uint64_t m_sizeBytes;
+    uint64_t m_estimatedRateBps;
     Time m_startTime;
     std::string m_patternName;
 };
