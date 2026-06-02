@@ -20,8 +20,7 @@ class TlOcsFlowMetricsTestCase : public TestCase
         {
             FlowMetricRecord record;
             record.flowId = index;
-            record.pathType = index == 0 ? "eps-wecmp" : "eps";
-            record.selectedSpine = index == 0 ? std::optional<uint32_t>(1) : std::nullopt;
+            record.pathType = "eps";
             record.receivedBytes = 100;
             record.completed = true;
             record.completionTimeS = static_cast<double>(index + 1);
@@ -42,8 +41,7 @@ class TlOcsFlowMetricsTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ_TOL(summary.avgFctS.value(), 5.5, 1e-12, "average FCT mismatch");
         NS_TEST_ASSERT_MSG_EQ_TOL(summary.p90FctS.value(), 9.0, 1e-12, "p90 FCT mismatch");
         NS_TEST_ASSERT_MSG_EQ_TOL(summary.p95FctS.value(), 10.0, 1e-12, "p95 FCT mismatch");
-        NS_TEST_ASSERT_MSG_EQ(records[0].pathType, "eps-wecmp", "path type was not retained");
-        NS_TEST_ASSERT_MSG_EQ(records[0].selectedSpine.value(), 1, "selected spine was not retained");
+        NS_TEST_ASSERT_MSG_EQ(records[0].pathType, "eps", "path type was not retained");
     }
 };
 

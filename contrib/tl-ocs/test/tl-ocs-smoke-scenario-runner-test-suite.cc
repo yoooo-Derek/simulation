@@ -37,7 +37,6 @@ SmokeScenarioOptions
 MakeOptions()
 {
     SmokeScenarioOptions options;
-    options.availableSpines = {0, 1};
     options.enableFlowMetrics = true;
     options.enableLinkMetrics = true;
     options.enableOcsMetrics = true;
@@ -113,14 +112,11 @@ class TlOcsTlOcsScenarioTestCase : public TestCase
         NS_TEST_ASSERT_MSG_GT(result.observedMatrixBytes, 0, "TL-OCS observed no bytes");
         NS_TEST_ASSERT_MSG_GT(result.algorithmSelectedEdges, 0, "TL-OCS selected no edges");
         NS_TEST_ASSERT_MSG_GT(result.receivedBytes, 0, "TL-OCS received no bytes");
-        NS_TEST_ASSERT_MSG_EQ(result.epsWecmpFlows,
-                              0,
-                              "V4 TL-OCS residual traffic should not use EPS-WECMP");
         for (const auto& metric : result.flowMetrics)
         {
-            NS_TEST_ASSERT_MSG_NE(metric.pathType,
-                                  "eps-wecmp",
-                                  "V4 TL-OCS flow metrics should expose only OCS or EPS paths");
+            NS_TEST_ASSERT_MSG_EQ(metric.pathType == "ocs" || metric.pathType == "eps",
+                                  true,
+                                  "TL-OCS flow metrics should expose only OCS or EPS paths");
         }
         NS_TEST_ASSERT_MSG_GT(result.flowMetricsSummary->completedFlows, 0, "TL-OCS completed no flows");
         NS_TEST_ASSERT_MSG_GT(result.linkUtilizationSummary->epsMaxLinkUtilization.value(),
@@ -171,7 +167,7 @@ class TlOcsOcsBaselineScenarioTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(result.ocsActiveEdges,
                               result.algorithmSelectedEdges,
                               "OCS baseline active edge count mismatch");
-        NS_TEST_ASSERT_MSG_GT(result.ocsAdmittedFlows, 0, "OCS baseline admitted no flows");
+        NS_TEST_ASSERT_MSG_GT(result.ocsAssignedFlows, 0, "OCS baseline admitted no flows");
         NS_TEST_ASSERT_MSG_GT(result.receivedBytes, 0, "OCS baseline received no bytes");
         NS_TEST_ASSERT_MSG_GT(result.flowMetricsSummary->completedFlows,
                               0,

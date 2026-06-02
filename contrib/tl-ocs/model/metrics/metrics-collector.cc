@@ -32,7 +32,6 @@ MetricsCollector::Collect(const FlowMetricSource& source, const std::string& sch
     record.destinationTor = source.flow.GetDestinationTorId();
     record.destinationServer = source.flow.GetDestinationServerId();
     record.pathType = source.path.pathType;
-    record.selectedSpine = source.path.selectedSpine;
     record.sizeBytes = source.flow.GetSizeBytes();
     record.receivedBytes = source.tracking->receivedBytes;
     record.startTimeS = source.flow.GetStartTime().GetSeconds();

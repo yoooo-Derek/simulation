@@ -54,7 +54,6 @@ VolumeScheduler::Run(const TrafficMatrix& observedW, uint32_t opticalPortsPerTor
     MatrixProcessor processor;
     TlOcsAlgorithmResult result;
     result.A = processor.BuildUndirected(observedW);
-    result.Abar = result.A;
     result.B = result.A;
     result.trafficGraph = processor.Sparsify(result.A, 0.0);
     result.communityLabels.resize(result.A.GetSize(), 0);
@@ -85,7 +84,6 @@ CommunityScheduler::Run(const TrafficMatrix& observedW,
 
     TlOcsAlgorithmResult result;
     result.A = processor.BuildUndirected(observedW);
-    result.Abar = result.A;
     result.trafficGraph = processor.Sparsify(result.A, parameters.thetaF);
     result.B = nullModel.ComputeModularityGain(result.A, parameters.eta);
     CommunityDetectionOptions communityOptions;
@@ -104,7 +102,7 @@ CommunityScheduler::Run(const TrafficMatrix& observedW,
     schedulerParameters.enableCommunityFactor = true;
     schedulerParameters.opticalPortsPerTor = parameters.opticalPortsPerTor;
     const OpticalScheduleResult schedule =
-        scheduler.SelectEdges(result.B, result.communityLabels, {}, schedulerParameters);
+        scheduler.SelectEdges(result.B, result.communityLabels, schedulerParameters);
     result.candidateEdges = schedule.candidateEdges;
     result.selectedEdges = schedule.selectedEdges;
     return result;

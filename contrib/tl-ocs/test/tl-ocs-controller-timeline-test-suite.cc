@@ -85,7 +85,6 @@ RunSchemeDifferentiation(OpticalSchedulingMode schedulingMode)
         {11, 0, 0, 2, 0, 10000, MilliSeconds(2), "timeline-scheme-difference"}};
 
     TlOcsAlgorithmParameters parameters;
-    parameters.enableEwma = false;
     parameters.enableCommunityFactor = false;
     parameters.opticalPortsPerTor = 1;
 
@@ -148,7 +147,6 @@ RunGeneratedScenario(const SimulationConfig& simulation, const std::vector<FlowS
     observer.AttachToTopology(index);
 
     TlOcsAlgorithmParameters parameters;
-    parameters.enableEwma = false;
     parameters.opticalPortsPerTor = 1;
 
     ControllerTimelineOptions options;
@@ -239,10 +237,8 @@ TlOcsControllerTimelineTestCase::DoRun()
 
     ControllerTimelineOptions options;
     options.enableOcsAdmission = true;
-    options.enableEpsWecmp = true;
     options.stage1Stop = MilliSeconds(40);
     options.stageGap = MilliSeconds(1);
-    options.availableSpines = {0, 1};
 
     ControllerState state;
     ControllerTimeline timeline(state);
@@ -266,11 +262,8 @@ TlOcsControllerTimelineTestCase::DoRun()
     NS_TEST_ASSERT_MSG_EQ(result.stage2InstalledFlows, 2, "unexpected stage-2 flow count");
     NS_TEST_ASSERT_MSG_GT(result.stage1ReceivedBytes, 0, "stage-1 flow bytes were not received");
     NS_TEST_ASSERT_MSG_GT(result.stage2ReceivedBytes, 0, "stage-2 flow bytes were not received");
-    NS_TEST_ASSERT_MSG_GT(result.ocsAdmittedFlows, 0, "expected an OCS-admitted stage-2 flow");
+    NS_TEST_ASSERT_MSG_GT(result.ocsAssignedFlows, 0, "expected an OCS-admitted stage-2 flow");
     NS_TEST_ASSERT_MSG_GT(result.epsFallbackFlows, 0, "expected an EPS fallback stage-2 flow");
-    NS_TEST_ASSERT_MSG_EQ(result.epsWecmpFlows,
-                          result.epsFallbackFlows,
-                          "all fallback flows should enter EPS-WECMP");
     NS_TEST_ASSERT_MSG_EQ(linkManager.IsActive(0, 1), true, "expected active community edge 0-1");
     NS_TEST_ASSERT_MSG_EQ(linkManager.IsActive(2, 3), true, "expected active community edge 2-3");
     const auto& admittedDecision = FindDecision(result.stage2Decisions, 4);
@@ -278,7 +271,7 @@ TlOcsControllerTimelineTestCase::DoRun()
     NS_TEST_ASSERT_MSG_EQ(admittedDecision.pathType, "ocs", "active pair should use OCS");
     NS_TEST_ASSERT_MSG_EQ(admittedDecision.admittedToOcs, true, "active pair was not admitted");
     NS_TEST_ASSERT_MSG_EQ(fallbackDecision.pathType,
-                          "eps-wecmp",
+                          "eps",
                           "inactive pair should retain residual EPS path");
     NS_TEST_ASSERT_MSG_EQ(fallbackDecision.admittedToOcs,
                           false,
@@ -289,7 +282,7 @@ TlOcsControllerTimelineTestCase::DoRun()
     const auto& fallbackMetric = FindMetric(metrics, 5);
     NS_TEST_ASSERT_MSG_EQ(admittedMetric.pathType, "ocs", "metric lost OCS path type");
     NS_TEST_ASSERT_MSG_EQ(fallbackMetric.pathType,
-                          "eps-wecmp",
+                          "eps",
                           "metric lost residual EPS path type");
     NS_TEST_ASSERT_MSG_EQ(admittedMetric.completed, true, "OCS stage-2 flow did not complete");
     NS_TEST_ASSERT_MSG_EQ(fallbackMetric.completed, true, "EPS stage-2 flow did not complete");
@@ -385,7 +378,7 @@ class TlOcsControllerTimelineUniformReadinessTestCase : public TestCase
                               traffic.numFlows,
                               "uniform stage-2 flow count mismatch");
         NS_TEST_ASSERT_MSG_GT(result.timeline.stage2ReceivedBytes, 0, "uniform stage-2 received no bytes");
-        NS_TEST_ASSERT_MSG_GT(result.timeline.ocsAdmittedFlows, 0, "uniform admitted no OCS flows");
+        NS_TEST_ASSERT_MSG_GT(result.timeline.ocsAssignedFlows, 0, "uniform admitted no OCS flows");
         NS_TEST_ASSERT_MSG_EQ(HasValidStage2Metrics(result, traffic.numFlows),
                               true,
                               "uniform stage-2 metrics are invalid");
@@ -432,7 +425,7 @@ class TlOcsControllerTimelineAggregationReadinessTestCase : public TestCase
         NS_TEST_ASSERT_MSG_GT(result.timeline.stage2ReceivedBytes,
                               0,
                               "aggregation stage-2 received no bytes");
-        NS_TEST_ASSERT_MSG_GT(result.timeline.ocsAdmittedFlows,
+        NS_TEST_ASSERT_MSG_GT(result.timeline.ocsAssignedFlows,
                               0,
                               "aggregation admitted no OCS flows");
         NS_TEST_ASSERT_MSG_EQ(HasValidStage2Metrics(result, traffic.numFlows),

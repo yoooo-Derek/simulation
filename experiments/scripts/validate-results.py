@@ -13,7 +13,7 @@ SUMMARY_BASE_FIELDS = {
 FLOW_FIELDS = {
     "flow_id", "path_type", "received_bytes", "completed"
 }
-FLOW_PATH_TYPES = {"eps", "eps-wecmp", "ocs"}
+FLOW_PATH_TYPES = {"eps", "ocs"}
 NONNEGATIVE_SUMMARY_FIELDS = {
     "installed_flows", "received_bytes", "total_flows", "completed_flows",
     "incomplete_flows", "eps_avg_link_utilization", "eps_max_link_utilization",

@@ -65,33 +65,17 @@ TlOcsAlgorithmSelectionTestCase::DoRun()
     observed.AddBytes(1, 3, 5);
 
     TlOcsAlgorithmParameters parameters;
-    NS_TEST_ASSERT_MSG_EQ(parameters.enableEwma,
-                          false,
-                          "V4 TL-OCS should schedule from current-window A by default");
-    NS_TEST_ASSERT_MSG_EQ(parameters.enableHolding,
-                          false,
-                          "V4 TL-OCS should disable optional holding by default");
-    NS_TEST_ASSERT_MSG_EQ_TOL(parameters.lambda,
-                              0.0,
-                              1e-12,
-                              "V4 TL-OCS should not apply a previous-active score bonus by default");
-    parameters.beta = 0.8;
     parameters.thetaF = 0.0;
     parameters.eta = 1.0;
     parameters.alpha = 0.5;
-    parameters.lambda = 0.0;
     parameters.opticalPortsPerTor = 1;
     parameters.maxPasses = 4;
 
     TlOcsAlgorithm algorithm;
-    TlOcsAlgorithmResult result = algorithm.Run(observed, DenseMatrix(), {}, parameters);
+    TlOcsAlgorithmResult result = algorithm.Run(observed, parameters);
 
     NS_TEST_ASSERT_MSG_EQ_TOL(result.A.Get(0, 1), 200.0, 1e-12, "unexpected A(0,1)");
     NS_TEST_ASSERT_MSG_EQ_TOL(result.A.Get(2, 3), 160.0, 1e-12, "unexpected A(2,3)");
-    NS_TEST_ASSERT_MSG_EQ_TOL(result.Abar.Get(0, 1),
-                              result.A.Get(0, 1),
-                              1e-12,
-                              "first-cycle Abar should equal A");
     NS_TEST_ASSERT_MSG_GT(result.B.Get(0, 1), 0.0, "community-local B(0,1) should be positive");
     NS_TEST_ASSERT_MSG_GT(result.B.Get(2, 3), 0.0, "community-local B(2,3) should be positive");
     NS_TEST_ASSERT_MSG_LT(result.B.Get(0, 2),
@@ -139,143 +123,6 @@ TlOcsAlgorithmSelectionTestCase::DoRun()
     }
 }
 
-class TlOcsAlgorithmPreviousActiveTestCase : public TestCase
-{
-  public:
-    TlOcsAlgorithmPreviousActiveTestCase();
-
-  private:
-    void DoRun() override;
-};
-
-TlOcsAlgorithmPreviousActiveTestCase::TlOcsAlgorithmPreviousActiveTestCase()
-    : TestCase("TL-OCS algorithm lambda increases previous active edge score")
-{
-}
-
-void
-TlOcsAlgorithmPreviousActiveTestCase::DoRun()
-{
-    TrafficMatrix observed(3);
-    observed.AddBytes(0, 1, 100);
-    observed.AddBytes(1, 0, 100);
-    observed.AddBytes(0, 2, 1);
-    observed.AddBytes(2, 0, 1);
-
-    TlOcsAlgorithmParameters baseline;
-    baseline.lambda = 0.0;
-    baseline.opticalPortsPerTor = 1;
-
-    TlOcsAlgorithmParameters boosted = baseline;
-    boosted.lambda = 50.0;
-
-    TlOcsAlgorithm algorithm;
-    const auto withoutLambda = algorithm.Run(observed, DenseMatrix(), {{0, 2}}, baseline);
-    const auto withLambda = algorithm.Run(observed, DenseMatrix(), {{0, 2}}, boosted);
-
-    double baselineScore = 0.0;
-    double boostedScore = 0.0;
-    for (const auto& edge : withoutLambda.candidateEdges)
-    {
-        if (edge.sourceTor == 0 && edge.destinationTor == 2)
-        {
-            baselineScore = edge.score;
-        }
-    }
-    for (const auto& edge : withLambda.candidateEdges)
-    {
-        if (edge.sourceTor == 0 && edge.destinationTor == 2)
-        {
-            boostedScore = edge.score;
-        }
-    }
-
-    NS_TEST_ASSERT_MSG_GT(boostedScore, baselineScore, "lambda should raise previous edge score");
-}
-
-class TlOcsAlgorithmStabilityParametersTestCase : public TestCase
-{
-  public:
-    TlOcsAlgorithmStabilityParametersTestCase();
-
-  private:
-    void DoRun() override;
-};
-
-TlOcsAlgorithmStabilityParametersTestCase::TlOcsAlgorithmStabilityParametersTestCase()
-    : TestCase("TL-OCS algorithm forwards optical stability parameters")
-{
-}
-
-void
-TlOcsAlgorithmStabilityParametersTestCase::DoRun()
-{
-    TrafficMatrix observed(3);
-    observed.AddBytes(0, 1, 10);
-    observed.AddBytes(1, 0, 10);
-    observed.AddBytes(0, 2, 14);
-    observed.AddBytes(2, 0, 14);
-
-    TlOcsAlgorithmParameters parameters;
-    parameters.beta = 0.0;
-    parameters.eta = 0.0;
-    parameters.alpha = 1.0;
-    parameters.enableHolding = true;
-    parameters.holdActiveEdges = true;
-    parameters.replacementThreshold = 10.0;
-    parameters.opticalPortsPerTor = 1;
-
-    const auto result = TlOcsAlgorithm().Run(observed, DenseMatrix(), {{0, 1}}, parameters);
-    parameters.enableHolding = false;
-    const auto disabledHolding = TlOcsAlgorithm().Run(observed, DenseMatrix(), {{0, 1}}, parameters);
-
-    NS_TEST_ASSERT_MSG_EQ(result.selectedEdges.size(), 1, "expected one selected edge");
-    NS_TEST_ASSERT_MSG_EQ(result.selectedEdges[0].sourceTor, 0, "retained edge source mismatch");
-    NS_TEST_ASSERT_MSG_EQ(result.selectedEdges[0].destinationTor,
-                          1,
-                          "retained edge destination mismatch");
-    NS_TEST_ASSERT_MSG_EQ(result.retainedEdgeCount, 1, "retained count mismatch");
-    NS_TEST_ASSERT_MSG_EQ(result.replacementCount, 0, "threshold should suppress replacement");
-    NS_TEST_ASSERT_MSG_EQ(disabledHolding.selectedEdges[0].sourceTor,
-                          0,
-                          "disabled holding source mismatch");
-    NS_TEST_ASSERT_MSG_EQ(disabledHolding.selectedEdges[0].destinationTor,
-                          2,
-                          "disabled holding should restore greedy selection");
-}
-
-class TlOcsAlgorithmEwmaAblationTestCase : public TestCase
-{
-  public:
-    TlOcsAlgorithmEwmaAblationTestCase();
-
-  private:
-    void DoRun() override;
-};
-
-TlOcsAlgorithmEwmaAblationTestCase::TlOcsAlgorithmEwmaAblationTestCase()
-    : TestCase("TL-OCS EWMA ablation ignores previous smoothed traffic")
-{
-}
-
-void
-TlOcsAlgorithmEwmaAblationTestCase::DoRun()
-{
-    TrafficMatrix observed(3);
-    observed.AddBytes(0, 1, 30);
-    DenseMatrix previous(3);
-    previous.Set(0, 1, 100.0);
-    previous.Set(1, 0, 100.0);
-
-    TlOcsAlgorithmParameters parameters;
-    parameters.beta = 0.9;
-    parameters.enableEwma = false;
-
-    const auto result = TlOcsAlgorithm().Run(observed, previous, {}, parameters);
-    NS_TEST_ASSERT_MSG_EQ_TOL(result.Abar.Get(0, 1), 30.0, 1e-12, "Abar must equal current A");
-    NS_TEST_ASSERT_MSG_EQ_TOL(result.Abar.Get(1, 0), 30.0, 1e-12, "Abar must stay symmetric");
-}
-
 class TlOcsAlgorithmNullModelAblationTestCase : public TestCase
 {
   public:
@@ -286,7 +133,7 @@ class TlOcsAlgorithmNullModelAblationTestCase : public TestCase
 };
 
 TlOcsAlgorithmNullModelAblationTestCase::TlOcsAlgorithmNullModelAblationTestCase()
-    : TestCase("TL-OCS null-model ablation uses smoothed traffic as score matrix")
+    : TestCase("TL-OCS null-model ablation uses current traffic as score matrix")
 {
 }
 
@@ -298,20 +145,19 @@ TlOcsAlgorithmNullModelAblationTestCase::DoRun()
     observed.AddBytes(1, 2, 10);
 
     TlOcsAlgorithmParameters enabled;
-    enabled.enableEwma = false;
     TlOcsAlgorithmParameters disabled = enabled;
     disabled.enableNullModel = false;
 
-    const auto withNullModel = TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, enabled);
-    const auto withoutNullModel = TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, disabled);
+    const auto withNullModel = TlOcsAlgorithm().Run(observed, enabled);
+    const auto withoutNullModel = TlOcsAlgorithm().Run(observed, disabled);
 
     NS_TEST_ASSERT_MSG_LT(withNullModel.B.Get(0, 1),
-                          withNullModel.Abar.Get(0, 1),
+                          withNullModel.A.Get(0, 1),
                           "null model should subtract expected traffic");
     NS_TEST_ASSERT_MSG_EQ_TOL(withoutNullModel.B.Get(0, 1),
-                              withoutNullModel.Abar.Get(0, 1),
+                              withoutNullModel.A.Get(0, 1),
                               1e-12,
-                              "disabled null model must expose Abar directly");
+                              "disabled null model must expose A directly");
 }
 
 class TlOcsAlgorithmNullModelRankingTestCase : public TestCase
@@ -338,7 +184,6 @@ TlOcsAlgorithmNullModelRankingTestCase::DoRun()
     observed.AddBytes(1, 4, 10);
 
     TlOcsAlgorithmParameters volumeScore;
-    volumeScore.enableEwma = false;
     volumeScore.enableNullModel = false;
     volumeScore.enableCommunityFactor = false;
     volumeScore.opticalPortsPerTor = 1;
@@ -347,8 +192,8 @@ TlOcsAlgorithmNullModelRankingTestCase::DoRun()
     excessScore.enableNullModel = true;
     excessScore.eta = 1.0;
 
-    const auto volume = TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, volumeScore);
-    const auto excess = TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, excessScore);
+    const auto volume = TlOcsAlgorithm().Run(observed, volumeScore);
+    const auto excess = TlOcsAlgorithm().Run(observed, excessScore);
 
     // Node 1 communicates with 0, 3, and 4. Its higher degree makes the
     // absolute-volume 0-1 edge less structurally surprising than edge 0-2.
@@ -379,9 +224,6 @@ TlOcsAlgorithmTestSuite::TlOcsAlgorithmTestSuite()
     : TestSuite("tl-ocs-algorithm")
 {
     AddTestCase(new TlOcsAlgorithmSelectionTestCase);
-    AddTestCase(new TlOcsAlgorithmPreviousActiveTestCase);
-    AddTestCase(new TlOcsAlgorithmStabilityParametersTestCase);
-    AddTestCase(new TlOcsAlgorithmEwmaAblationTestCase);
     AddTestCase(new TlOcsAlgorithmNullModelAblationTestCase);
     AddTestCase(new TlOcsAlgorithmNullModelRankingTestCase);
 }

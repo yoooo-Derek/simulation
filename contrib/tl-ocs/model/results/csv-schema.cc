@@ -11,8 +11,7 @@ GetSmokeSummaryCsvHeader()
     return "experiment,scheme,traffic_pattern,run_id,random_seed,num_tors,servers_per_tor,"
            "observer_window_s,ocs_period_s,stop_time_s,status,installed_flows,received_bytes,"
            "observed_matrix_bytes,algorithm_candidate_edges,algorithm_selected_edges,"
-           "ocs_active_edges,ocs_admitted_flows,eps_fallback_flows,eps_wecmp_flows,"
-           "eps_wecmp_spine0_flows,eps_wecmp_spine1_flows,timeline_cycles,"
+           "ocs_active_edges,ocs_assigned_flows,eps_fallback_flows,timeline_cycles,"
            "stage1_installed_flows,stage2_installed_flows,stage1_received_bytes,"
            "stage2_received_bytes,total_flows,completed_flows,incomplete_flows,"
            "avg_fct_s,p90_fct_s,p95_fct_s,eps_avg_link_utilization,"
@@ -24,7 +23,7 @@ std::string
 GetFlowResultCsvHeader()
 {
     return "experiment,scheme,traffic_pattern,run_id,flow_id,source_tor,source_server,"
-           "destination_tor,destination_server,path_type,selected_spine,size_bytes,"
+           "destination_tor,destination_server,path_type,size_bytes,"
            "received_bytes,start_time_s,completion_time_s,fct_s,completed";
 }
 

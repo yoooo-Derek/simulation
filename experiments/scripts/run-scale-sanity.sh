@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 if [ "$#" -ne 2 ]; then
-    echo "Usage: $0 <8|16> <eps-ecmp|eps-wecmp|ocs-volume|ocs-community|tl-ocs>" >&2
+    echo "Usage: $0 <8|16> <eps-ecmp|ocs-volume|ocs-community|tl-ocs>" >&2
     exit 2
 fi
 

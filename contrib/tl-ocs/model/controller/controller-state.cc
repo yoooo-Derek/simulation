@@ -11,30 +11,11 @@ void
 ControllerState::UpdateFromAlgorithmResult(const TlOcsAlgorithmResult& result,
                                            uint64_t observedMatrixBytes)
 {
-    m_currentAbar = result.Abar;
     m_lastSelectedEdges = result.selectedEdges;
-    m_previousActiveEdges.clear();
-    m_previousActiveEdges.reserve(result.selectedEdges.size());
-    for (const auto& edge : result.selectedEdges)
-    {
-        m_previousActiveEdges.emplace_back(edge.sourceTor, edge.destinationTor);
-    }
     m_lastCandidateEdgeCount = static_cast<uint32_t>(result.candidateEdges.size());
     m_lastSelectedEdgeCount = static_cast<uint32_t>(result.selectedEdges.size());
     m_lastObservedMatrixBytes = observedMatrixBytes;
     m_currentCycleIndex++;
-}
-
-const DenseMatrix&
-ControllerState::GetPreviousAbar() const
-{
-    return m_currentAbar;
-}
-
-const std::vector<std::pair<uint32_t, uint32_t>>&
-ControllerState::GetPreviousActiveEdges() const
-{
-    return m_previousActiveEdges;
 }
 
 const std::vector<OpticalEdge>&

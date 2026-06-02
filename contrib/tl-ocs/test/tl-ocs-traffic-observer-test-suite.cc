@@ -163,7 +163,7 @@ TlOcsObservedCommunityLocalAlgorithmTestCase::DoRun()
     TlOcsAlgorithmParameters parameters;
     parameters.opticalPortsPerTor = 1;
     const TlOcsAlgorithmResult result =
-        TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, parameters);
+        TlOcsAlgorithm().Run(observed, parameters);
 
     NS_TEST_ASSERT_MSG_EQ(result.communityLabels[0],
                           result.communityLabels[1],
@@ -219,7 +219,7 @@ class TlOcsObservedUniformReadinessTestCase : public TestCase
                               0,
                               "uniform observer snapshot must contain data-plane bytes");
         const TlOcsAlgorithmResult result =
-            TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, TlOcsAlgorithmParameters());
+            TlOcsAlgorithm().Run(observed, TlOcsAlgorithmParameters());
         NS_TEST_ASSERT_MSG_GT(result.selectedEdges.size(),
                               0,
                               "uniform observed matrix should yield schedulable OCS edges");
@@ -270,7 +270,6 @@ TlOcsObservedAggregationAlgorithmTestCase::DoRun()
     }
 
     TlOcsAlgorithmParameters volumeParameters;
-    volumeParameters.enableEwma = false;
     volumeParameters.enableNullModel = false;
     volumeParameters.enableCommunityFactor = false;
     volumeParameters.opticalPortsPerTor = 1;
@@ -278,17 +277,17 @@ TlOcsObservedAggregationAlgorithmTestCase::DoRun()
     tlParameters.enableNullModel = true;
 
     const TlOcsAlgorithmResult volume =
-        TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, volumeParameters);
+        TlOcsAlgorithm().Run(observed, volumeParameters);
     const TlOcsAlgorithmResult tlOcs =
-        TlOcsAlgorithm().Run(observed, DenseMatrix(), {}, tlParameters);
+        TlOcsAlgorithm().Run(observed, tlParameters);
 
-    NS_TEST_ASSERT_MSG_GT(volume.Abar.Get(0, 1), 0.0, "expected positive aggregation volume");
+    NS_TEST_ASSERT_MSG_GT(volume.A.Get(0, 1), 0.0, "expected positive aggregation volume");
     NS_TEST_ASSERT_MSG_EQ_TOL(volume.B.Get(0, 1),
-                              volume.Abar.Get(0, 1),
+                              volume.A.Get(0, 1),
                               1e-12,
                               "disabled null model should preserve observed volume");
     NS_TEST_ASSERT_MSG_LT(tlOcs.B.Get(0, 1),
-                          tlOcs.Abar.Get(0, 1),
+                          tlOcs.A.Get(0, 1),
                           "null model should reduce aggregator-edge natural volume bias");
     NS_TEST_ASSERT_MSG_GT(tlOcs.B.Get(0, 1),
                           0.0,

@@ -23,7 +23,7 @@ class TlOcsFlowResultWriterTestCase : public TestCase
     {
         ExperimentConfig experiment;
         experiment.SetExperimentName("flow-writer-test");
-        experiment.SetSchemeName("eps-wecmp");
+        experiment.SetSchemeName("eps-ecmp");
         experiment.SetTrafficPattern("uniform");
 
         OutputConfig output;
@@ -31,10 +31,9 @@ class TlOcsFlowResultWriterTestCase : public TestCase
 
         FlowMetricRecord completed;
         completed.flowId = 1;
-        completed.schemeName = "eps-wecmp";
+        completed.schemeName = "eps-ecmp";
         completed.patternName = "uniform";
-        completed.pathType = "eps-wecmp";
-        completed.selectedSpine = 1;
+        completed.pathType = "eps";
         completed.sizeBytes = 100;
         completed.receivedBytes = 100;
         completed.startTimeS = 0.001;
@@ -44,7 +43,7 @@ class TlOcsFlowResultWriterTestCase : public TestCase
 
         FlowMetricRecord incomplete;
         incomplete.flowId = 2;
-        incomplete.schemeName = "eps-wecmp";
+        incomplete.schemeName = "eps-ecmp";
         incomplete.patternName = "uniform";
         incomplete.pathType = "eps";
         incomplete.sizeBytes = 100;
@@ -60,8 +59,8 @@ class TlOcsFlowResultWriterTestCase : public TestCase
         content << stream.rdbuf();
         const std::string text = content.str();
         NS_TEST_ASSERT_MSG_NE(text.find("experiment,scheme,traffic_pattern"), std::string::npos, "missing flow CSV header");
-        NS_TEST_ASSERT_MSG_NE(text.find("eps-wecmp,1,100,100"), std::string::npos, "missing selected spine row");
-        NS_TEST_ASSERT_MSG_NE(text.find("eps,,100,25,0.002,,,false"), std::string::npos, "incomplete row should keep completion fields empty");
+        NS_TEST_ASSERT_MSG_NE(text.find("eps,100,100"), std::string::npos, "missing completed EPS row");
+        NS_TEST_ASSERT_MSG_NE(text.find("eps,100,25,0.002,,,false"), std::string::npos, "incomplete row should keep completion fields empty");
     }
 };
 

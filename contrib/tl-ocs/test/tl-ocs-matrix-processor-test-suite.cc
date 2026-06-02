@@ -35,27 +35,23 @@ TlOcsMatrixProcessorSymmetryTestCase::DoRun()
     NS_TEST_ASSERT_MSG_EQ_TOL(a.Get(0, 0), 0.0, 1e-9, "A diagonal must be zero");
 }
 
-class TlOcsMatrixProcessorEwmaAndSparsifyTestCase : public TestCase
+class TlOcsMatrixProcessorSparsifyTestCase : public TestCase
 {
   public:
-    TlOcsMatrixProcessorEwmaAndSparsifyTestCase();
+    TlOcsMatrixProcessorSparsifyTestCase();
 
   private:
     void DoRun() override;
 };
 
-TlOcsMatrixProcessorEwmaAndSparsifyTestCase::TlOcsMatrixProcessorEwmaAndSparsifyTestCase()
-    : TestCase("TL-OCS MatrixProcessor applies EWMA and theta_f sparsification")
+TlOcsMatrixProcessorSparsifyTestCase::TlOcsMatrixProcessorSparsifyTestCase()
+    : TestCase("TL-OCS MatrixProcessor applies theta_f sparsification")
 {
 }
 
 void
-TlOcsMatrixProcessorEwmaAndSparsifyTestCase::DoRun()
+TlOcsMatrixProcessorSparsifyTestCase::DoRun()
 {
-    DenseMatrix previous(3);
-    previous.Set(0, 1, 10.0);
-    previous.Set(1, 0, 10.0);
-
     DenseMatrix current(3);
     current.Set(0, 1, 30.0);
     current.Set(1, 0, 30.0);
@@ -63,10 +59,8 @@ TlOcsMatrixProcessorEwmaAndSparsifyTestCase::DoRun()
     current.Set(2, 1, 4.0);
 
     MatrixProcessor processor;
-    DenseMatrix abar = processor.ApplyEwma(current, previous, 0.5);
-    TrafficGraph graph = processor.Sparsify(abar, 8.0);
+    TrafficGraph graph = processor.Sparsify(current, 8.0);
 
-    NS_TEST_ASSERT_MSG_EQ_TOL(abar.Get(0, 1), 20.0, 1e-9, "unexpected EWMA value");
     NS_TEST_ASSERT_MSG_EQ(graph.GetEdges().size(), 1, "theta_f should keep one edge");
     NS_TEST_ASSERT_MSG_EQ(graph.GetEdges()[0].source, 0, "unexpected sparse edge source");
     NS_TEST_ASSERT_MSG_EQ(graph.GetEdges()[0].destination, 1, "unexpected sparse edge destination");
@@ -89,16 +83,16 @@ TlOcsNullModelTestCase::TlOcsNullModelTestCase()
 void
 TlOcsNullModelTestCase::DoRun()
 {
-    DenseMatrix abar(3);
-    abar.Set(0, 1, 20.0);
-    abar.Set(1, 0, 20.0);
-    abar.Set(1, 2, 10.0);
-    abar.Set(2, 1, 10.0);
+    DenseMatrix a(3);
+    a.Set(0, 1, 20.0);
+    a.Set(1, 0, 20.0);
+    a.Set(1, 2, 10.0);
+    a.Set(2, 1, 10.0);
 
     NullModel nullModel;
-    const auto degree = nullModel.ComputeDegree(abar);
-    const double total = nullModel.ComputeTotalTraffic(abar);
-    DenseMatrix b = nullModel.ComputeModularityGain(abar, 1.0);
+    const auto degree = nullModel.ComputeDegree(a);
+    const double total = nullModel.ComputeTotalTraffic(a);
+    DenseMatrix b = nullModel.ComputeModularityGain(a, 1.0);
 
     NS_TEST_ASSERT_MSG_EQ_TOL(degree[0], 20.0, 1e-9, "unexpected degree d0");
     NS_TEST_ASSERT_MSG_EQ_TOL(degree[1], 30.0, 1e-9, "unexpected degree d1");
@@ -120,7 +114,7 @@ TlOcsMatrixProcessorTestSuite::TlOcsMatrixProcessorTestSuite()
     : TestSuite("tl-ocs-matrix-processor")
 {
     AddTestCase(new TlOcsMatrixProcessorSymmetryTestCase);
-    AddTestCase(new TlOcsMatrixProcessorEwmaAndSparsifyTestCase);
+    AddTestCase(new TlOcsMatrixProcessorSparsifyTestCase);
     AddTestCase(new TlOcsNullModelTestCase);
 }
 

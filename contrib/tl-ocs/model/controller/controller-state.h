@@ -5,7 +5,6 @@
 
 #include <cstdint>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace ns3
@@ -19,8 +18,6 @@ class ControllerState
     void UpdateFromAlgorithmResult(const TlOcsAlgorithmResult& result,
                                    uint64_t observedMatrixBytes);
 
-    const DenseMatrix& GetPreviousAbar() const;
-    const std::vector<std::pair<uint32_t, uint32_t>>& GetPreviousActiveEdges() const;
     const std::vector<OpticalEdge>& GetLastSelectedEdges() const;
     uint32_t GetLastCandidateEdgeCount() const;
     uint32_t GetLastSelectedEdgeCount() const;
@@ -29,8 +26,6 @@ class ControllerState
     std::string GetSummary() const;
 
   private:
-    DenseMatrix m_currentAbar;
-    std::vector<std::pair<uint32_t, uint32_t>> m_previousActiveEdges;
     std::vector<OpticalEdge> m_lastSelectedEdges;
     uint32_t m_lastCandidateEdgeCount = 0;
     uint32_t m_lastSelectedEdgeCount = 0;

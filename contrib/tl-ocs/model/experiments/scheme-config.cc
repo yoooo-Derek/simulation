@@ -14,10 +14,6 @@ SchemeConfig::FromString(const std::string& name)
     {
         return SchemeConfig(SchemeType::EPS_ECMP);
     }
-    if (name == "eps-wecmp")
-    {
-        return SchemeConfig(SchemeType::EPS_WECMP);
-    }
     if (name == "ocs-volume")
     {
         return SchemeConfig(SchemeType::OCS_VOLUME);
@@ -51,8 +47,6 @@ SchemeConfig::ToString() const
     {
     case SchemeType::EPS_ECMP:
         return "eps-ecmp";
-    case SchemeType::EPS_WECMP:
-        return "eps-wecmp";
     case SchemeType::OCS_VOLUME:
         return "ocs-volume";
     case SchemeType::OCS_COMMUNITY:
@@ -86,20 +80,6 @@ bool
 SchemeConfig::EnableOcsAdmission() const
 {
     return EnableOcsLinks();
-}
-
-bool
-SchemeConfig::EnableEpsWecmp() const
-{
-    // EPS-WECMP remains available only for legacy smoke compatibility. V4 TL-OCS
-    // sends optical-path misses through the default EPS forwarding path.
-    return m_type == SchemeType::EPS_WECMP;
-}
-
-bool
-SchemeConfig::IsV4MainScheme() const
-{
-    return m_type != SchemeType::EPS_WECMP;
 }
 
 bool

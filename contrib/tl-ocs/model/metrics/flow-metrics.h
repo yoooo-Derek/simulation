@@ -39,7 +39,6 @@ struct FlowMetricRecord
     uint32_t destinationTor = 0;
     uint32_t destinationServer = 0;
     std::string pathType;
-    std::optional<uint32_t> selectedSpine;
     uint64_t sizeBytes = 0;
     uint64_t receivedBytes = 0;
     double startTimeS = 0.0;

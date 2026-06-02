@@ -23,12 +23,9 @@ struct ControllerTimelineOptions
 {
     OpticalSchedulingMode schedulingMode = OpticalSchedulingMode::TL_OCS;
     bool enableOcsAdmission = true;
-    bool enableEpsWecmp = false;
     bool printOcsDecisions = false;
-    bool printEpsWecmpDecisions = false;
     Time stage1Stop;
     Time stageGap = MilliSeconds(1);
-    std::vector<uint32_t> availableSpines;
 };
 
 struct ControllerTimelineResult
@@ -42,11 +39,8 @@ struct ControllerTimelineResult
     uint32_t stage2InstalledFlows = 0;
     uint64_t stage1ReceivedBytes = 0;
     uint64_t stage2ReceivedBytes = 0;
-    uint32_t ocsAdmittedFlows = 0;
+    uint32_t ocsAssignedFlows = 0;
     uint32_t epsFallbackFlows = 0;
-    uint32_t epsWecmpFlows = 0;
-    uint32_t epsWecmpSpine0Flows = 0;
-    uint32_t epsWecmpSpine1Flows = 0;
     std::string selectedEdgeList;
     std::vector<FlowPathDecision> stage2Decisions;
     std::vector<FlowMetricSource> metricSources;

@@ -125,7 +125,7 @@ FlowLauncher::Install(const std::vector<FlowSpec>& flows,
         result.installedFlows++;
         if (decision.admittedToOcs)
         {
-            result.admittedOcsFlows++;
+            result.assignedOcsFlows++;
         }
         else
         {

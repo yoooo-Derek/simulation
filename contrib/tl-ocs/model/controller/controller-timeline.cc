@@ -1,7 +1,5 @@
 #include "controller-timeline.h"
 
-#include "ns3/eps-link-state.h"
-#include "ns3/eps-wecmp-router.h"
 #include "ns3/flow-launcher.h"
 #include "ns3/ocs-admission.h"
 #include "ns3/simulator.h"
@@ -113,11 +111,7 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
     else
     {
         TlOcsAlgorithm algorithm;
-        algorithmResult =
-            algorithm.Run(observed,
-                          m_state.GetPreviousAbar(),
-                          m_state.GetPreviousActiveEdges(),
-                          algorithmParameters);
+        algorithmResult = algorithm.Run(observed, algorithmParameters);
     }
     m_state.UpdateFromAlgorithmResult(algorithmResult, result.observedMatrixBytes);
 
@@ -138,23 +132,9 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
         OffsetStartTimes(stage2Flows, Simulator::Now() + options.stageGap);
     OcsAdmission admission(linkManager);
     FlowPathSelector selector;
-    if (options.enableEpsWecmp)
-    {
-        EpsLinkState epsLinkState;
-        EpsWecmpRouter epsWecmpRouter(epsLinkState);
-        result.stage2Decisions = selector.Select(shiftedStage2Flows,
-                                                 admission,
-                                                 nodeIndex,
-                                                 epsWecmpRouter,
-                                                 options.availableSpines);
-    }
-    else
-    {
-        result.stage2Decisions = selector.Select(shiftedStage2Flows, admission, nodeIndex);
-    }
+    result.stage2Decisions = selector.Select(shiftedStage2Flows, admission, nodeIndex);
 
     InstallOcsHostRoutes(shiftedStage2Flows, result.stage2Decisions, nodeIndex);
-    InstallEpsWecmpHostRoutes(shiftedStage2Flows, result.stage2Decisions, nodeIndex);
 
     FlowLaunchResult stage2Launch =
         launcher.Install(shiftedStage2Flows,
@@ -166,23 +146,11 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
     result.metricSources.insert(result.metricSources.end(),
                                 stage2Launch.metricSources.begin(),
                                 stage2Launch.metricSources.end());
-    result.ocsAdmittedFlows = stage2Launch.admittedOcsFlows;
+    result.ocsAssignedFlows = stage2Launch.assignedOcsFlows;
     result.epsFallbackFlows = stage2Launch.epsFlows;
 
     for (const auto& decision : result.stage2Decisions)
     {
-        if (decision.pathType == "eps-wecmp")
-        {
-            result.epsWecmpFlows++;
-            if (decision.selectedSpine == 0)
-            {
-                result.epsWecmpSpine0Flows++;
-            }
-            else if (decision.selectedSpine == 1)
-            {
-                result.epsWecmpSpine1Flows++;
-            }
-        }
         if (options.printOcsDecisions)
         {
             std::cout << "TL-OCS timeline OCS path assignment flow " << decision.flowId
@@ -190,13 +158,6 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
                       << " path=" << decision.pathType
                       << " admitted=" << (decision.admittedToOcs ? "true" : "false")
                       << " dst=" << decision.destinationAddress << std::endl;
-        }
-        if (options.printEpsWecmpDecisions && decision.pathType == "eps-wecmp")
-        {
-            std::cout << "TL-OCS timeline EPS-WECMP flow " << decision.flowId
-                      << ": " << decision.sourceTor << "->" << decision.destinationTor
-                      << " spine=" << decision.selectedSpine.value()
-                      << " costBefore=" << decision.epsWecmpCostBeforeAssignment << std::endl;
         }
     }
 

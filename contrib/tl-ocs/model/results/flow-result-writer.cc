@@ -49,11 +49,7 @@ FlowResultWriter::Write(const ExperimentConfig& experiment,
                << record.flowId << ',' << record.sourceTor << ',' << record.sourceServer << ','
                << record.destinationTor << ',' << record.destinationServer << ','
                << EscapeCsvField(record.pathType) << ',';
-        if (record.selectedSpine.has_value())
-        {
-            stream << record.selectedSpine.value();
-        }
-        stream << ',' << record.sizeBytes << ',' << record.receivedBytes << ','
+        stream << record.sizeBytes << ',' << record.receivedBytes << ','
                << std::setprecision(12) << record.startTimeS << ',';
         WriteOptionalDouble(stream, record.stopTimeS);
         stream << ',';

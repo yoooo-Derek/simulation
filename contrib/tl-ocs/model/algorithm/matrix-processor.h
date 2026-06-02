@@ -13,10 +13,7 @@ class MatrixProcessor
 {
   public:
     DenseMatrix BuildUndirected(const TrafficMatrix& observedW) const;
-    DenseMatrix ApplyEwma(const DenseMatrix& currentA,
-                          const DenseMatrix& previousAbar,
-                          double beta) const;
-    TrafficGraph Sparsify(const DenseMatrix& abar, double thetaF) const;
+    TrafficGraph Sparsify(const DenseMatrix& matrix, double thetaF) const;
 };
 
 } // namespace tl_ocs

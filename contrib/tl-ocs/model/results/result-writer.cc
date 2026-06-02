@@ -45,11 +45,8 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 std::optional<uint32_t> algorithmCandidateEdges,
                                 std::optional<uint32_t> algorithmSelectedEdges,
                                 std::optional<uint32_t> ocsActiveEdges,
-                                std::optional<uint32_t> ocsAdmittedFlows,
+                                std::optional<uint32_t> ocsAssignedFlows,
                                 std::optional<uint32_t> epsFallbackFlows,
-                                std::optional<uint32_t> epsWecmpFlows,
-                                std::optional<uint32_t> epsWecmpSpine0Flows,
-                                std::optional<uint32_t> epsWecmpSpine1Flows,
                                 std::optional<uint32_t> timelineCycles,
                                 std::optional<uint32_t> stage1InstalledFlows,
                                 std::optional<uint32_t> stage2InstalledFlows,
@@ -116,29 +113,14 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
         stream << ocsActiveEdges.value();
     }
     stream << ',';
-    if (ocsAdmittedFlows.has_value())
+    if (ocsAssignedFlows.has_value())
     {
-        stream << ocsAdmittedFlows.value();
+        stream << ocsAssignedFlows.value();
     }
     stream << ',';
     if (epsFallbackFlows.has_value())
     {
         stream << epsFallbackFlows.value();
-    }
-    stream << ',';
-    if (epsWecmpFlows.has_value())
-    {
-        stream << epsWecmpFlows.value();
-    }
-    stream << ',';
-    if (epsWecmpSpine0Flows.has_value())
-    {
-        stream << epsWecmpSpine0Flows.value();
-    }
-    stream << ',';
-    if (epsWecmpSpine1Flows.has_value())
-    {
-        stream << epsWecmpSpine1Flows.value();
     }
     stream << ',';
     if (timelineCycles.has_value())

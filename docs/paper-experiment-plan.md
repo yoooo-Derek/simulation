@@ -6,7 +6,7 @@ and does not claim paper results.
 ## Goals
 
 The future paper evaluation should compare `tl-ocs` against `eps-ecmp`,
-`eps-wecmp`, `ocs-volume`, and `ocs-community`.
+`ocs-volume`, and `ocs-community`.
 
 Evaluation fields should include completed-flow average, p90, and p95 FCT;
 received bytes and a later explicitly defined throughput field; EPS average and
@@ -16,7 +16,6 @@ Current `received_bytes` is a trace-derived byte count, not a throughput field.
 ## Scheme Matrix
 
 - `eps-ecmp`
-- `eps-wecmp`
 - `ocs-volume`
 - `ocs-community`
 - `tl-ocs`
@@ -99,7 +98,6 @@ python3 experiments/scripts/diagnose-flows.py \
 ## Current Limits
 
 - single-cycle controller only
-- controlled static-route WECMP, not complete five-tuple WECMP
 - full-mesh precreated OCS candidate links
 - whole-run aggregate utilization only, no time series
 - single-cycle active-set application count, not multi-period reconfiguration

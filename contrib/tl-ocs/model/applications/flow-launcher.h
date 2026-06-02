@@ -20,7 +20,7 @@ namespace tl_ocs
 struct FlowLaunchResult
 {
     uint32_t installedFlows = 0;
-    uint32_t admittedOcsFlows = 0;
+    uint32_t assignedOcsFlows = 0;
     uint32_t epsFlows = 0;
     ApplicationContainer sourceApplications;
     ApplicationContainer sinkApplications;

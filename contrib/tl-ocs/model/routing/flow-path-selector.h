@@ -5,10 +5,8 @@
 #include "ns3/ipv4-address.h"
 #include "ns3/node-index.h"
 #include "ns3/ocs-admission.h"
-#include "ns3/eps-wecmp-router.h"
 
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,8 +23,6 @@ struct FlowPathDecision
     bool admittedToOcs = false;
     uint32_t sourceTor = 0;
     uint32_t destinationTor = 0;
-    std::optional<uint32_t> selectedSpine;
-    uint64_t epsWecmpCostBeforeAssignment = 0;
 };
 
 class FlowPathSelector
@@ -40,17 +36,6 @@ class FlowPathSelector
                             const OcsAdmission& admission,
                             const NodeIndex& nodeIndex) const;
 
-    std::vector<FlowPathDecision> Select(const std::vector<FlowSpec>& flows,
-                                         const OcsAdmission& admission,
-                                         const NodeIndex& nodeIndex,
-                                         EpsWecmpRouter& epsWecmpRouter,
-                                         const std::vector<uint32_t>& availableSpines) const;
-
-    FlowPathDecision Select(const FlowSpec& flow,
-                            const OcsAdmission& admission,
-                            const NodeIndex& nodeIndex,
-                            EpsWecmpRouter& epsWecmpRouter,
-                            const std::vector<uint32_t>& availableSpines) const;
 };
 
 void InstallOcsHostRoutes(const FlowSpec& flow,
@@ -60,14 +45,6 @@ void InstallOcsHostRoutes(const FlowSpec& flow,
 void InstallOcsHostRoutes(const std::vector<FlowSpec>& flows,
                           const std::vector<FlowPathDecision>& decisions,
                           const NodeIndex& nodeIndex);
-
-void InstallEpsWecmpHostRoutes(const FlowSpec& flow,
-                               const FlowPathDecision& decision,
-                               const NodeIndex& nodeIndex);
-
-void InstallEpsWecmpHostRoutes(const std::vector<FlowSpec>& flows,
-                               const std::vector<FlowPathDecision>& decisions,
-                               const NodeIndex& nodeIndex);
 
 } // namespace tl_ocs
 } // namespace ns3

@@ -11,7 +11,6 @@ namespace tl_ocs
 enum class SchemeType
 {
     EPS_ECMP,
-    EPS_WECMP,
     OCS_VOLUME,
     OCS_COMMUNITY,
     TL_OCS
@@ -30,8 +29,6 @@ class SchemeConfig
     bool EnableTrafficObserver() const;
     bool EnableAlgorithm() const;
     bool EnableOcsAdmission() const;
-    bool EnableEpsWecmp() const;
-    bool IsV4MainScheme() const;
     bool UseCommunity() const;
     bool UseVolumeScheduler() const;
 

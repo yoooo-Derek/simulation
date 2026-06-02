@@ -20,9 +20,7 @@ namespace tl_ocs
 struct SmokeScenarioOptions
 {
     Time timelineStageGap = MilliSeconds(1);
-    std::vector<uint32_t> availableSpines;
     bool printOcsDecisions = false;
-    bool printEpsWecmpDecisions = false;
     bool enableFlowMetrics = false;
     bool enableLinkMetrics = false;
     bool enableOcsMetrics = false;
@@ -38,11 +36,8 @@ struct SmokeScenarioResult
     uint32_t algorithmCandidateEdges = 0;
     uint32_t algorithmSelectedEdges = 0;
     uint32_t ocsActiveEdges = 0;
-    uint32_t ocsAdmittedFlows = 0;
+    uint32_t ocsAssignedFlows = 0;
     uint32_t epsFallbackFlows = 0;
-    uint32_t epsWecmpFlows = 0;
-    uint32_t epsWecmpSpine0Flows = 0;
-    uint32_t epsWecmpSpine1Flows = 0;
     uint32_t timelineCycles = 0;
     uint32_t stage1InstalledFlows = 0;
     uint32_t stage2InstalledFlows = 0;

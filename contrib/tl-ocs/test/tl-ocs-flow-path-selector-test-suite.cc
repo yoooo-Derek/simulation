@@ -1,6 +1,4 @@
 #include "ns3/eps-topology-builder.h"
-#include "ns3/eps-link-state.h"
-#include "ns3/eps-wecmp-router.h"
 #include "ns3/flow-path-selector.h"
 #include "ns3/flow-spec.h"
 #include "ns3/ocs-admission.h"
@@ -48,25 +46,12 @@ TlOcsFlowPathSelectorTestCase::DoRun()
 
     const FlowPathDecision activeDecision = selector.Select(active, admission, index);
     const FlowPathDecision inactiveDecision = selector.Select(inactive, admission, index);
-    EpsLinkState linkState;
-    EpsWecmpRouter epsWecmpRouter(linkState);
-    const FlowPathDecision wecmpDecision =
-        selector.Select(inactive, admission, index, epsWecmpRouter, {0});
-
     NS_TEST_ASSERT_MSG_EQ(activeDecision.pathType, "ocs", "active pair should select OCS");
     NS_TEST_ASSERT_MSG_EQ(activeDecision.admittedToOcs, true, "active pair was not admitted");
     NS_TEST_ASSERT_MSG_EQ(inactiveDecision.pathType, "eps", "inactive pair should select EPS");
     NS_TEST_ASSERT_MSG_EQ(inactiveDecision.admittedToOcs,
                           false,
                           "inactive pair should not be admitted");
-    NS_TEST_ASSERT_MSG_EQ(wecmpDecision.pathType,
-                          "eps-wecmp",
-                          "inactive pair should select EPS-WECMP when enabled");
-    NS_TEST_ASSERT_MSG_EQ(wecmpDecision.selectedSpine.has_value(),
-                          true,
-                          "EPS-WECMP decision should store selected spine");
-    NS_TEST_ASSERT_MSG_EQ(wecmpDecision.selectedSpine.value(), 0, "unexpected selected spine");
-
     Simulator::Destroy();
 }
 

@@ -26,8 +26,6 @@ build_lib(
     model/results/csv-schema.cc
     model/results/flow-result-writer.cc
     model/results/result-writer.cc
-    model/routing/eps-link-state.cc
-    model/routing/eps-wecmp-router.cc
     model/routing/flow-path-selector.cc
     model/routing/ocs-admission.cc
     model/routing/ocs-link-manager.cc
@@ -64,8 +62,6 @@ build_lib(
     model/results/csv-schema.h
     model/results/flow-result-writer.h
     model/results/result-writer.h
-    model/routing/eps-link-state.h
-    model/routing/eps-wecmp-router.h
     model/routing/flow-path-selector.h
     model/routing/ocs-admission.h
     model/routing/ocs-link-manager.h
@@ -90,8 +86,6 @@ build_lib(
     test/tl-ocs-controller-timeline-test-suite.cc
     test/tl-ocs-community-detector-test-suite.cc
     test/tl-ocs-eps-topology-test-suite.cc
-    test/tl-ocs-eps-link-state-test-suite.cc
-    test/tl-ocs-eps-wecmp-router-test-suite.cc
     test/tl-ocs-flow-launcher-test-suite.cc
     test/tl-ocs-flow-launcher-metrics-test-suite.cc
     test/tl-ocs-flow-metrics-test-suite.cc

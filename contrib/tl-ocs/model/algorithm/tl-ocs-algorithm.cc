@@ -11,8 +11,6 @@ namespace tl_ocs
 
 TlOcsAlgorithmResult
 TlOcsAlgorithm::Run(const TrafficMatrix& observedW,
-                    const DenseMatrix& previousAbar,
-                    const std::vector<std::pair<uint32_t, uint32_t>>& previousActiveEdges,
                     const TlOcsAlgorithmParameters& parameters) const
 {
     MatrixProcessor processor;
@@ -22,12 +20,10 @@ TlOcsAlgorithm::Run(const TrafficMatrix& observedW,
 
     TlOcsAlgorithmResult result;
     result.A = processor.BuildUndirected(observedW);
-    result.Abar = parameters.enableEwma ? processor.ApplyEwma(result.A, previousAbar, parameters.beta)
-                                       : result.A;
-    result.trafficGraph = processor.Sparsify(result.Abar, parameters.thetaF);
+    result.trafficGraph = processor.Sparsify(result.A, parameters.thetaF);
     result.B = !parameters.enableNullModel || parameters.useVolumeOnlyScore
-                   ? result.Abar
-                   : nullModel.ComputeModularityGain(result.Abar, parameters.eta);
+                   ? result.A
+                   : nullModel.ComputeModularityGain(result.A, parameters.eta);
     if (parameters.useVolumeOnlyScore)
     {
         result.communityLabels.resize(result.B.GetSize(), 0);
@@ -51,21 +47,11 @@ TlOcsAlgorithm::Run(const TrafficMatrix& observedW,
     schedulerParameters.alpha = parameters.alpha;
     schedulerParameters.enableCommunityFactor =
         parameters.enableCommunityFactor && !parameters.useVolumeOnlyScore;
-    schedulerParameters.lambda = parameters.useVolumeOnlyScore ? 0.0 : parameters.lambda;
-    schedulerParameters.replacementThreshold = parameters.replacementThreshold;
-    schedulerParameters.holdActiveEdges =
-        !parameters.useVolumeOnlyScore && parameters.enableHolding && parameters.holdActiveEdges;
-    schedulerParameters.minActiveEdgeScore = parameters.minActiveEdgeScore;
-    schedulerParameters.maxReplacements = parameters.maxReplacements;
     schedulerParameters.opticalPortsPerTor = parameters.opticalPortsPerTor;
     const OpticalScheduleResult schedule =
-        scheduler.SelectEdges(result.B, result.communityLabels, previousActiveEdges, schedulerParameters);
+        scheduler.SelectEdges(result.B, result.communityLabels, schedulerParameters);
     result.candidateEdges = schedule.candidateEdges;
     result.selectedEdges = schedule.selectedEdges;
-    result.retainedEdgeCount = schedule.retainedCount;
-    result.replacementCount = schedule.replacementCount;
-    result.droppedPreviousEdgeCount = schedule.droppedPreviousCount;
-    result.newSelectedEdgeCount = schedule.newSelectedCount;
     return result;
 }
 

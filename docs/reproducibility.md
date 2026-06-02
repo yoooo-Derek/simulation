@@ -19,7 +19,6 @@ python3 experiments/scripts/validate-results.py \
   results/raw/phase11b-tl-ocs-flows.csv
 python3 experiments/scripts/aggregate-results.py \
   results/raw/phase11b-eps-ecmp.csv \
-  results/raw/phase11b-eps-wecmp.csv \
   results/raw/phase11b-ocs-volume.csv \
   results/raw/phase11b-ocs-community.csv \
   results/raw/phase11b-tl-ocs.csv \
