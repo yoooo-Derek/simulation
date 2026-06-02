@@ -82,35 +82,6 @@ class TlOcsEpsEcmpScenarioTestCase : public TestCase
     }
 };
 
-class TlOcsEpsWecmpScenarioTestCase : public TestCase
-{
-  public:
-    TlOcsEpsWecmpScenarioTestCase()
-        : TestCase("TL-OCS scheme runner executes EPS-WECMP smoke")
-    {
-    }
-
-  private:
-    void DoRun() override
-    {
-        const SimulationConfig simulation = MakeSimulation();
-        EpsTopologyBuilder builder;
-        NodeIndex index = builder.Build(simulation, 2);
-        SmokeScenarioRunner runner;
-        const SmokeScenarioResult result =
-            runner.Run(simulation,
-                       SchemeConfig::FromString("eps-wecmp"),
-                       index,
-                       MakeFlows(simulation),
-                       nullptr,
-                       TlOcsAlgorithmParameters(),
-                       MakeOptions());
-        NS_TEST_ASSERT_MSG_EQ(result.epsWecmpFlows, 4, "EPS-WECMP did not route every flow");
-        NS_TEST_ASSERT_MSG_GT(result.receivedBytes, 0, "EPS-WECMP received no bytes");
-        Simulator::Destroy();
-    }
-};
-
 class TlOcsTlOcsScenarioTestCase : public TestCase
 {
   public:
@@ -142,6 +113,15 @@ class TlOcsTlOcsScenarioTestCase : public TestCase
         NS_TEST_ASSERT_MSG_GT(result.observedMatrixBytes, 0, "TL-OCS observed no bytes");
         NS_TEST_ASSERT_MSG_GT(result.algorithmSelectedEdges, 0, "TL-OCS selected no edges");
         NS_TEST_ASSERT_MSG_GT(result.receivedBytes, 0, "TL-OCS received no bytes");
+        NS_TEST_ASSERT_MSG_EQ(result.epsWecmpFlows,
+                              0,
+                              "V4 TL-OCS residual traffic should not use EPS-WECMP");
+        for (const auto& metric : result.flowMetrics)
+        {
+            NS_TEST_ASSERT_MSG_NE(metric.pathType,
+                                  "eps-wecmp",
+                                  "V4 TL-OCS flow metrics should expose only OCS or EPS paths");
+        }
         NS_TEST_ASSERT_MSG_GT(result.flowMetricsSummary->completedFlows, 0, "TL-OCS completed no flows");
         NS_TEST_ASSERT_MSG_GT(result.linkUtilizationSummary->epsMaxLinkUtilization.value(),
                               0.0,
@@ -209,7 +189,6 @@ class TlOcsSmokeScenarioRunnerTestSuite : public TestSuite
         : TestSuite("tl-ocs-smoke-scenario-runner")
     {
         AddTestCase(new TlOcsEpsEcmpScenarioTestCase);
-        AddTestCase(new TlOcsEpsWecmpScenarioTestCase);
         AddTestCase(new TlOcsOcsBaselineScenarioTestCase("ocs-volume"));
         AddTestCase(new TlOcsOcsBaselineScenarioTestCase("ocs-community"));
         AddTestCase(new TlOcsTlOcsScenarioTestCase);

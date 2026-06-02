@@ -65,6 +65,16 @@ TlOcsAlgorithmSelectionTestCase::DoRun()
     observed.AddBytes(1, 3, 5);
 
     TlOcsAlgorithmParameters parameters;
+    NS_TEST_ASSERT_MSG_EQ(parameters.enableEwma,
+                          false,
+                          "V4 TL-OCS should schedule from current-window A by default");
+    NS_TEST_ASSERT_MSG_EQ(parameters.enableHolding,
+                          false,
+                          "V4 TL-OCS should disable optional holding by default");
+    NS_TEST_ASSERT_MSG_EQ_TOL(parameters.lambda,
+                              0.0,
+                              1e-12,
+                              "V4 TL-OCS should not apply a previous-active score bonus by default");
     parameters.beta = 0.8;
     parameters.thetaF = 0.0;
     parameters.eta = 1.0;

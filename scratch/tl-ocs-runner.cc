@@ -77,8 +77,15 @@ main(int argc, char* argv[])
     uint32_t numFlows = 4;
     uint64_t flowSizeBytes = 1000000;
     double flowStartIntervalSeconds = 0.001;
+    std::string arrivalMode = "deterministic";
+    double poissonMeanInterArrivalSeconds = 0.001;
     uint32_t communityCount = 2;
+    double communityLocalProbability = 0.8;
     uint32_t aggregatorTor = 0;
+    double iterationPeriodSeconds = 0.005;
+    uint32_t burstSize = 4;
+    uint32_t numIterations = 1;
+    bool includeAggregationReturnFlows = false;
     double beta = 0.8;
     double thetaF = 0.0;
     double eta = 1.0;
@@ -125,9 +132,16 @@ main(int argc, char* argv[])
     cmd.AddValue("numFlows", "Number of generated training traffic flows", numFlows);
     cmd.AddValue("flowSizeBytes", "Bytes per generated training traffic flow", flowSizeBytes);
     cmd.AddValue("flowStartInterval", "Interval between generated flow start times in seconds", flowStartIntervalSeconds);
+    cmd.AddValue("arrivalMode", "Training flow arrival mode: deterministic, poisson, or iteration-burst", arrivalMode);
+    cmd.AddValue("poissonMeanInterArrival", "Mean Poisson inter-arrival time in seconds", poissonMeanInterArrivalSeconds);
     cmd.AddValue("communityCount", "Number of deterministic traffic communities", communityCount);
+    cmd.AddValue("communityLocalProbability", "Probability that a Poisson community-local flow stays within its community", communityLocalProbability);
     cmd.AddValue("aggregatorTor", "Aggregator ToR for parameter-aggregation traffic", aggregatorTor);
-    cmd.AddValue("beta", "EWMA beta for TL-OCS algorithm smoke", beta);
+    cmd.AddValue("iterationPeriod", "Period between parameter-aggregation iterations in seconds", iterationPeriodSeconds);
+    cmd.AddValue("burstSize", "Flows generated per parameter-aggregation iteration burst", burstSize);
+    cmd.AddValue("numIterations", "Number of parameter-aggregation iteration bursts", numIterations);
+    cmd.AddValue("includeAggregationReturnFlows", "Add aggregator-to-worker return flows to iteration bursts", includeAggregationReturnFlows);
+    cmd.AddValue("beta", "Legacy optional EWMA beta; V4 TL-OCS uses current-window A by default", beta);
     cmd.AddValue("thetaF", "Traffic graph sparsification threshold", thetaF);
     cmd.AddValue("eta", "Null-model resolution parameter", eta);
     cmd.AddValue("alpha", "Cross-community optical gain factor", alpha);
@@ -341,8 +355,33 @@ main(int argc, char* argv[])
             trafficConfig.numFlows = numFlows;
             trafficConfig.flowSizeBytes = flowSizeBytes;
             trafficConfig.flowStartInterval = Seconds(flowStartIntervalSeconds);
+            if (arrivalMode == "deterministic" || arrivalMode == "interval")
+            {
+                trafficConfig.arrivalMode = TrafficArrivalMode::DETERMINISTIC;
+            }
+            else if (arrivalMode == "poisson")
+            {
+                trafficConfig.arrivalMode = TrafficArrivalMode::POISSON;
+            }
+            else if (arrivalMode == "iteration-burst")
+            {
+                trafficConfig.arrivalMode = TrafficArrivalMode::ITERATION_BURST;
+            }
+            else
+            {
+                std::cerr << "Unsupported training traffic arrival mode: " << arrivalMode
+                          << std::endl;
+                return 1;
+            }
+            trafficConfig.randomSeed = randomSeed;
+            trafficConfig.poissonMeanInterArrival = Seconds(poissonMeanInterArrivalSeconds);
             trafficConfig.communityCount = communityCount;
+            trafficConfig.communityLocalProbability = communityLocalProbability;
             trafficConfig.aggregatorTor = aggregatorTor;
+            trafficConfig.iterationPeriod = Seconds(iterationPeriodSeconds);
+            trafficConfig.burstSize = burstSize;
+            trafficConfig.numIterations = numIterations;
+            trafficConfig.includeAggregationReturnFlows = includeAggregationReturnFlows;
 
             std::unique_ptr<TrainingTrafficGenerator> generator;
             if (trafficPattern == "uniform")
@@ -431,10 +470,13 @@ main(int argc, char* argv[])
                 std::cout << "TL-OCS scheme runner: scheme=" << scenarioResult.schemeName
                           << ", status=" << scenarioResult.status
                           << ", selectedEdges=" << scenarioResult.selectedEdgeList
-                          << ", admitted=" << scenarioResult.ocsAdmittedFlows
-                          << ", epsFallback=" << scenarioResult.epsFallbackFlows
-                          << ", epsWecmp=" << scenarioResult.epsWecmpFlows
-                          << ", receivedBytes=" << scenarioResult.receivedBytes << std::endl;
+                          << ", ocsAssigned=" << scenarioResult.ocsAdmittedFlows
+                          << ", epsFallback=" << scenarioResult.epsFallbackFlows;
+                if (scheme->EnableEpsWecmp())
+                {
+                    std::cout << ", legacyEpsWecmp=" << scenarioResult.epsWecmpFlows;
+                }
+                std::cout << ", receivedBytes=" << scenarioResult.receivedBytes << std::endl;
                 if (flowMetricsSummary.has_value())
                 {
                     std::cout << "TL-OCS flow metrics: totalFlows="
@@ -585,7 +627,7 @@ main(int argc, char* argv[])
                           << timelineResult.selectedEdgeList << std::endl;
                 std::cout << "TL-OCS controller timeline OCS active edges: "
                           << timelineResult.ocsActiveEdges << std::endl;
-                std::cout << "TL-OCS controller timeline OCS admitted flows: "
+                std::cout << "TL-OCS controller timeline OCS assigned flows: "
                           << timelineResult.ocsAdmittedFlows << std::endl;
                 std::cout << "TL-OCS controller timeline EPS fallback flows: "
                           << timelineResult.epsFallbackFlows << std::endl;
@@ -783,7 +825,7 @@ main(int argc, char* argv[])
 
                         std::cout << "TL-OCS OCS active edges: " << ocsActiveEdges.value()
                                   << std::endl;
-                        std::cout << "TL-OCS OCS admitted flows: "
+                        std::cout << "TL-OCS OCS assigned flows: "
                                   << ocsAdmittedFlows.value() << std::endl;
                         std::cout << "TL-OCS EPS fallback flows: "
                                   << epsFallbackFlows.value() << std::endl;

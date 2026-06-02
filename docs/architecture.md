@@ -5,7 +5,8 @@ The new project is an ns-3.47 source tree. TL-OCS self-authored code belongs in
 
 ## Module Boundary
 
-`contrib/tl-ocs` is the project module. It maps V3 into the following boundaries:
+`contrib/tl-ocs` is the project module. It maps the current V4 algorithm into
+the following boundaries:
 
 - `config`: lightweight simulation, experiment, and output parameters.
 - `traffic`: future ToR-pair traffic matrix inputs, synthetic training traffic
@@ -77,23 +78,27 @@ server IPv4 address while packets traverse the active ToR-ToR OCS link. EPS
 fallback flows use the existing EPS routes. Phase 7 does not reroute existing
 flows, implement WECMP, implement baselines, or export paper metrics.
 
-## V3 Pipeline Mapping
+## V4 Pipeline Mapping
 
-V3's control flow maps to module responsibilities as follows:
+V4's main control flow maps to module responsibilities as follows:
 
 - `W(t)` directed observation: `observer`.
-- `A(t)` undirected matrix and EWMA `Abar(t)`: `traffic` plus `observer`.
+- `A(t)` current-window undirected matrix: `algorithm`.
 - sparse traffic graph `G_f(t)`: `traffic`.
 - null-model expectation and modularity gain `B_ij`: `algorithm`.
 - Louvain-style traffic community detection: `algorithm`.
 - OCS candidate gain and port-constrained selection: `algorithm`.
-- state holding, update gate, and hold-time constraints: `controller` plus
-  `algorithm`.
-- OCS admission and EPS residual routing: `routing` plus `controller`.
-- WECMP residual splitting: `routing`.
+- optical-path assignment and EPS fallback: `routing` plus `controller`.
+- EPS forwarding for main V4 scenarios: default ECMP behavior from the EPS
+  topology.
 - topology and link capacity realization: `topology`.
 - experiment traffic and evaluation metrics: `applications`, `metrics`, and
   `results`.
+
+`MatrixProcessor::ApplyEwma`, previous-active holding controls, and the
+controlled static-route EPS-WECMP path remain internal compatibility helpers.
+They are disabled in the V4 TL-OCS defaults and are not part of the V4 main
+scheme path.
 
 ## Scratch Boundary
 

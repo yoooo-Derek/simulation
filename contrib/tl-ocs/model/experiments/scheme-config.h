@@ -31,6 +31,7 @@ class SchemeConfig
     bool EnableAlgorithm() const;
     bool EnableOcsAdmission() const;
     bool EnableEpsWecmp() const;
+    bool IsV4MainScheme() const;
     bool UseCommunity() const;
     bool UseVolumeScheduler() const;
 

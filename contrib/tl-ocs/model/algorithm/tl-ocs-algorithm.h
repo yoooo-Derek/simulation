@@ -21,7 +21,8 @@ struct TlOcsAlgorithmParameters
     double replacementThreshold = 0.0;
     bool enableNullModel = true;
     bool enableCommunityFactor = true;
-    bool enableEwma = true;
+    // Legacy compatibility only. V4 schedules from the current observation window A.
+    bool enableEwma = false;
     bool enableHolding = false;
     bool useVolumeOnlyScore = false;
     bool holdActiveEdges = false;
@@ -35,7 +36,8 @@ struct TlOcsAlgorithmParameters
 
 struct TlOcsAlgorithmResult
 {
-    // Core pipeline artifacts: W -> A -> Abar -> B -> communities -> OCS edges.
+    // V4 core pipeline artifacts: W -> A -> B -> communities -> OCS edges.
+    // Abar remains available for legacy EWMA regression coverage.
     DenseMatrix A;
     DenseMatrix Abar;
     DenseMatrix B;

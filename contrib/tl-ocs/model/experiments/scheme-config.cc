@@ -91,7 +91,15 @@ SchemeConfig::EnableOcsAdmission() const
 bool
 SchemeConfig::EnableEpsWecmp() const
 {
-    return m_type == SchemeType::EPS_WECMP || m_type == SchemeType::TL_OCS;
+    // EPS-WECMP remains available only for legacy smoke compatibility. V4 TL-OCS
+    // sends optical-path misses through the default EPS forwarding path.
+    return m_type == SchemeType::EPS_WECMP;
+}
+
+bool
+SchemeConfig::IsV4MainScheme() const
+{
+    return m_type != SchemeType::EPS_WECMP;
 }
 
 bool

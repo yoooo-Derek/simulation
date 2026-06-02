@@ -185,7 +185,7 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
         }
         if (options.printOcsDecisions)
         {
-            std::cout << "TL-OCS timeline OCS admission flow " << decision.flowId
+            std::cout << "TL-OCS timeline OCS path assignment flow " << decision.flowId
                       << ": " << decision.sourceTor << "->" << decision.destinationTor
                       << " path=" << decision.pathType
                       << " admitted=" << (decision.admittedToOcs ? "true" : "false")
