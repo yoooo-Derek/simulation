@@ -25,6 +25,7 @@ NodeIndex::AddServerGroup(const NodeContainer& servers)
 {
     m_serversByTor.push_back(servers);
     m_serverAddressesByTor.emplace_back(servers.GetN(), Ipv4Address());
+    m_ocsServerAddressesByTor.emplace_back(servers.GetN(), Ipv4Address());
     m_serverLinksByTor.emplace_back(servers.GetN());
     m_torIngressDevicesByTor.emplace_back(servers.GetN(), nullptr);
 }
@@ -38,6 +39,18 @@ NodeIndex::SetServerIpv4Address(uint32_t torId, uint32_t serverId, Ipv4Address a
         throw std::out_of_range("TL-OCS server address index is out of range");
     }
     m_serverAddressesByTor[torId][serverId] = address;
+    m_serverAddressToTor[address.Get()] = torId;
+}
+
+void
+NodeIndex::SetOcsServerIpv4Address(uint32_t torId, uint32_t serverId, Ipv4Address address)
+{
+    if (torId >= m_ocsServerAddressesByTor.size() ||
+        serverId >= m_ocsServerAddressesByTor.at(torId).size())
+    {
+        throw std::out_of_range("TL-OCS OCS server address index is out of range");
+    }
+    m_ocsServerAddressesByTor[torId][serverId] = address;
     m_serverAddressToTor[address.Get()] = torId;
 }
 
@@ -123,6 +136,17 @@ NodeIndex::GetServerIpv4Address(uint32_t torId, uint32_t serverId) const
         throw std::out_of_range("TL-OCS server address index is out of range");
     }
     return m_serverAddressesByTor[torId][serverId];
+}
+
+Ipv4Address
+NodeIndex::GetOcsServerIpv4Address(uint32_t torId, uint32_t serverId) const
+{
+    if (torId >= m_ocsServerAddressesByTor.size() ||
+        serverId >= m_ocsServerAddressesByTor.at(torId).size())
+    {
+        throw std::out_of_range("TL-OCS OCS server address index is out of range");
+    }
+    return m_ocsServerAddressesByTor[torId][serverId];
 }
 
 NodeIndex::ServerLinkInfo

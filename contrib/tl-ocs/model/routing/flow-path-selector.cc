@@ -46,6 +46,9 @@ FlowPathSelector::Select(const FlowSpec& flow,
         }
         decision.pathType = "ocs";
         decision.admittedToOcs = true;
+        decision.destinationAddress =
+            nodeIndex.GetOcsServerIpv4Address(flow.GetDestinationTorId(),
+                                              flow.GetDestinationServerId());
     }
     return decision;
 }
@@ -70,14 +73,10 @@ InstallOcsHostRoutes(const FlowSpec& flow,
     const NodeIndex::ServerLinkInfo destinationServerLink =
         nodeIndex.GetServerLinkInfo(flow.GetDestinationTorId(), flow.GetDestinationServerId());
 
-    const Ipv4Address sourceAddress = sourceServerLink.serverAddress;
-    const Ipv4Address destinationAddress = destinationServerLink.serverAddress;
+    const Ipv4Address destinationAddress = decision.destinationAddress;
 
     Ptr<Ipv4StaticRouting> sourceServerRouting = staticRoutingHelper.GetStaticRouting(
         nodeIndex.GetServer(flow.GetSourceTorId(), flow.GetSourceServerId())->GetObject<Ipv4>());
-    Ptr<Ipv4StaticRouting> destinationServerRouting = staticRoutingHelper.GetStaticRouting(
-        nodeIndex.GetServer(flow.GetDestinationTorId(), flow.GetDestinationServerId())
-            ->GetObject<Ipv4>());
     Ptr<Ipv4StaticRouting> sourceTorRouting =
         staticRoutingHelper.GetStaticRouting(nodeIndex.GetTor(flow.GetSourceTorId())->GetObject<Ipv4>());
     Ptr<Ipv4StaticRouting> destinationTorRouting = staticRoutingHelper.GetStaticRouting(
@@ -91,13 +90,9 @@ InstallOcsHostRoutes(const FlowSpec& flow,
         nodeIndex.GetOcsPeerAddress(flow.GetSourceTorId(), flow.GetDestinationTorId()),
         nodeIndex.GetOcsInterfaceIndex(flow.GetSourceTorId(), flow.GetDestinationTorId()));
 
-    destinationTorRouting->AddHostRouteTo(
-        sourceAddress,
-        nodeIndex.GetOcsPeerAddress(flow.GetDestinationTorId(), flow.GetSourceTorId()),
-        nodeIndex.GetOcsInterfaceIndex(flow.GetDestinationTorId(), flow.GetSourceTorId()));
-    destinationServerRouting->AddHostRouteTo(sourceAddress,
-                                             destinationServerLink.torAddress,
-                                             destinationServerLink.serverInterfaceIndex);
+    destinationTorRouting->AddHostRouteTo(destinationAddress,
+                                          destinationServerLink.serverAddress,
+                                          destinationServerLink.torInterfaceIndex);
 }
 
 void

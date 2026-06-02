@@ -3,6 +3,7 @@
 #include "ns3/internet-stack-helper.h"
 #include "ns3/ipv4-address-helper.h"
 #include "ns3/ipv4-global-routing-helper.h"
+#include "ns3/ipv4-interface-address.h"
 #include "ns3/point-to-point-helper.h"
 #include "ns3/string.h"
 
@@ -76,6 +77,14 @@ EpsTopologyBuilder::Build(const SimulationConfig& config,
                                      devices.Get(0),
                                      devices.Get(1)});
             index.SetTorIngressDevice(torId, serverId, devices.Get(1));
+            const uint32_t serverIndex = torId * config.GetServersPerTor() + serverId;
+            const Ipv4Address ocsServerAddress(0xac100001 + serverIndex);
+            index.GetServer(torId, serverId)
+                ->GetObject<Ipv4>()
+                ->AddAddress(interfaces.Get(0).second,
+                             Ipv4InterfaceAddress(ocsServerAddress,
+                                                  Ipv4Mask("255.255.255.255")));
+            index.SetOcsServerIpv4Address(torId, serverId, ocsServerAddress);
             ipv4.NewNetwork();
         }
     }

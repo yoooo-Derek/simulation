@@ -687,7 +687,8 @@ main(int argc, char* argv[])
                                         static_cast<uint32_t>(flows.size()),
                                         Simulator::Now() + MilliSeconds(1));
                         OcsAdmission admission(linkManager,
-                                               config.GetOcsAssignmentThresholdBps());
+                                               config.GetOcsAssignmentThresholdBps(),
+                                               config.GetStopTime());
                         FlowPathSelector selector;
                         const std::vector<FlowPathDecision> decisions =
                             selector.Select(admittedFlows, admission, index);
@@ -698,7 +699,10 @@ main(int argc, char* argv[])
                                              decisions,
                                              index,
                                              config.GetStopTime(),
-                                             static_cast<uint16_t>(10000 + flows.size()));
+                                             static_cast<uint16_t>(10000 + flows.size()),
+                                             [&admission](uint32_t flowId) {
+                                                 admission.Release(flowId);
+                                             });
                         ocsAssignedFlows = ocsLaunchResult.assignedOcsFlows;
                         epsFallbackFlows = ocsLaunchResult.epsFlows;
 

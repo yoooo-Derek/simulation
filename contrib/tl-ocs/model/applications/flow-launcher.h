@@ -10,6 +10,7 @@
 #include "ns3/packet-sink.h"
 
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace ns3
@@ -36,12 +37,14 @@ class FlowLauncher
     FlowLaunchResult Install(const std::vector<FlowSpec>& flows,
                              const NodeIndex& nodeIndex,
                              Time stopTime,
-                             uint16_t portBase = 10000) const;
+                             uint16_t portBase = 10000,
+                             const std::function<void(uint32_t)>& completionCallback = {}) const;
     FlowLaunchResult Install(const std::vector<FlowSpec>& flows,
                              const std::vector<FlowPathDecision>& decisions,
                              const NodeIndex& nodeIndex,
                              Time stopTime,
-                             uint16_t portBase = 10000) const;
+                             uint16_t portBase = 10000,
+                             const std::function<void(uint32_t)>& completionCallback = {}) const;
 };
 
 } // namespace tl_ocs

@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <limits>
 #include <map>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -29,9 +30,11 @@ class OcsAdmission
 {
   public:
     explicit OcsAdmission(const OcsLinkManager& linkManager,
-                          uint64_t assignmentThresholdBps = std::numeric_limits<uint64_t>::max());
+                          uint64_t assignmentThresholdBps = std::numeric_limits<uint64_t>::max(),
+                          Time reservationTimeout = Time::Max());
 
     OcsAdmissionDecision Decide(const FlowSpec& flow);
+    bool Release(uint32_t flowId);
 
     uint64_t GetAssignedRateBps(uint32_t sourceTor,
                                 uint32_t destinationTor,
@@ -40,8 +43,10 @@ class OcsAdmission
   private:
     struct RateReservation
     {
+        uint32_t flowId;
+        std::pair<uint32_t, uint32_t> edge;
         uint64_t rateBps;
-        Time releaseTime;
+        std::optional<Time> timeoutReleaseTime;
     };
 
     static std::pair<uint32_t, uint32_t> NormalizeEdge(uint32_t sourceTor,
@@ -49,10 +54,11 @@ class OcsAdmission
 
     const OcsLinkManager& m_linkManager;
     uint64_t GetAssignedRateBps(const std::pair<uint32_t, uint32_t>& edge, Time atTime) const;
-    void ReleaseExpired(const std::pair<uint32_t, uint32_t>& edge, Time atTime);
+    void ReleaseExpired(Time atTime);
 
     uint64_t m_assignmentThresholdBps;
-    std::map<std::pair<uint32_t, uint32_t>, std::vector<RateReservation>> m_reservations;
+    Time m_reservationTimeout;
+    std::map<uint32_t, RateReservation> m_reservations;
 };
 
 } // namespace tl_ocs

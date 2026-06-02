@@ -78,7 +78,7 @@ class TlOcsOcsAdmissionReleaseTestCase : public TestCase
 {
   public:
     TlOcsOcsAdmissionReleaseTestCase()
-        : TestCase("TL-OCS planned lightpath rate release admits later flows")
+        : TestCase("TL-OCS completion release admits a later lightpath flow")
     {
     }
 
@@ -90,21 +90,55 @@ class TlOcsOcsAdmissionReleaseTestCase : public TestCase
         OcsAdmission assignment(manager, 1000);
 
         const FlowSpec first(0, 0, 0, 1, 0, 1000, MilliSeconds(1), "test", 1000);
-        const FlowSpec tooFast(1, 0, 0, 1, 0, 1000, MilliSeconds(2), "test", 1100);
-        const FlowSpec afterRelease(2, 1, 0, 0, 0, 1000, Seconds(10), "test", 1000);
+        const FlowSpec blocked(1, 0, 0, 1, 0, 1000, MilliSeconds(2), "test", 1000);
+        const FlowSpec afterRelease(2, 1, 0, 0, 0, 1000, MilliSeconds(3), "test", 1000);
 
         NS_TEST_ASSERT_MSG_EQ(assignment.Decide(first).admitted,
                               true,
                               "first rate reservation should fit");
-        NS_TEST_ASSERT_MSG_EQ(assignment.Decide(tooFast).admitted,
+        NS_TEST_ASSERT_MSG_EQ(assignment.Decide(blocked).admitted,
                               false,
-                              "single flow above threshold should use EPS");
+                              "concurrent flow should use EPS before completion release");
+        NS_TEST_ASSERT_MSG_EQ(assignment.Release(first.GetFlowId()),
+                              true,
+                              "completed flow reservation was not released");
         NS_TEST_ASSERT_MSG_EQ(assignment.Decide(afterRelease).admitted,
                               true,
-                              "flow after planned release should fit");
-        NS_TEST_ASSERT_MSG_EQ(assignment.GetAssignedRateBps(0, 1, Seconds(10)),
+                              "flow after completion release should fit");
+        NS_TEST_ASSERT_MSG_EQ(assignment.GetAssignedRateBps(0, 1, MilliSeconds(3)),
                               1000,
                               "released reservation should not remain in assigned rate");
+    }
+};
+
+class TlOcsOcsAdmissionTimeoutTestCase : public TestCase
+{
+  public:
+    TlOcsOcsAdmissionTimeoutTestCase()
+        : TestCase("TL-OCS timeout fallback releases an incomplete lightpath flow")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        OcsLinkManager manager;
+        manager.ApplySelectedEdges({{0, 1, 1.0, 1.0, true, true}});
+        OcsAdmission assignment(manager, 1000, MilliSeconds(5));
+
+        const FlowSpec incomplete(0, 0, 0, 1, 0, 1000, MilliSeconds(1), "test", 1000);
+        const FlowSpec blocked(1, 0, 0, 1, 0, 1000, MilliSeconds(5), "test", 1000);
+        const FlowSpec afterTimeout(2, 1, 0, 0, 0, 1000, MilliSeconds(6), "test", 1000);
+
+        NS_TEST_ASSERT_MSG_EQ(assignment.Decide(incomplete).admitted,
+                              true,
+                              "initial reservation should fit");
+        NS_TEST_ASSERT_MSG_EQ(assignment.Decide(blocked).admitted,
+                              false,
+                              "reservation should remain active before timeout");
+        NS_TEST_ASSERT_MSG_EQ(assignment.Decide(afterTimeout).admitted,
+                              true,
+                              "timeout fallback should release incomplete flow reservation");
     }
 };
 
@@ -120,6 +154,7 @@ TlOcsOcsAdmissionTestSuite::TlOcsOcsAdmissionTestSuite()
     AddTestCase(new TlOcsOcsAdmissionTestCase);
     AddTestCase(new TlOcsOcsAdmissionCapacityTestCase);
     AddTestCase(new TlOcsOcsAdmissionReleaseTestCase);
+    AddTestCase(new TlOcsOcsAdmissionTimeoutTestCase);
 }
 
 static TlOcsOcsAdmissionTestSuite g_tlOcsOcsAdmissionTestSuite;

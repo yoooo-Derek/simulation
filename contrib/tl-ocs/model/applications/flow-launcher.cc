@@ -26,6 +26,8 @@ DelayUntil(Time absoluteTime)
 void
 SinkRxTrace(std::shared_ptr<FlowMetricTrackingState> tracking,
             uint64_t expectedBytes,
+            uint32_t flowId,
+            std::shared_ptr<std::function<void(uint32_t)>> completionCallback,
             Ptr<const Packet> packet,
             const Address&)
 {
@@ -34,6 +36,10 @@ SinkRxTrace(std::shared_ptr<FlowMetricTrackingState> tracking,
     {
         tracking->completed = true;
         tracking->completionTime = Simulator::Now();
+        if (*completionCallback)
+        {
+            (*completionCallback)(flowId);
+        }
     }
 }
 
@@ -54,7 +60,8 @@ FlowLaunchResult
 FlowLauncher::Install(const std::vector<FlowSpec>& flows,
                       const NodeIndex& nodeIndex,
                       Time stopTime,
-                      uint16_t portBase) const
+                      uint16_t portBase,
+                      const std::function<void(uint32_t)>& completionCallback) const
 {
     std::vector<FlowPathDecision> decisions;
     decisions.reserve(flows.size());
@@ -70,7 +77,7 @@ FlowLauncher::Install(const std::vector<FlowSpec>& flows,
         decision.destinationTor = flow.GetDestinationTorId();
         decisions.push_back(decision);
     }
-    return Install(flows, decisions, nodeIndex, stopTime, portBase);
+    return Install(flows, decisions, nodeIndex, stopTime, portBase, completionCallback);
 }
 
 FlowLaunchResult
@@ -78,7 +85,8 @@ FlowLauncher::Install(const std::vector<FlowSpec>& flows,
                       const std::vector<FlowPathDecision>& decisions,
                       const NodeIndex& nodeIndex,
                       Time stopTime,
-                      uint16_t portBase) const
+                      uint16_t portBase,
+                      const std::function<void(uint32_t)>& completionCallback) const
 {
     if (flows.size() != decisions.size())
     {
@@ -86,6 +94,8 @@ FlowLauncher::Install(const std::vector<FlowSpec>& flows,
     }
 
     FlowLaunchResult result;
+    auto sharedCompletionCallback =
+        std::make_shared<std::function<void(uint32_t)>>(completionCallback);
 
     for (uint32_t index = 0; index < flows.size(); ++index)
     {
@@ -112,7 +122,9 @@ FlowLauncher::Install(const std::vector<FlowSpec>& flows,
         sink->TraceConnectWithoutContext("Rx",
                                          MakeBoundCallback(&SinkRxTrace,
                                                            tracking,
-                                                           flow.GetSizeBytes()));
+                                                           flow.GetSizeBytes(),
+                                                           flow.GetFlowId(),
+                                                           sharedCompletionCallback));
         result.metricSources.push_back({flow, decision, tracking});
 
         BulkSendHelper sourceHelper("ns3::TcpSocketFactory",

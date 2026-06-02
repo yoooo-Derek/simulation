@@ -133,7 +133,9 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
 
     const std::vector<FlowSpec> shiftedStage2Flows =
         OffsetStartTimes(stage2Flows, Simulator::Now() + options.stageGap);
-    OcsAdmission admission(linkManager, simulation.GetOcsAssignmentThresholdBps());
+    OcsAdmission admission(linkManager,
+                           simulation.GetOcsAssignmentThresholdBps(),
+                           simulation.GetStopTime());
     FlowPathSelector selector;
     result.stage2Decisions = selector.Select(shiftedStage2Flows, admission, nodeIndex);
 
@@ -144,7 +146,10 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
                          result.stage2Decisions,
                          nodeIndex,
                          simulation.GetStopTime(),
-                         static_cast<uint16_t>(10000 + stage1Flows.size()));
+                         static_cast<uint16_t>(10000 + stage1Flows.size()),
+                         [&admission](uint32_t flowId) {
+                             admission.Release(flowId);
+                         });
     result.stage2InstalledFlows = stage2Launch.installedFlows;
     result.metricSources.insert(result.metricSources.end(),
                                 stage2Launch.metricSources.begin(),

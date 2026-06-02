@@ -59,6 +59,7 @@ class NodeIndex
     void SetSpineNodes(const NodeContainer& spines);
     void AddServerGroup(const NodeContainer& servers);
     void SetServerIpv4Address(uint32_t torId, uint32_t serverId, Ipv4Address address);
+    void SetOcsServerIpv4Address(uint32_t torId, uint32_t serverId, Ipv4Address address);
     void SetServerLinkInfo(uint32_t torId, uint32_t serverId, const ServerLinkInfo& linkInfo);
     void SetTorIngressDevice(uint32_t torId, uint32_t serverId, Ptr<NetDevice> device);
     void AddTorSpineLink(const TorSpineLinkInfo& linkInfo);
@@ -68,6 +69,7 @@ class NodeIndex
     Ptr<Node> GetTor(uint32_t torId) const;
     Ptr<Node> GetSpine(uint32_t spineId) const;
     Ipv4Address GetServerIpv4Address(uint32_t torId, uint32_t serverId) const;
+    Ipv4Address GetOcsServerIpv4Address(uint32_t torId, uint32_t serverId) const;
     ServerLinkInfo GetServerLinkInfo(uint32_t torId, uint32_t serverId) const;
     std::vector<ServerLinkInfo> GetServerLinks() const;
     Ptr<NetDevice> GetTorIngressDevice(uint32_t torId, uint32_t serverId) const;
@@ -95,6 +97,7 @@ class NodeIndex
     NodeContainer m_spines;
     std::vector<NodeContainer> m_serversByTor;
     std::vector<std::vector<Ipv4Address>> m_serverAddressesByTor;
+    std::vector<std::vector<Ipv4Address>> m_ocsServerAddressesByTor;
     std::vector<std::vector<ServerLinkInfo>> m_serverLinksByTor;
     std::vector<std::vector<Ptr<NetDevice>>> m_torIngressDevicesByTor;
     std::map<uint32_t, uint32_t> m_serverAddressToTor;

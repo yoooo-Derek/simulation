@@ -34,8 +34,10 @@ lightpaths under the per-ToR optical port constraint.
 `OcsLinkManager` owns the active lightpath set. `FlowPathSelector` assigns a new
 flow to an active optical path when its ToR pair matches and the lightpath has
 enough assignment capacity. Each active lightpath tracks assigned estimated
-flow rate against `ocsAssignmentThresholdBps`. Reservations are released at
-the planned end time derived from flow size and estimated rate. Unmatched or
+flow rate against `ocsAssignmentThresholdBps`. Packet-sink completion
+notifications release reservations; a rule timeout remains a fallback for
+incomplete flows. OCS flows connect to a server-side optical address alias so
+their host routes do not affect ordinary server addresses. Unmatched or
 capacity-exceeding flows retain traditional EPS forwarding.
 
 ## Schemes
@@ -48,6 +50,6 @@ capacity-exceeding flows retain traditional EPS forwarding.
 
 - The controller runtime is a single-cycle two-stage smoke.
 - Candidate optical links are precreated as a full mesh for small scenarios.
-- Optical path assignment uses workload-estimated flow rates and planned
-  release times rather than runtime rate estimation.
+- Optical path assignment uses workload-estimated flow rates rather than
+  runtime rate estimation.
 - Link utilization is a whole-run aggregate, not a time series.
