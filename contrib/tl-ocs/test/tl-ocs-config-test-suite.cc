@@ -1,6 +1,8 @@
 #include "ns3/simulation-config.h"
 #include "ns3/test.h"
 
+#include <limits>
+
 using namespace ns3;
 using namespace ns3::tl_ocs;
 
@@ -28,6 +30,9 @@ TlOcsSimulationConfigDefaultsTestCase::DoRun()
     NS_TEST_ASSERT_MSG_EQ(config.GetServersPerTor(), 2, "unexpected default servers per ToR");
     NS_TEST_ASSERT_MSG_EQ(config.GetEpsDataRate(), "25Gbps", "unexpected default EPS rate");
     NS_TEST_ASSERT_MSG_EQ(config.GetOcsDataRate(), "100Gbps", "unexpected default OCS rate");
+    NS_TEST_ASSERT_MSG_EQ(config.GetOcsAssignmentThreshold(),
+                          std::numeric_limits<uint64_t>::max(),
+                          "default assignment threshold should not restrict smoke flows");
 }
 
 class TlOcsSimulationConfigInvalidTestCase : public TestCase

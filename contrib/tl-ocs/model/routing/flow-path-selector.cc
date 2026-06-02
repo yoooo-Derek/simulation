@@ -13,7 +13,7 @@ namespace tl_ocs
 
 std::vector<FlowPathDecision>
 FlowPathSelector::Select(const std::vector<FlowSpec>& flows,
-                         const OcsAdmission& admission,
+                         OcsAdmission& admission,
                          const NodeIndex& nodeIndex) const
 {
     std::vector<FlowPathDecision> decisions;
@@ -27,7 +27,7 @@ FlowPathSelector::Select(const std::vector<FlowSpec>& flows,
 
 FlowPathDecision
 FlowPathSelector::Select(const FlowSpec& flow,
-                         const OcsAdmission& admission,
+                         OcsAdmission& admission,
                          const NodeIndex& nodeIndex) const
 {
     const OcsAdmissionDecision admissionDecision = admission.Decide(flow);

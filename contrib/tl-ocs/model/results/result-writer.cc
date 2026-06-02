@@ -47,6 +47,7 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 std::optional<uint32_t> ocsActiveEdges,
                                 std::optional<uint32_t> ocsAssignedFlows,
                                 std::optional<uint32_t> epsFallbackFlows,
+                                std::optional<double> communityInternalSelectedEdgeRatio,
                                 std::optional<uint32_t> timelineCycles,
                                 std::optional<uint32_t> stage1InstalledFlows,
                                 std::optional<uint32_t> stage2InstalledFlows,
@@ -122,6 +123,8 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     {
         stream << epsFallbackFlows.value();
     }
+    stream << ',';
+    WriteOptionalDouble(stream, communityInternalSelectedEdgeRatio);
     stream << ',';
     if (timelineCycles.has_value())
     {

@@ -38,6 +38,7 @@ struct SmokeScenarioResult
     uint32_t ocsActiveEdges = 0;
     uint32_t ocsAssignedFlows = 0;
     uint32_t epsFallbackFlows = 0;
+    double communityInternalSelectedEdgeRatio = 0.0;
     uint32_t timelineCycles = 0;
     uint32_t stage1InstalledFlows = 0;
     uint32_t stage2InstalledFlows = 0;

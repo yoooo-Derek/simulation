@@ -36,7 +36,10 @@ struct TlOcsAlgorithmResult
     uint32_t communityLevelCount = 0;
     std::vector<OpticalEdge> candidateEdges;
     std::vector<OpticalEdge> selectedEdges;
+    double communityInternalSelectedEdgeRatio = 0.0;
 };
+
+double CalculateCommunityInternalSelectedEdgeRatio(const std::vector<OpticalEdge>& selectedEdges);
 
 class TlOcsAlgorithm
 {

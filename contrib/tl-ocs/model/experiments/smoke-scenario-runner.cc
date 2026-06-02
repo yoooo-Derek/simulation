@@ -49,6 +49,8 @@ CopyTimelineResult(const ControllerTimelineResult& timeline, SmokeScenarioResult
     result.ocsActiveEdges = timeline.ocsActiveEdges;
     result.ocsAssignedFlows = timeline.ocsAssignedFlows;
     result.epsFallbackFlows = timeline.epsFallbackFlows;
+    result.communityInternalSelectedEdgeRatio =
+        timeline.communityInternalSelectedEdgeRatio;
     result.timelineCycles = timeline.timelineCycles;
     result.stage1InstalledFlows = timeline.stage1InstalledFlows;
     result.stage2InstalledFlows = timeline.stage2InstalledFlows;

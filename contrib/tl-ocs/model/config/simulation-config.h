@@ -28,6 +28,9 @@ class SimulationConfig
     void SetOcsDataRate(std::string ocsDataRate);
     const std::string& GetOcsDataRate() const;
 
+    void SetOcsAssignmentThreshold(uint64_t thresholdBytes);
+    uint64_t GetOcsAssignmentThreshold() const;
+
     void SetStopTime(Time stopTime);
     Time GetStopTime() const;
 
@@ -51,6 +54,7 @@ class SimulationConfig
     uint32_t m_serversPerTor;
     std::string m_epsDataRate;
     std::string m_ocsDataRate;
+    uint64_t m_ocsAssignmentThreshold;
     Time m_stopTime;
     Time m_observerWindow;
     Time m_ocsReconfigurationPeriod;

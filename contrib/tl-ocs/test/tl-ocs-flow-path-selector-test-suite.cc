@@ -52,6 +52,16 @@ TlOcsFlowPathSelectorTestCase::DoRun()
     NS_TEST_ASSERT_MSG_EQ(inactiveDecision.admittedToOcs,
                           false,
                           "inactive pair should not be admitted");
+
+    OcsAdmission capacityLimited(manager, 1000);
+    const FlowSpec fitting(2, 0, 0, 1, 0, 800, MilliSeconds(1), "test");
+    const FlowSpec exceeding(3, 0, 0, 1, 0, 300, MilliSeconds(1), "test");
+    NS_TEST_ASSERT_MSG_EQ(selector.Select(fitting, capacityLimited, index).pathType,
+                          "ocs",
+                          "flow within capacity should use OCS");
+    NS_TEST_ASSERT_MSG_EQ(selector.Select(exceeding, capacityLimited, index).pathType,
+                          "eps",
+                          "flow exceeding capacity should fall back to EPS");
     Simulator::Destroy();
 }
 

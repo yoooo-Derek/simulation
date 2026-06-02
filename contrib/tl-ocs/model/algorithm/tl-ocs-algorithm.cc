@@ -9,6 +9,21 @@ namespace ns3
 namespace tl_ocs
 {
 
+double
+CalculateCommunityInternalSelectedEdgeRatio(const std::vector<OpticalEdge>& selectedEdges)
+{
+    if (selectedEdges.empty())
+    {
+        return 0.0;
+    }
+    uint32_t internalEdges = 0;
+    for (const auto& edge : selectedEdges)
+    {
+        internalEdges += edge.sameCommunity ? 1 : 0;
+    }
+    return static_cast<double>(internalEdges) / selectedEdges.size();
+}
+
 TlOcsAlgorithmResult
 TlOcsAlgorithm::Run(const TrafficMatrix& observedW,
                     const TlOcsAlgorithmParameters& parameters) const
@@ -52,6 +67,8 @@ TlOcsAlgorithm::Run(const TrafficMatrix& observedW,
         scheduler.SelectEdges(result.B, result.communityLabels, schedulerParameters);
     result.candidateEdges = schedule.candidateEdges;
     result.selectedEdges = schedule.selectedEdges;
+    result.communityInternalSelectedEdgeRatio =
+        CalculateCommunityInternalSelectedEdgeRatio(result.selectedEdges);
     return result;
 }
 

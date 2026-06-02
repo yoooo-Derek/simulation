@@ -33,6 +33,7 @@ class ResultWriter
                                             std::optional<uint32_t> ocsActiveEdges = std::nullopt,
                                             std::optional<uint32_t> ocsAssignedFlows = std::nullopt,
                                             std::optional<uint32_t> epsFallbackFlows = std::nullopt,
+                                            std::optional<double> communityInternalSelectedEdgeRatio = std::nullopt,
                                             std::optional<uint32_t> timelineCycles = std::nullopt,
                                             std::optional<uint32_t> stage1InstalledFlows = std::nullopt,
                                             std::optional<uint32_t> stage2InstalledFlows = std::nullopt,

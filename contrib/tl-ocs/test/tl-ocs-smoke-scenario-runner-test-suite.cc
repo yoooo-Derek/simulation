@@ -77,6 +77,10 @@ class TlOcsEpsEcmpScenarioTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(result.ocsMetricsSummary->ocsFlowHitRate.value(),
                               0.0,
                               "EPS-ECMP unexpectedly has OCS hits");
+        NS_TEST_ASSERT_MSG_EQ_TOL(result.communityInternalSelectedEdgeRatio,
+                                  0.0,
+                                  1e-12,
+                                  "EPS-ECMP should expose a stable empty-edge ratio");
         Simulator::Destroy();
     }
 };
@@ -128,6 +132,9 @@ class TlOcsTlOcsScenarioTestCase : public TestCase
         NS_TEST_ASSERT_MSG_GT(result.ocsMetricsSummary->ocsFlowHitRate.value(),
                               0.0,
                               "TL-OCS has no completed OCS hits");
+        NS_TEST_ASSERT_MSG_GT(result.communityInternalSelectedEdgeRatio,
+                              0.0,
+                              "TL-OCS community-local smoke has no internal selected edges");
         NS_TEST_ASSERT_MSG_EQ(result.ocsMetricsSummary->ocsReconfigurationCount,
                               1,
                               "TL-OCS single-cycle reconfiguration count mismatch");

@@ -83,6 +83,10 @@ TlOcsAlgorithmSelectionTestCase::DoRun()
                           "weak cross-community edge should have lower structural gain");
     NS_TEST_ASSERT_MSG_GT(result.candidateEdges.size(), 0, "expected candidate edges");
     NS_TEST_ASSERT_MSG_EQ(result.selectedEdges.size(), 2, "expected both strong community edges");
+    NS_TEST_ASSERT_MSG_EQ_TOL(result.communityInternalSelectedEdgeRatio,
+                              1.0,
+                              1e-12,
+                              "community-local selected edges should be internal");
     NS_TEST_ASSERT_MSG_EQ(result.communityLabels[0],
                           result.communityLabels[1],
                           "0 and 1 should share a community");

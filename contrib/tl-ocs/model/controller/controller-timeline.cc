@@ -121,6 +121,8 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
     result.algorithmSelectedEdges =
         static_cast<uint32_t>(algorithmResult.selectedEdges.size());
     result.selectedEdgeList = FormatSelectedEdges(algorithmResult.selectedEdges);
+    result.communityInternalSelectedEdgeRatio =
+        algorithmResult.communityInternalSelectedEdgeRatio;
 
     if (options.enableOcsAdmission)
     {
@@ -130,7 +132,7 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
 
     const std::vector<FlowSpec> shiftedStage2Flows =
         OffsetStartTimes(stage2Flows, Simulator::Now() + options.stageGap);
-    OcsAdmission admission(linkManager);
+    OcsAdmission admission(linkManager, simulation.GetOcsAssignmentThreshold());
     FlowPathSelector selector;
     result.stage2Decisions = selector.Select(shiftedStage2Flows, admission, nodeIndex);
 

@@ -29,11 +29,11 @@ class FlowPathSelector
 {
   public:
     std::vector<FlowPathDecision> Select(const std::vector<FlowSpec>& flows,
-                                         const OcsAdmission& admission,
+                                         OcsAdmission& admission,
                                          const NodeIndex& nodeIndex) const;
 
     FlowPathDecision Select(const FlowSpec& flow,
-                            const OcsAdmission& admission,
+                            OcsAdmission& admission,
                             const NodeIndex& nodeIndex) const;
 
 };

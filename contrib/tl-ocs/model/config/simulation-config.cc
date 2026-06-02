@@ -1,6 +1,7 @@
 #include "simulation-config.h"
 
 #include <sstream>
+#include <limits>
 #include <utility>
 
 namespace ns3
@@ -13,6 +14,7 @@ SimulationConfig::SimulationConfig()
       m_serversPerTor(2),
       m_epsDataRate("25Gbps"),
       m_ocsDataRate("100Gbps"),
+      m_ocsAssignmentThreshold(std::numeric_limits<uint64_t>::max()),
       m_stopTime(MilliSeconds(10)),
       m_observerWindow(MilliSeconds(1)),
       m_ocsReconfigurationPeriod(MilliSeconds(5)),
@@ -67,6 +69,18 @@ const std::string&
 SimulationConfig::GetOcsDataRate() const
 {
     return m_ocsDataRate;
+}
+
+void
+SimulationConfig::SetOcsAssignmentThreshold(uint64_t thresholdBytes)
+{
+    m_ocsAssignmentThreshold = thresholdBytes;
+}
+
+uint64_t
+SimulationConfig::GetOcsAssignmentThreshold() const
+{
+    return m_ocsAssignmentThreshold;
 }
 
 void
@@ -143,6 +157,7 @@ SimulationConfig::GetSummary() const
     std::ostringstream os;
     os << "numTors=" << m_numTors << ", serversPerTor=" << m_serversPerTor
        << ", epsDataRate=" << m_epsDataRate << ", ocsDataRate=" << m_ocsDataRate
+       << ", ocsAssignmentThreshold=" << m_ocsAssignmentThreshold
        << ", stopTime=" << m_stopTime.As(Time::S)
        << ", observerWindow=" << m_observerWindow.As(Time::S)
        << ", ocsPeriod=" << m_ocsReconfigurationPeriod.As(Time::S)

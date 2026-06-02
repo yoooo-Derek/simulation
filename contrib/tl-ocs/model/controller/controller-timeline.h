@@ -41,6 +41,7 @@ struct ControllerTimelineResult
     uint64_t stage2ReceivedBytes = 0;
     uint32_t ocsAssignedFlows = 0;
     uint32_t epsFallbackFlows = 0;
+    double communityInternalSelectedEdgeRatio = 0.0;
     std::string selectedEdgeList;
     std::vector<FlowPathDecision> stage2Decisions;
     std::vector<FlowMetricSource> metricSources;

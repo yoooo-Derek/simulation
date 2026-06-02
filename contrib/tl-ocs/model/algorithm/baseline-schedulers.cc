@@ -56,7 +56,13 @@ VolumeScheduler::Run(const TrafficMatrix& observedW, uint32_t opticalPortsPerTor
     result.A = processor.BuildUndirected(observedW);
     result.B = result.A;
     result.trafficGraph = processor.Sparsify(result.A, 0.0);
-    result.communityLabels.resize(result.A.GetSize(), 0);
+    const CommunityDetectionResult communities =
+        CommunityDetector().DetectDetailed(result.A, CommunityDetectionOptions());
+    result.communityLabels = communities.labels;
+    result.communityScore = communities.score;
+    result.communityPassCount = communities.passCount;
+    result.communityMovedCount = communities.movedCount;
+    result.communityLevelCount = communities.levelCount;
 
     for (uint32_t i = 0; i < result.A.GetSize(); ++i)
     {
@@ -65,11 +71,19 @@ VolumeScheduler::Run(const TrafficMatrix& observedW, uint32_t opticalPortsPerTor
             const double volume = result.A.Get(i, j);
             if (volume > 0.0)
             {
-                result.candidateEdges.push_back({i, j, volume, volume, true, false});
+                result.candidateEdges.push_back(
+                    {i,
+                     j,
+                     volume,
+                     volume,
+                     result.communityLabels[i] == result.communityLabels[j],
+                     false});
             }
         }
     }
     SelectUnderPortConstraint(result, opticalPortsPerTor);
+    result.communityInternalSelectedEdgeRatio =
+        CalculateCommunityInternalSelectedEdgeRatio(result.selectedEdges);
     return result;
 }
 
@@ -105,6 +119,8 @@ CommunityScheduler::Run(const TrafficMatrix& observedW,
         scheduler.SelectEdges(result.B, result.communityLabels, schedulerParameters);
     result.candidateEdges = schedule.candidateEdges;
     result.selectedEdges = schedule.selectedEdges;
+    result.communityInternalSelectedEdgeRatio =
+        CalculateCommunityInternalSelectedEdgeRatio(result.selectedEdges);
     return result;
 }
 

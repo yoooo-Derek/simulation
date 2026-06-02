@@ -32,7 +32,9 @@ structural gain with the community influence factor and greedily selects
 lightpaths under the per-ToR optical port constraint.
 
 `OcsLinkManager` owns the active lightpath set. `FlowPathSelector` assigns a new
-flow to an active optical path when its ToR pair matches; unmatched flows retain
+flow to an active optical path when its ToR pair matches and the lightpath has
+enough assignment capacity. Each active lightpath tracks assigned flow bytes
+against `ocsAssignmentThreshold`; unmatched or capacity-exceeding flows retain
 EPS forwarding. Already-running flows are not rerouted.
 
 ## Schemes
@@ -46,5 +48,6 @@ EPS forwarding. Already-running flows are not rerouted.
 
 - The controller runtime is a single-cycle two-stage smoke.
 - Candidate optical links are precreated as a full mesh for small scenarios.
-- Optical path assignment is pair-based and does not yet enforce capacity.
+- Optical path assignment uses a per-lightpath assigned-byte estimate rather
+  than a runtime rate estimator.
 - Link utilization is a whole-run aggregate, not a time series.

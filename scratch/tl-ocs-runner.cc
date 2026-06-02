@@ -2,6 +2,7 @@
 #include "ns3/tl-ocs-module.h"
 
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -69,6 +70,7 @@ main(int argc, char* argv[])
     bool printOcsDecisions = false;
     uint32_t spines = 1;
     std::string ocsDataRate = "100Gbps";
+    uint64_t ocsAssignmentThreshold = std::numeric_limits<uint64_t>::max();
     double ocsDelaySeconds = 0.000005;
     double timelineStageGapSeconds = 0.001;
     uint64_t tcpFlowBytes = 1000000;
@@ -120,6 +122,9 @@ main(int argc, char* argv[])
     cmd.AddValue("printOcsDecisions", "Print per-flow OCS/EPS path decisions", printOcsDecisions);
     cmd.AddValue("spines", "Number of EPS spine nodes", spines);
     cmd.AddValue("ocsDataRate", "OCS candidate link data rate", ocsDataRate);
+    cmd.AddValue("ocsAssignmentThreshold",
+                 "Maximum assigned flow bytes per active OCS lightpath",
+                 ocsAssignmentThreshold);
     cmd.AddValue("ocsDelay", "OCS candidate link delay in seconds", ocsDelaySeconds);
     cmd.AddValue("timelineStageGap", "Gap between controller timeline stages in seconds", timelineStageGapSeconds);
     cmd.AddValue("tcpFlowBytes", "Maximum bytes sent by the TCP smoke flow", tcpFlowBytes);
@@ -167,6 +172,7 @@ main(int argc, char* argv[])
     config.SetObserverWindow(Seconds(observerWindowSeconds));
     config.SetOcsReconfigurationPeriod(Seconds(ocsPeriodSeconds));
     config.SetOcsDataRate(ocsDataRate);
+    config.SetOcsAssignmentThreshold(ocsAssignmentThreshold);
     config.SetStopTime(Seconds(stopTimeSeconds));
     config.SetRandomSeed(randomSeed);
     config.SetRunId(runId);
@@ -302,6 +308,7 @@ main(int argc, char* argv[])
     std::optional<uint32_t> ocsActiveEdges;
     std::optional<uint32_t> ocsAssignedFlows;
     std::optional<uint32_t> epsFallbackFlows;
+    std::optional<double> communityInternalSelectedEdgeRatio;
     std::optional<uint32_t> timelineCycles;
     std::optional<uint32_t> stage1InstalledFlows;
     std::optional<uint32_t> stage2InstalledFlows;
@@ -429,6 +436,8 @@ main(int argc, char* argv[])
                     ocsActiveEdges = scenarioResult.ocsActiveEdges;
                     ocsAssignedFlows = scenarioResult.ocsAssignedFlows;
                     epsFallbackFlows = scenarioResult.epsFallbackFlows;
+                    communityInternalSelectedEdgeRatio =
+                        scenarioResult.communityInternalSelectedEdgeRatio;
                 }
                 status = scenarioResult.status;
                 flowMetrics = scenarioResult.flowMetrics;
@@ -441,6 +450,8 @@ main(int argc, char* argv[])
                           << ", selectedEdges=" << scenarioResult.selectedEdgeList
                           << ", ocsAssigned=" << scenarioResult.ocsAssignedFlows
                           << ", epsFallback=" << scenarioResult.epsFallbackFlows;
+                std::cout << ", communityInternalSelectedEdgeRatio="
+                          << scenarioResult.communityInternalSelectedEdgeRatio;
                 std::cout << ", receivedBytes=" << scenarioResult.receivedBytes << std::endl;
                 if (flowMetricsSummary.has_value())
                 {
@@ -568,6 +579,8 @@ main(int argc, char* argv[])
                 ocsActiveEdges = timelineResult.ocsActiveEdges;
                 ocsAssignedFlows = timelineResult.ocsAssignedFlows;
                 epsFallbackFlows = timelineResult.epsFallbackFlows;
+                communityInternalSelectedEdgeRatio =
+                    timelineResult.communityInternalSelectedEdgeRatio;
                 timelineCycles = timelineResult.timelineCycles;
                 stage1InstalledFlows = timelineResult.stage1InstalledFlows;
                 stage2InstalledFlows = timelineResult.stage2InstalledFlows;
@@ -633,6 +646,8 @@ main(int argc, char* argv[])
                         static_cast<uint32_t>(algorithmResult.candidateEdges.size());
                     algorithmSelectedEdges =
                         static_cast<uint32_t>(algorithmResult.selectedEdges.size());
+                    communityInternalSelectedEdgeRatio =
+                        algorithmResult.communityInternalSelectedEdgeRatio;
                     status = "algorithm_smoke_ok";
 
                     std::ostringstream selectedEdges;
@@ -666,7 +681,7 @@ main(int argc, char* argv[])
                             OffsetFlows(flows,
                                         static_cast<uint32_t>(flows.size()),
                                         Simulator::Now() + MilliSeconds(1));
-                        OcsAdmission admission(linkManager);
+                        OcsAdmission admission(linkManager, config.GetOcsAssignmentThreshold());
                         FlowPathSelector selector;
                         const std::vector<FlowPathDecision> decisions =
                             selector.Select(admittedFlows, admission, index);
@@ -761,6 +776,7 @@ main(int argc, char* argv[])
                                  ocsActiveEdges,
                                  ocsAssignedFlows,
                                  epsFallbackFlows,
+                                 communityInternalSelectedEdgeRatio,
                                  timelineCycles,
                                  stage1InstalledFlows,
                                  stage2InstalledFlows,
