@@ -11,7 +11,9 @@
 #include "ns3/traffic-observer.h"
 
 #include <cstdint>
+#include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ns3
@@ -31,6 +33,8 @@ struct ControllerTimelineOptions
 struct ControllerTimelineResult
 {
     uint32_t timelineCycles = 0;
+    uint32_t schedulingRoundCount = 0;
+    uint32_t ocsReconfigurationCount = 0;
     uint64_t observedMatrixBytes = 0;
     uint32_t algorithmCandidateEdges = 0;
     uint32_t algorithmSelectedEdges = 0;
@@ -45,6 +49,7 @@ struct ControllerTimelineResult
     std::string selectedEdgeList;
     std::vector<FlowPathDecision> stage2Decisions;
     std::vector<FlowMetricSource> metricSources;
+    std::vector<std::pair<std::pair<uint32_t, uint32_t>, double>> activeLightpathDurations;
 
     uint32_t GetInstalledFlows() const;
     uint64_t GetReceivedBytes() const;
@@ -60,6 +65,15 @@ class ControllerTimeline
         const SimulationConfig& simulation,
         const std::vector<FlowSpec>& stage1Flows,
         const std::vector<FlowSpec>& stage2Flows,
+        TrafficObserver& observer,
+        const TlOcsAlgorithmParameters& algorithmParameters,
+        OcsLinkManager& linkManager,
+        const ControllerTimelineOptions& options) const;
+
+    ControllerTimelineResult RunFiniteMultiCycle(
+        const NodeIndex& nodeIndex,
+        const SimulationConfig& simulation,
+        const std::vector<FlowSpec>& flows,
         TrafficObserver& observer,
         const TlOcsAlgorithmParameters& algorithmParameters,
         OcsLinkManager& linkManager,

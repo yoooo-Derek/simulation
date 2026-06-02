@@ -54,6 +54,9 @@ TlOcsResultWriterSmokeSummaryTestCase::DoRun()
     NS_TEST_ASSERT_MSG_NE(text.find("avg_received_throughput_bps"),
                           std::string::npos,
                           "missing received throughput CSV field");
+    NS_TEST_ASSERT_MSG_NE(text.find("scheduling_round_count"),
+                          std::string::npos,
+                          "missing periodic scheduling CSV field");
     NS_TEST_ASSERT_MSG_NE(text.find("smoke_ok"), std::string::npos, "missing smoke status");
 }
 

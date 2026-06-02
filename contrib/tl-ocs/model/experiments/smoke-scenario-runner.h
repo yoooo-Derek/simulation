@@ -24,6 +24,7 @@ struct SmokeScenarioOptions
     bool enableFlowMetrics = false;
     bool enableLinkMetrics = false;
     bool enableOcsMetrics = false;
+    bool enableFiniteMultiCycle = false;
 };
 
 struct SmokeScenarioResult
@@ -40,6 +41,8 @@ struct SmokeScenarioResult
     uint32_t epsFallbackFlows = 0;
     double communityInternalSelectedEdgeRatio = 0.0;
     uint32_t timelineCycles = 0;
+    uint32_t schedulingRoundCount = 0;
+    uint32_t ocsReconfigurationCount = 0;
     uint32_t stage1InstalledFlows = 0;
     uint32_t stage2InstalledFlows = 0;
     uint64_t stage1ReceivedBytes = 0;

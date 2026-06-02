@@ -49,6 +49,7 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 std::optional<uint32_t> epsFallbackFlows,
                                 std::optional<double> communityInternalSelectedEdgeRatio,
                                 std::optional<uint32_t> timelineCycles,
+                                std::optional<uint32_t> schedulingRoundCount,
                                 std::optional<uint32_t> stage1InstalledFlows,
                                 std::optional<uint32_t> stage2InstalledFlows,
                                 std::optional<uint64_t> stage1ReceivedBytes,
@@ -129,6 +130,11 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     if (timelineCycles.has_value())
     {
         stream << timelineCycles.value();
+    }
+    stream << ',';
+    if (schedulingRoundCount.has_value())
+    {
+        stream << schedulingRoundCount.value();
     }
     stream << ',';
     if (stage1InstalledFlows.has_value())

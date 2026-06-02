@@ -6,7 +6,7 @@ Summary rows include experiment identity, topology dimensions, installed and
 received flow counts, observer bytes, selected and active optical edge counts,
 optical path assignment counts, EPS fallback counts, stage counts, whole-run
 average received throughput, FCT summaries, aggregate EPS and OCS link utilization, OCS hit rates, and the
-single-cycle reconfiguration count. `community_internal_selected_edge_ratio`
+active-set reconfiguration count. `community_internal_selected_edge_ratio`
 is the fraction of selected lightpaths whose endpoints have the same detected
 community label. EPS-ECMP reports `0` because it selects no lightpaths.
 
@@ -16,7 +16,13 @@ by eight and divided by the configured simulation stop time.
 EPS utilization currently summarizes directional ToR-spine device traces. OCS
 utilization summarizes directional members of the active lightpath set,
 including active directions with zero transmitted `MacTx` bytes. In the
-single-cycle smoke, the OCS active duration is the stage-2 interval.
+single-cycle smoke, the OCS active duration is the stage-2 interval. In finite
+multi-cycle runs, each lightpath duration is accumulated across the OCS periods
+in which that lightpath is active. Inactive candidate links are excluded.
+
+`scheduling_round_count` is the number of OCS period boundaries that consumed a
+completed observer window. `ocs_reconfiguration_count` is the number of times
+that applying a periodic schedule changed the active lightpath set.
 
 ## Per-Flow CSV
 

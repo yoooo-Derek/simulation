@@ -16,8 +16,8 @@ The scratch runner performs configuration and module assembly only.
 - `algorithm`: `W -> A -> B -> communities -> G -> selectedEdges`.
 - `routing`: active lightpath management, optical path assignment, and EPS
   forwarding for unmatched new flows.
-- `controller`: one-cycle two-stage snapshot, scheduling, assignment, and flow
-  launch orchestration.
+- `controller`: compatible two-stage smoke orchestration and finite periodic
+  snapshot, scheduling, assignment, and flow launch orchestration.
 - `metrics`: actual flow completion, received bytes, and aggregate link trace
   metrics.
 - `results`: summary and per-flow CSV writers.
@@ -48,7 +48,9 @@ capacity-exceeding flows retain traditional EPS forwarding.
 
 ## Current Limits
 
-- The controller runtime is a single-cycle two-stage smoke.
+- The finite controller runtime consumes completed observer windows at each
+  OCS period boundary. New flows are assigned when their start-time event
+  occurs; already started flows retain their original path.
 - Candidate optical links are precreated as a full mesh for small scenarios.
 - Optical path assignment uses workload-estimated flow rates rather than
   runtime rate estimation.

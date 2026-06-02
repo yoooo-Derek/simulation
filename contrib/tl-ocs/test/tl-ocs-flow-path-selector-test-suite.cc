@@ -181,6 +181,89 @@ class TlOcsFlowPathDataPlaneConsistencyTestCase : public TestCase
     }
 };
 
+class TlOcsFlowPathActiveSetClosureTestCase : public TestCase
+{
+  public:
+    TlOcsFlowPathActiveSetClosureTestCase()
+        : TestCase("TL-OCS active-set closure preserves started OCS flow and rejects new flow")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(2);
+        simulation.SetServersPerTor(1);
+        simulation.SetStopTime(MilliSeconds(80));
+
+        EpsTopologyBuilder::BuildOptions options;
+        options.enableOcsLinks = true;
+        NodeIndex index = EpsTopologyBuilder().Build(simulation, 1, options);
+        OcsLinkManager manager;
+        manager.ApplySelectedEdges({{0, 1, 1.0, 1.0, true, true}});
+        OcsAdmission admission(manager);
+        FlowPathSelector selector;
+        FlowLauncher launcher;
+
+        const FlowSpec started(0,
+                               0,
+                               0,
+                               1,
+                               0,
+                               1000000,
+                               MilliSeconds(1),
+                               "active-set-close",
+                               1000000000);
+        const FlowPathDecision startedDecision = selector.Select(started, admission, index);
+        InstallOcsHostRoutes(started, startedDecision, index);
+        const FlowLaunchResult startedLaunch =
+            launcher.Install({started},
+                             {startedDecision},
+                             index,
+                             simulation.GetStopTime(),
+                             14000,
+                             [&admission](uint32_t flowId) {
+                                 admission.Release(flowId);
+                             });
+
+        Simulator::Stop(MilliSeconds(1.2));
+        Simulator::Run();
+        manager.ApplySelectedEdges({});
+
+        const FlowSpec later(1,
+                             0,
+                             0,
+                             1,
+                             0,
+                             10000,
+                             MilliSeconds(3),
+                             "active-set-close",
+                             1000000000);
+        const FlowPathDecision laterDecision = selector.Select(later, admission, index);
+        const FlowLaunchResult laterLaunch =
+            launcher.Install({later}, {laterDecision}, index, simulation.GetStopTime(), 15000);
+
+        Simulator::Stop(simulation.GetStopTime() - Simulator::Now());
+        Simulator::Run();
+        const auto metrics =
+            MetricsCollector().Collect({startedLaunch.metricSources[0], laterLaunch.metricSources[0]},
+                                       "tl-ocs");
+        NS_TEST_ASSERT_MSG_EQ(startedDecision.pathType, "ocs", "started flow should use OCS");
+        NS_TEST_ASSERT_MSG_EQ(laterDecision.pathType,
+                              "eps",
+                              "new flow matched a closed logical lightpath");
+        NS_TEST_ASSERT_MSG_EQ(metrics[0].completed,
+                              true,
+                              "started OCS flow did not complete after active-set closure");
+        NS_TEST_ASSERT_MSG_EQ(metrics[1].completed, true, "later EPS flow did not complete");
+        NS_TEST_ASSERT_MSG_EQ(admission.GetAssignedRateBps(0, 1, Simulator::Now()),
+                              0,
+                              "completion did not release closed-lightpath reservation");
+        Simulator::Destroy();
+    }
+};
+
 class TlOcsFlowPathSelectorTestSuite : public TestSuite
 {
   public:
@@ -192,6 +275,7 @@ TlOcsFlowPathSelectorTestSuite::TlOcsFlowPathSelectorTestSuite()
 {
     AddTestCase(new TlOcsFlowPathSelectorTestCase);
     AddTestCase(new TlOcsFlowPathDataPlaneConsistencyTestCase);
+    AddTestCase(new TlOcsFlowPathActiveSetClosureTestCase);
 }
 
 static TlOcsFlowPathSelectorTestSuite g_tlOcsFlowPathSelectorTestSuite;

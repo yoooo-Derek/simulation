@@ -21,6 +21,8 @@ class LinkMetricsCollector
     void AttachToTopology(const NodeIndex& nodeIndex, const SimulationConfig& simulation);
     void SetActiveOcsLightpaths(const std::vector<std::pair<uint32_t, uint32_t>>& activeEdges,
                                 double activeDurationS);
+    void SetActiveOcsLightpathDurations(
+        const std::vector<std::pair<std::pair<uint32_t, uint32_t>, double>>& activeDurations);
     std::vector<LinkMetricRecord> Collect() const;
     LinkUtilizationSummary Summarize() const;
 

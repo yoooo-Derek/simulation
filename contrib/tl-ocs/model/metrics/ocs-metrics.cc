@@ -8,11 +8,11 @@ namespace tl_ocs
 OcsMetricsSummary
 SummarizeOcsMetrics(const std::vector<FlowMetricRecord>& records,
                     uint32_t ocsActiveEdges,
-                    bool activeSetApplied)
+                    uint32_t ocsReconfigurationCount)
 {
     OcsMetricsSummary summary;
     summary.ocsActiveEdges = ocsActiveEdges;
-    summary.ocsReconfigurationCount = activeSetApplied && ocsActiveEdges > 0 ? 1 : 0;
+    summary.ocsReconfigurationCount = ocsReconfigurationCount;
     for (const auto& record : records)
     {
         summary.totalFlows++;

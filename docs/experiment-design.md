@@ -29,6 +29,12 @@ the corresponding lightpath reservation, with a rule timeout as fallback for
 incomplete flows. OCS flows use optical address aliases, while EPS fallback
 retains the traditional electrical forwarding path.
 
+The optional finite multi-cycle runtime keeps the same data-plane semantics but
+runs continuously. Every observer window records `W(t-1)`. At each OCS period
+boundary, the controller consumes the most recent completed window, derives
+`A(t-1)`, and updates `E_o(t)`. A flow chooses its optical or EPS path only when
+its start-time event occurs. Later lightpath updates do not reroute that flow.
+
 Metrics are derived from application and device traces. They include flow
 completion summaries, whole-run average received throughput, received bytes,
 EPS and active-lightpath OCS link utilization aggregates, and OCS flow and byte

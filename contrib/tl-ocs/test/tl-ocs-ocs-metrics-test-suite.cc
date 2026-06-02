@@ -29,7 +29,7 @@ class TlOcsOcsMetricsTestCase : public TestCase
         incompleteOcs.completed = false;
 
         const OcsMetricsSummary summary =
-            SummarizeOcsMetrics({ocs, eps, incompleteOcs}, 2, true);
+            SummarizeOcsMetrics({ocs, eps, incompleteOcs}, 2, 3);
         NS_TEST_ASSERT_MSG_EQ(summary.totalFlows, 3, "installed flow denominator mismatch");
         NS_TEST_ASSERT_MSG_EQ(summary.ocsFlows, 2, "OCS assigned flow count mismatch");
         NS_TEST_ASSERT_MSG_EQ_TOL(summary.ocsFlowHitRate.value(),
@@ -40,7 +40,7 @@ class TlOcsOcsMetricsTestCase : public TestCase
                                   150.0 / 450.0,
                                   1e-12,
                                   "OCS byte hit rate mismatch");
-        NS_TEST_ASSERT_MSG_EQ(summary.ocsReconfigurationCount, 1, "single-cycle count mismatch");
+        NS_TEST_ASSERT_MSG_EQ(summary.ocsReconfigurationCount, 3, "periodic count mismatch");
         NS_TEST_ASSERT_MSG_EQ(SummarizeOcsMetrics({}, 0, false).ocsReconfigurationCount,
                               0,
                               "empty active set counted as reconfiguration");

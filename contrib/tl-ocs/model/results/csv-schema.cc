@@ -13,6 +13,7 @@ GetSmokeSummaryCsvHeader()
            "observed_matrix_bytes,algorithm_candidate_edges,algorithm_selected_edges,"
            "ocs_active_edges,ocs_assigned_flows,eps_fallback_flows,"
            "community_internal_selected_edge_ratio,timeline_cycles,"
+           "scheduling_round_count,"
            "stage1_installed_flows,stage2_installed_flows,stage1_received_bytes,"
            "stage2_received_bytes,total_flows,completed_flows,incomplete_flows,"
            "avg_received_throughput_bps,"

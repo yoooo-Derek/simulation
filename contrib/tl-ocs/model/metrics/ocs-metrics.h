@@ -26,7 +26,7 @@ struct OcsMetricsSummary
 
 OcsMetricsSummary SummarizeOcsMetrics(const std::vector<FlowMetricRecord>& records,
                                      uint32_t ocsActiveEdges,
-                                     bool activeSetApplied);
+                                     uint32_t ocsReconfigurationCount);
 
 } // namespace tl_ocs
 } // namespace ns3

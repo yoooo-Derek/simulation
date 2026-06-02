@@ -3,6 +3,7 @@
 #include "ns3/controller-timeline.h"
 #include "ns3/eps-topology-builder.h"
 #include "ns3/metrics-collector.h"
+#include "ns3/link-metrics-collector.h"
 #include "ns3/ocs-link-manager.h"
 #include "ns3/simulation-config.h"
 #include "ns3/simulator.h"
@@ -437,6 +438,87 @@ class TlOcsControllerTimelineAggregationReadinessTestCase : public TestCase
     }
 };
 
+class TlOcsControllerTimelineFiniteMultiCycleTestCase : public TestCase
+{
+  public:
+    TlOcsControllerTimelineFiniteMultiCycleTestCase()
+        : TestCase("TL-OCS finite controller assigns flows from completed windows at arrival time")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(4);
+        simulation.SetServersPerTor(1);
+        simulation.SetObserverWindow(MilliSeconds(5));
+        simulation.SetOcsReconfigurationPeriod(MilliSeconds(10));
+        simulation.SetOcsAssignmentThresholdBps(1000000000);
+        simulation.SetStopTime(MilliSeconds(50));
+
+        EpsTopologyBuilder::BuildOptions buildOptions;
+        buildOptions.enableOcsLinks = true;
+        NodeIndex index = EpsTopologyBuilder().Build(simulation, 1, buildOptions);
+        TrafficObserver observer(simulation.GetNumTors(), simulation.GetObserverWindow());
+        observer.AttachToTopology(index);
+        LinkMetricsCollector linkMetrics;
+        linkMetrics.AttachToTopology(index, simulation);
+
+        // 0-1 is visible before the first scheduling boundary. 2-3 arrives
+        // afterwards and must remain EPS until the second completed-window
+        // update. Later 2-3 flows use OCS; the spacing lets the real sink
+        // completion callback release each one-Gbps reservation.
+        const std::vector<FlowSpec> flows = {
+            {0, 0, 0, 1, 0, 100000, MilliSeconds(1), "finite-cycle", 1000000000},
+            {1, 2, 0, 3, 0, 100000, MilliSeconds(17), "finite-cycle", 1000000000},
+            {2, 2, 0, 3, 0, 100000, MilliSeconds(22), "finite-cycle", 1000000000},
+            {3, 2, 0, 3, 0, 100000, MilliSeconds(26), "finite-cycle", 1000000000}};
+
+        ControllerTimelineOptions options;
+        options.enableOcsAdmission = true;
+        ControllerState state;
+        OcsLinkManager linkManager;
+        const ControllerTimelineResult result =
+            ControllerTimeline(state).RunFiniteMultiCycle(index,
+                                                          simulation,
+                                                          flows,
+                                                          observer,
+                                                          TlOcsAlgorithmParameters(),
+                                                          linkManager,
+                                                          options);
+        linkMetrics.SetActiveOcsLightpathDurations(result.activeLightpathDurations);
+        const auto records = MetricsCollector().Collect(result.metricSources, "tl-ocs");
+
+        NS_TEST_ASSERT_MSG_EQ(result.schedulingRoundCount, 4, "unexpected scheduling round count");
+        NS_TEST_ASSERT_MSG_EQ(result.ocsReconfigurationCount >= 2,
+                              true,
+                              "expected periodic active-set updates");
+        NS_TEST_ASSERT_MSG_EQ(FindDecision(result.stage2Decisions, 0).pathType,
+                              "eps",
+                              "flow before first schedule should use EPS");
+        NS_TEST_ASSERT_MSG_EQ(FindDecision(result.stage2Decisions, 1).pathType,
+                              "eps",
+                              "future 2-3 traffic affected an earlier schedule");
+        NS_TEST_ASSERT_MSG_EQ(FindDecision(result.stage2Decisions, 2).pathType,
+                              "ocs",
+                              "completed 2-3 window did not affect a later flow");
+        NS_TEST_ASSERT_MSG_EQ(FindDecision(result.stage2Decisions, 3).pathType,
+                              "ocs",
+                              "completion release did not make capacity reusable");
+        NS_TEST_ASSERT_MSG_EQ(FindMetric(records, 2).completed,
+                              true,
+                              "OCS flow did not complete");
+        NS_TEST_ASSERT_MSG_GT(FindMetric(records, 2).receivedBytes,
+                              0,
+                              "OCS flow received no bytes");
+        NS_TEST_ASSERT_MSG_GT(linkMetrics.Summarize().ocsMaxLinkUtilization.value(),
+                              0.0,
+                              "periodic active OCS link has no measured utilization");
+        Simulator::Destroy();
+    }
+};
+
 class TlOcsControllerTimelineTestSuite : public TestSuite
 {
   public:
@@ -450,6 +532,7 @@ TlOcsControllerTimelineTestSuite::TlOcsControllerTimelineTestSuite()
     AddTestCase(new TlOcsControllerTimelineSchemeDifferentiationTestCase);
     AddTestCase(new TlOcsControllerTimelineUniformReadinessTestCase);
     AddTestCase(new TlOcsControllerTimelineAggregationReadinessTestCase);
+    AddTestCase(new TlOcsControllerTimelineFiniteMultiCycleTestCase);
 }
 
 static TlOcsControllerTimelineTestSuite g_tlOcsControllerTimelineTestSuite;

@@ -63,6 +63,7 @@ main(int argc, char* argv[])
     bool enableOcsLinks = false;
     bool enableOcsAssignmentSmoke = false;
     bool enableControllerTimeline = false;
+    bool enableFiniteMultiCycle = false;
     bool enableSchemeRunner = false;
     bool enableFlowMetrics = false;
     bool enableLinkMetrics = false;
@@ -120,6 +121,7 @@ main(int argc, char* argv[])
     cmd.AddValue("enableOcsLinks", "Precreate candidate ToR-ToR OCS links", enableOcsLinks);
     cmd.AddValue("enableOcsAssignmentSmoke", "Run new-flow OCS path assignment smoke after algorithm selection", enableOcsAssignmentSmoke);
     cmd.AddValue("enableControllerTimeline", "Run the reusable single-cycle controller timeline smoke", enableControllerTimeline);
+    cmd.AddValue("enableFiniteMultiCycle", "Run finite periodic observer, scheduling, and new-flow assignment", enableFiniteMultiCycle);
     cmd.AddValue("enableSchemeRunner", "Run a unified Phase 10 baseline or TL-OCS scheme smoke", enableSchemeRunner);
     cmd.AddValue("enableFlowMetrics", "Write real flow-level metrics for the scheme runner", enableFlowMetrics);
     cmd.AddValue("enableLinkMetrics", "Write measured aggregate link utilization for the scheme runner", enableLinkMetrics);
@@ -263,6 +265,11 @@ main(int argc, char* argv[])
         std::cerr << "Flow metrics require --enableSchemeRunner=true" << std::endl;
         return 1;
     }
+    if (enableFiniteMultiCycle && !enableSchemeRunner)
+    {
+        std::cerr << "Finite multi-cycle runtime requires --enableSchemeRunner=true" << std::endl;
+        return 1;
+    }
     if (enableLinkMetrics && !enableSchemeRunner)
     {
         std::cerr << "Link metrics require --enableSchemeRunner=true" << std::endl;
@@ -322,6 +329,7 @@ main(int argc, char* argv[])
     std::optional<uint32_t> epsFallbackFlows;
     std::optional<double> communityInternalSelectedEdgeRatio;
     std::optional<uint32_t> timelineCycles;
+    std::optional<uint32_t> schedulingRoundCount;
     std::optional<uint32_t> stage1InstalledFlows;
     std::optional<uint32_t> stage2InstalledFlows;
     std::optional<uint64_t> stage1ReceivedBytes;
@@ -425,6 +433,7 @@ main(int argc, char* argv[])
                 scenarioOptions.enableFlowMetrics = enableFlowMetrics;
                 scenarioOptions.enableLinkMetrics = enableLinkMetrics;
                 scenarioOptions.enableOcsMetrics = enableOcsMetrics;
+                scenarioOptions.enableFiniteMultiCycle = enableFiniteMultiCycle;
 
                 SmokeScenarioRunner scenarioRunner;
                 const SmokeScenarioResult scenarioResult =
@@ -443,6 +452,7 @@ main(int argc, char* argv[])
                     algorithmCandidateEdges = scenarioResult.algorithmCandidateEdges;
                     algorithmSelectedEdges = scenarioResult.algorithmSelectedEdges;
                     timelineCycles = scenarioResult.timelineCycles;
+                    schedulingRoundCount = scenarioResult.schedulingRoundCount;
                     stage1InstalledFlows = scenarioResult.stage1InstalledFlows;
                     stage2InstalledFlows = scenarioResult.stage2InstalledFlows;
                     stage1ReceivedBytes = scenarioResult.stage1ReceivedBytes;
@@ -467,6 +477,8 @@ main(int argc, char* argv[])
                           << ", selectedEdges=" << scenarioResult.selectedEdgeList
                           << ", ocsAssigned=" << scenarioResult.ocsAssignedFlows
                           << ", epsFallback=" << scenarioResult.epsFallbackFlows;
+                std::cout << ", schedulingRounds=" << scenarioResult.schedulingRoundCount
+                          << ", reconfigurations=" << scenarioResult.ocsReconfigurationCount;
                 std::cout << ", communityInternalSelectedEdgeRatio="
                           << scenarioResult.communityInternalSelectedEdgeRatio;
                 std::cout << ", receivedBytes=" << scenarioResult.receivedBytes << std::endl;
@@ -805,6 +817,7 @@ main(int argc, char* argv[])
                                  epsFallbackFlows,
                                  communityInternalSelectedEdgeRatio,
                                  timelineCycles,
+                                 schedulingRoundCount,
                                  stage1InstalledFlows,
                                  stage2InstalledFlows,
                                  stage1ReceivedBytes,

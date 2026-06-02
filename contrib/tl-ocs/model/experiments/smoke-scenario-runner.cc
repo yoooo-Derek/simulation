@@ -53,6 +53,8 @@ CopyTimelineResult(const ControllerTimelineResult& timeline, SmokeScenarioResult
     result.communityInternalSelectedEdgeRatio =
         timeline.communityInternalSelectedEdgeRatio;
     result.timelineCycles = timeline.timelineCycles;
+    result.schedulingRoundCount = timeline.schedulingRoundCount;
+    result.ocsReconfigurationCount = timeline.ocsReconfigurationCount;
     result.stage1InstalledFlows = timeline.stage1InstalledFlows;
     result.stage2InstalledFlows = timeline.stage2InstalledFlows;
     result.stage1ReceivedBytes = timeline.stage1ReceivedBytes;
@@ -84,7 +86,7 @@ CollectPostRunMetrics(const SmokeScenarioOptions& options,
         result.ocsMetricsSummary =
             SummarizeOcsMetrics(result.flowMetrics,
                                 result.ocsActiveEdges,
-                                result.timelineCycles > 0 && result.ocsActiveEdges > 0);
+                                result.ocsReconfigurationCount);
     }
 }
 
@@ -143,24 +145,39 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
     ControllerState state;
     ControllerTimeline timeline(state);
     OcsLinkManager linkManager;
-    const std::vector<FlowSpec> stage2Flows =
-        OffsetFlowIds(flows, static_cast<uint32_t>(flows.size()));
     const ControllerTimelineResult timelineResult =
-        timeline.RunTwoStageSmoke(nodeIndex,
-                                  simulation,
-                                  flows,
-                                  stage2Flows,
-                                  *observer,
-                                  algorithmParameters,
-                                  linkManager,
-                                  timelineOptions);
+        options.enableFiniteMultiCycle
+            ? timeline.RunFiniteMultiCycle(nodeIndex,
+                                           simulation,
+                                           flows,
+                                           *observer,
+                                           algorithmParameters,
+                                           linkManager,
+                                           timelineOptions)
+            : timeline.RunTwoStageSmoke(nodeIndex,
+                                        simulation,
+                                        flows,
+                                        OffsetFlowIds(flows, static_cast<uint32_t>(flows.size())),
+                                        *observer,
+                                        algorithmParameters,
+                                        linkManager,
+                                        timelineOptions);
     CopyTimelineResult(timelineResult, result);
     if (linkMetricsCollector != nullptr)
     {
-        const double activeDurationS =
-            simulation.GetStopTime().GetSeconds() - timelineOptions.stage1Stop.GetSeconds() -
-            timelineOptions.stageGap.GetSeconds();
-        linkMetricsCollector->SetActiveOcsLightpaths(linkManager.GetActiveEdges(), activeDurationS);
+        if (options.enableFiniteMultiCycle)
+        {
+            linkMetricsCollector->SetActiveOcsLightpathDurations(
+                timelineResult.activeLightpathDurations);
+        }
+        else
+        {
+            const double activeDurationS =
+                simulation.GetStopTime().GetSeconds() - timelineOptions.stage1Stop.GetSeconds() -
+                timelineOptions.stageGap.GetSeconds();
+            linkMetricsCollector->SetActiveOcsLightpaths(linkManager.GetActiveEdges(),
+                                                         activeDurationS);
+        }
     }
     if (options.enableFlowMetrics)
     {
@@ -169,7 +186,8 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
                            result);
     }
     CollectPostRunMetrics(options, linkMetricsCollector.get(), result);
-    result.status = "scheme_" + scheme.ToString() + "_smoke_ok";
+    result.status = "scheme_" + scheme.ToString() +
+                    (options.enableFiniteMultiCycle ? "_finite_multi_cycle_ok" : "_smoke_ok");
     return result;
 }
 

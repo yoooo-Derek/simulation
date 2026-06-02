@@ -3,6 +3,7 @@
 #include "ns3/data-rate.h"
 
 #include <algorithm>
+#include <map>
 #include <sstream>
 
 namespace ns3
@@ -116,6 +117,31 @@ LinkMetricsCollector::SetActiveOcsLightpaths(
         {
             counter->record.activeDurationS = activeDurationS;
         }
+    }
+}
+
+void
+LinkMetricsCollector::SetActiveOcsLightpathDurations(
+    const std::vector<std::pair<std::pair<uint32_t, uint32_t>, double>>& activeDurations)
+{
+    std::map<std::pair<uint32_t, uint32_t>, double> normalizedDurations;
+    for (const auto& [edge, durationS] : activeDurations)
+    {
+        normalizedDurations[{std::min(edge.first, edge.second),
+                             std::max(edge.first, edge.second)}] += durationS;
+    }
+    for (const auto& counter : m_counters)
+    {
+        if (!counter->ocsEdge.has_value())
+        {
+            continue;
+        }
+        const auto edge = counter->ocsEdge.value();
+        const auto duration = normalizedDurations.find(
+            {std::min(edge.first, edge.second), std::max(edge.first, edge.second)});
+        counter->record.activeOcsLightpath = duration != normalizedDurations.end();
+        counter->record.activeDurationS =
+            counter->record.activeOcsLightpath ? duration->second : 0.0;
     }
 }
 
