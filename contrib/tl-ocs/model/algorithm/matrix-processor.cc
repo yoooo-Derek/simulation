@@ -31,7 +31,7 @@ MatrixProcessor::Sparsify(const DenseMatrix& matrix, double thetaF) const
         for (uint32_t j = i + 1; j < matrix.GetSize(); ++j)
         {
             const double value = matrix.Get(i, j);
-            if (value > thetaF)
+            if (value > 0.0 && value >= thetaF)
             {
                 graph.AddEdge(i, j, value);
             }

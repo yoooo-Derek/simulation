@@ -218,6 +218,46 @@ TlOcsAlgorithmNullModelRankingTestCase::DoRun()
                           "excess score should reject the lower-gain conflicting edge");
 }
 
+class TlOcsAlgorithmThetaFTestCase : public TestCase
+{
+  public:
+    TlOcsAlgorithmThetaFTestCase()
+        : TestCase("TL-OCS thetaF removes weak relations before the core pipeline")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        TrafficMatrix observed(3);
+        observed.AddBytes(0, 1, 100);
+        observed.AddBytes(1, 0, 100);
+        observed.AddBytes(1, 2, 5);
+        observed.AddBytes(2, 1, 5);
+
+        TlOcsAlgorithmParameters unfiltered;
+        unfiltered.enableNullModel = false;
+        unfiltered.enableCommunityFactor = false;
+        unfiltered.opticalPortsPerTor = 2;
+        TlOcsAlgorithmParameters filtered = unfiltered;
+        filtered.thetaF = 20.0;
+
+        const auto full = TlOcsAlgorithm().Run(observed, unfiltered);
+        const auto sparse = TlOcsAlgorithm().Run(observed, filtered);
+        NS_TEST_ASSERT_MSG_EQ_TOL(full.A.Get(1, 2), 10.0, 1e-12, "thetaF=0 changed A");
+        NS_TEST_ASSERT_MSG_EQ_TOL(sparse.A.Get(1, 2), 0.0, 1e-12, "thetaF did not filter A");
+        NS_TEST_ASSERT_MSG_EQ(ContainsEdge(full.candidateEdges, 1, 2),
+                              true,
+                              "unfiltered weak edge is missing");
+        NS_TEST_ASSERT_MSG_EQ(ContainsEdge(sparse.candidateEdges, 1, 2),
+                              false,
+                              "filtered weak edge reached OCS candidates");
+        NS_TEST_ASSERT_MSG_NE(sparse.communityLabels[1],
+                              sparse.communityLabels[2],
+                              "filtered node should not remain grouped through a weak relation");
+    }
+};
+
 class TlOcsAlgorithmTestSuite : public TestSuite
 {
   public:
@@ -230,6 +270,7 @@ TlOcsAlgorithmTestSuite::TlOcsAlgorithmTestSuite()
     AddTestCase(new TlOcsAlgorithmSelectionTestCase);
     AddTestCase(new TlOcsAlgorithmNullModelAblationTestCase);
     AddTestCase(new TlOcsAlgorithmNullModelRankingTestCase);
+    AddTestCase(new TlOcsAlgorithmThetaFTestCase);
 }
 
 static TlOcsAlgorithmTestSuite g_tlOcsAlgorithmTestSuite;

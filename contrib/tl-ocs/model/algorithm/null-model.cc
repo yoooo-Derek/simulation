@@ -8,28 +8,28 @@ namespace tl_ocs
 {
 
 std::vector<double>
-NullModel::ComputeDegree(const DenseMatrix& abar) const
+NullModel::ComputeDegree(const DenseMatrix& matrix) const
 {
-    std::vector<double> degree(abar.GetSize(), 0.0);
-    for (uint32_t i = 0; i < abar.GetSize(); ++i)
+    std::vector<double> degree(matrix.GetSize(), 0.0);
+    for (uint32_t i = 0; i < matrix.GetSize(); ++i)
     {
-        for (uint32_t j = 0; j < abar.GetSize(); ++j)
+        for (uint32_t j = 0; j < matrix.GetSize(); ++j)
         {
-            degree[i] += abar.Get(i, j);
+            degree[i] += matrix.Get(i, j);
         }
     }
     return degree;
 }
 
 double
-NullModel::ComputeTotalTraffic(const DenseMatrix& abar) const
+NullModel::ComputeTotalTraffic(const DenseMatrix& matrix) const
 {
     double total = 0.0;
-    for (uint32_t i = 0; i < abar.GetSize(); ++i)
+    for (uint32_t i = 0; i < matrix.GetSize(); ++i)
     {
-        for (uint32_t j = 0; j < abar.GetSize(); ++j)
+        for (uint32_t j = 0; j < matrix.GetSize(); ++j)
         {
-            total += abar.Get(i, j);
+            total += matrix.Get(i, j);
         }
     }
     return total * 0.5;
@@ -46,17 +46,17 @@ NullModel::ComputeExpected(double degreeI, double degreeJ, double totalTraffic) 
 }
 
 DenseMatrix
-NullModel::ComputeModularityGain(const DenseMatrix& abar, double eta) const
+NullModel::ComputeModularityGain(const DenseMatrix& matrix, double eta) const
 {
-    const std::vector<double> degree = ComputeDegree(abar);
-    const double totalTraffic = ComputeTotalTraffic(abar);
-    DenseMatrix gain(abar.GetSize());
-    for (uint32_t i = 0; i < abar.GetSize(); ++i)
+    const std::vector<double> degree = ComputeDegree(matrix);
+    const double totalTraffic = ComputeTotalTraffic(matrix);
+    DenseMatrix gain(matrix.GetSize());
+    for (uint32_t i = 0; i < matrix.GetSize(); ++i)
     {
-        for (uint32_t j = i + 1; j < abar.GetSize(); ++j)
+        for (uint32_t j = i + 1; j < matrix.GetSize(); ++j)
         {
             const double expected = ComputeExpected(degree[i], degree[j], totalTraffic);
-            const double value = abar.Get(i, j) - eta * expected;
+            const double value = matrix.Get(i, j) - eta * expected;
             gain.Set(i, j, value);
             gain.Set(j, i, value);
         }

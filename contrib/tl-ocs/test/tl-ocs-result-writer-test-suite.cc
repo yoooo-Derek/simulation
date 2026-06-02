@@ -51,6 +51,9 @@ TlOcsResultWriterSmokeSummaryTestCase::DoRun()
     const std::string text = content.str();
 
     NS_TEST_ASSERT_MSG_NE(text.find("experiment,scheme,traffic_pattern"), std::string::npos, "missing CSV header");
+    NS_TEST_ASSERT_MSG_NE(text.find("avg_received_throughput_bps"),
+                          std::string::npos,
+                          "missing received throughput CSV field");
     NS_TEST_ASSERT_MSG_NE(text.find("smoke_ok"), std::string::npos, "missing smoke status");
 }
 

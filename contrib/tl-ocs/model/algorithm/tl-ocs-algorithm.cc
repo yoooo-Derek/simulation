@@ -35,7 +35,21 @@ TlOcsAlgorithm::Run(const TrafficMatrix& observedW,
 
     TlOcsAlgorithmResult result;
     result.A = processor.BuildUndirected(observedW);
-    result.trafficGraph = processor.Sparsify(result.A, parameters.thetaF);
+    // thetaF defines the traffic relation graph used by the complete V5
+    // pipeline. Remove weak relations before computing degrees, B, and OCS
+    // candidates so sparsification is not a side artifact.
+    for (uint32_t i = 0; i < result.A.GetSize(); ++i)
+    {
+        for (uint32_t j = i + 1; j < result.A.GetSize(); ++j)
+        {
+            if (result.A.Get(i, j) < parameters.thetaF)
+            {
+                result.A.Set(i, j, 0.0);
+                result.A.Set(j, i, 0.0);
+            }
+        }
+    }
+    result.trafficGraph = processor.Sparsify(result.A, 0.0);
     result.B = !parameters.enableNullModel || parameters.useVolumeOnlyScore
                    ? result.A
                    : nullModel.ComputeModularityGain(result.A, parameters.eta);

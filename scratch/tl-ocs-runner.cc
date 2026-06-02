@@ -77,6 +77,10 @@ main(int argc, char* argv[])
     uint64_t tcpFlowBytes = 1000000;
     uint32_t numFlows = 4;
     uint64_t flowSizeBytes = 1000000;
+    bool enableMixedFlowSizes = false;
+    uint64_t smallFlowSizeBytes = 100000;
+    uint64_t largeFlowSizeBytes = 10000000;
+    double smallFlowProbability = 0.8;
     uint64_t flowRateBps = 1000000000;
     double flowStartIntervalSeconds = 0.001;
     std::string arrivalMode = "deterministic";
@@ -132,6 +136,10 @@ main(int argc, char* argv[])
     cmd.AddValue("tcpFlowBytes", "Maximum bytes sent by the TCP smoke flow", tcpFlowBytes);
     cmd.AddValue("numFlows", "Number of generated training traffic flows", numFlows);
     cmd.AddValue("flowSizeBytes", "Bytes per generated training traffic flow", flowSizeBytes);
+    cmd.AddValue("enableMixedFlowSizes", "Draw generated flow sizes from a small/large mixture", enableMixedFlowSizes);
+    cmd.AddValue("smallFlowSizeBytes", "Small-flow size for mixed generated flow sizes", smallFlowSizeBytes);
+    cmd.AddValue("largeFlowSizeBytes", "Large-flow size for mixed generated flow sizes", largeFlowSizeBytes);
+    cmd.AddValue("smallFlowProbability", "Probability of selecting the small-flow size in mixed mode", smallFlowProbability);
     cmd.AddValue("flowRateBps", "Estimated rate in bps per generated training traffic flow", flowRateBps);
     cmd.AddValue("flowStartInterval", "Interval between generated flow start times in seconds", flowStartIntervalSeconds);
     cmd.AddValue("arrivalMode", "Training flow arrival mode: deterministic, poisson, or iteration-burst", arrivalMode);
@@ -348,6 +356,10 @@ main(int argc, char* argv[])
             TrafficGenerationConfig trafficConfig;
             trafficConfig.numFlows = numFlows;
             trafficConfig.flowSizeBytes = flowSizeBytes;
+            trafficConfig.enableMixedFlowSizes = enableMixedFlowSizes;
+            trafficConfig.smallFlowSizeBytes = smallFlowSizeBytes;
+            trafficConfig.largeFlowSizeBytes = largeFlowSizeBytes;
+            trafficConfig.smallFlowProbability = smallFlowProbability;
             trafficConfig.estimatedFlowRateBps = flowRateBps;
             trafficConfig.flowStartInterval = Seconds(flowStartIntervalSeconds);
             if (arrivalMode == "deterministic" || arrivalMode == "interval")
@@ -467,6 +479,11 @@ main(int argc, char* argv[])
                     if (flowMetricsSummary->avgFctS.has_value())
                     {
                         std::cout << flowMetricsSummary->avgFctS.value();
+                    }
+                    std::cout << ", avgReceivedThroughputBps=";
+                    if (flowMetricsSummary->avgReceivedThroughputBps.has_value())
+                    {
+                        std::cout << flowMetricsSummary->avgReceivedThroughputBps.value();
                     }
                     else
                     {

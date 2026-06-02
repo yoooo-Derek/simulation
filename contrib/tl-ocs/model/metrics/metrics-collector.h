@@ -18,7 +18,8 @@ class MetricsCollector
                              const std::string& schemeName) const;
     std::vector<FlowMetricRecord> Collect(const std::vector<FlowMetricSource>& sources,
                                           const std::string& schemeName) const;
-    FlowMetricsSummary Summarize(const std::vector<FlowMetricRecord>& records) const;
+    FlowMetricsSummary Summarize(const std::vector<FlowMetricRecord>& records,
+                                 double measurementDurationS = 0.0) const;
 };
 
 } // namespace tl_ocs

@@ -267,6 +267,79 @@ class TlOcsIterationBurstTrafficGeneratorTestCase : public TestCase
     }
 };
 
+class TlOcsMixedFlowSizeTrafficGeneratorTestCase : public TestCase
+{
+  public:
+    TlOcsMixedFlowSizeTrafficGeneratorTestCase()
+        : TestCase("TL-OCS mixed flow sizes are reproducible and preserve fixed mode")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(4);
+        simulation.SetServersPerTor(1);
+        simulation.SetStopTime(Seconds(1));
+
+        TrafficGenerationConfig traffic;
+        traffic.numFlows = 64;
+        traffic.flowSizeBytes = 777;
+        const auto fixed = UniformTrafficGenerator().Generate(simulation, traffic);
+        for (const auto& flow : fixed)
+        {
+            NS_TEST_ASSERT_MSG_EQ(flow.GetSizeBytes(), 777, "fixed size mode changed");
+        }
+
+        traffic.enableMixedFlowSizes = true;
+        traffic.smallFlowSizeBytes = 100;
+        traffic.largeFlowSizeBytes = 1000;
+        traffic.smallFlowProbability = 1.0;
+        const auto allSmall = UniformTrafficGenerator().Generate(simulation, traffic);
+        for (const auto& flow : allSmall)
+        {
+            NS_TEST_ASSERT_MSG_EQ(flow.GetSizeBytes(), 100, "small-only distribution changed");
+        }
+
+        traffic.smallFlowProbability = 0.0;
+        const auto allLarge = UniformTrafficGenerator().Generate(simulation, traffic);
+        for (const auto& flow : allLarge)
+        {
+            NS_TEST_ASSERT_MSG_EQ(flow.GetSizeBytes(), 1000, "large-only distribution changed");
+        }
+
+        traffic.smallFlowProbability = 0.5;
+        traffic.randomSeed = 41;
+        const auto mixed = CommunityTrafficGenerator().Generate(simulation, traffic);
+        const auto repeated = CommunityTrafficGenerator().Generate(simulation, traffic);
+        bool sawSmall = false;
+        bool sawLarge = false;
+        for (uint32_t index = 0; index < mixed.size(); ++index)
+        {
+            NS_TEST_ASSERT_MSG_EQ(mixed[index].GetSizeBytes(),
+                                  repeated[index].GetSizeBytes(),
+                                  "same seed changed mixed size sequence");
+            sawSmall = sawSmall || mixed[index].GetSizeBytes() == 100;
+            sawLarge = sawLarge || mixed[index].GetSizeBytes() == 1000;
+        }
+        NS_TEST_ASSERT_MSG_EQ(sawSmall && sawLarge, true, "mixed distribution lacks one size");
+
+        traffic.arrivalMode = TrafficArrivalMode::ITERATION_BURST;
+        traffic.numFlows = 4;
+        traffic.numIterations = 1;
+        traffic.burstSize = 4;
+        const auto burst = AggregationTrafficGenerator().Generate(simulation, traffic);
+        NS_TEST_ASSERT_MSG_EQ(burst.size(), 4, "mixed iteration burst count mismatch");
+        for (const auto& flow : burst)
+        {
+            NS_TEST_ASSERT_MSG_EQ(flow.GetSizeBytes() == 100 || flow.GetSizeBytes() == 1000,
+                                  true,
+                                  "iteration burst ignored mixed sizes");
+        }
+    }
+};
+
 class TlOcsTrafficGeneratorTestSuite : public TestSuite
 {
   public:
@@ -282,6 +355,7 @@ TlOcsTrafficGeneratorTestSuite::TlOcsTrafficGeneratorTestSuite()
     AddTestCase(new TlOcsPoissonTrafficGeneratorTestCase);
     AddTestCase(new TlOcsPoissonCommunityTrafficGeneratorTestCase);
     AddTestCase(new TlOcsIterationBurstTrafficGeneratorTestCase);
+    AddTestCase(new TlOcsMixedFlowSizeTrafficGeneratorTestCase);
 }
 
 static TlOcsTrafficGeneratorTestSuite g_tlOcsTrafficGeneratorTestSuite;

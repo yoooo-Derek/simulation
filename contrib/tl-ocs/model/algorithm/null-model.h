@@ -13,10 +13,10 @@ namespace tl_ocs
 class NullModel
 {
   public:
-    std::vector<double> ComputeDegree(const DenseMatrix& abar) const;
-    double ComputeTotalTraffic(const DenseMatrix& abar) const;
+    std::vector<double> ComputeDegree(const DenseMatrix& matrix) const;
+    double ComputeTotalTraffic(const DenseMatrix& matrix) const;
     double ComputeExpected(double degreeI, double degreeJ, double totalTraffic) const;
-    DenseMatrix ComputeModularityGain(const DenseMatrix& abar, double eta) const;
+    DenseMatrix ComputeModularityGain(const DenseMatrix& matrix, double eta) const;
     DenseMatrix ComputePositiveGain(const DenseMatrix& modularityGain) const;
 };
 

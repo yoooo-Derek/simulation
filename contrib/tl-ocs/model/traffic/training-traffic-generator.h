@@ -24,6 +24,10 @@ struct TrafficGenerationConfig
 {
     uint32_t numFlows = 4;
     uint64_t flowSizeBytes = 1000000;
+    bool enableMixedFlowSizes = false;
+    uint64_t smallFlowSizeBytes = 100000;
+    uint64_t largeFlowSizeBytes = 10000000;
+    double smallFlowProbability = 0.8;
     uint64_t estimatedFlowRateBps = 1000000000;
     Time flowStartInterval = MilliSeconds(1);
     TrafficArrivalMode arrivalMode = TrafficArrivalMode::DETERMINISTIC;
@@ -49,6 +53,8 @@ class TrainingTrafficGenerator
     static Time GetStartTime(const TrafficGenerationConfig& traffic, uint32_t flowIndex);
     static std::vector<Time> GenerateStartTimes(const SimulationConfig& simulation,
                                                 const TrafficGenerationConfig& traffic);
+    static std::vector<uint64_t> GenerateFlowSizes(const TrafficGenerationConfig& traffic,
+                                                   uint32_t flowCount);
 };
 
 } // namespace tl_ocs

@@ -13,6 +13,7 @@ UniformTrafficGenerator::Generate(const SimulationConfig& simulation,
 {
     std::vector<FlowSpec> flows;
     const std::vector<Time> startTimes = GenerateStartTimes(simulation, traffic);
+    const std::vector<uint64_t> flowSizes = GenerateFlowSizes(traffic, startTimes.size());
     flows.reserve(startTimes.size());
 
     const uint32_t numTors = simulation.GetNumTors();
@@ -36,7 +37,7 @@ UniformTrafficGenerator::Generate(const SimulationConfig& simulation,
                            sourceServer,
                            destinationTor,
                            destinationServer,
-                           traffic.flowSizeBytes,
+                           flowSizes[flowId],
                            startTimes[flowId],
                            "uniform",
                            traffic.estimatedFlowRateBps);

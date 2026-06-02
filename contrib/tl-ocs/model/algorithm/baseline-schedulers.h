@@ -13,8 +13,7 @@ namespace tl_ocs
 enum class OpticalSchedulingMode
 {
     TL_OCS,
-    VOLUME,
-    COMMUNITY
+    VOLUME
 };
 
 class VolumeScheduler
@@ -22,13 +21,6 @@ class VolumeScheduler
   public:
     TlOcsAlgorithmResult Run(const TrafficMatrix& observedW,
                              uint32_t opticalPortsPerTor) const;
-};
-
-class CommunityScheduler
-{
-  public:
-    TlOcsAlgorithmResult Run(const TrafficMatrix& observedW,
-                             const TlOcsAlgorithmParameters& parameters) const;
 };
 
 } // namespace tl_ocs

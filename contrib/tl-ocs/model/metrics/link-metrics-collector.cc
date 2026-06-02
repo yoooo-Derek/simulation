@@ -2,6 +2,7 @@
 
 #include "ns3/data-rate.h"
 
+#include <algorithm>
 #include <sstream>
 
 namespace ns3
@@ -22,7 +23,8 @@ LinkMetricsCollector::AddCounter(const std::string& linkId,
                                  const std::string& destinationEndpoint,
                                  uint64_t dataRateBps,
                                  double activeDurationS,
-                                 Ptr<NetDevice> device)
+                                 Ptr<NetDevice> device,
+                                 std::optional<std::pair<uint32_t, uint32_t>> ocsEdge)
 {
     auto counter = std::make_shared<Counter>();
     counter->record.linkId = linkId;
@@ -31,6 +33,7 @@ LinkMetricsCollector::AddCounter(const std::string& linkId,
     counter->record.destinationEndpoint = destinationEndpoint;
     counter->record.dataRateBps = dataRateBps;
     counter->record.activeDurationS = activeDurationS;
+    counter->ocsEdge = ocsEdge;
     // PointToPointNetDevice MacTx counts device-level transmitted packet bytes,
     // including protocol overhead above the application payload.
     device->TraceConnectWithoutContext("MacTx",
@@ -77,14 +80,42 @@ LinkMetricsCollector::AttachToTopology(const NodeIndex& nodeIndex,
                    "tor" + std::to_string(link.torB),
                    ocsDataRateBps,
                    durationS,
-                   link.torADevice);
+                   link.torADevice,
+                   std::make_pair(link.torA, link.torB));
         AddCounter(prefix.str() + "-b-to-a",
                    "ocs",
                    "tor" + std::to_string(link.torB),
                    "tor" + std::to_string(link.torA),
                    ocsDataRateBps,
                    durationS,
-                   link.torBDevice);
+                   link.torBDevice,
+                   std::make_pair(link.torA, link.torB));
+    }
+}
+
+void
+LinkMetricsCollector::SetActiveOcsLightpaths(
+    const std::vector<std::pair<uint32_t, uint32_t>>& activeEdges,
+    double activeDurationS)
+{
+    std::set<std::pair<uint32_t, uint32_t>> normalized;
+    for (const auto& edge : activeEdges)
+    {
+        normalized.insert({std::min(edge.first, edge.second), std::max(edge.first, edge.second)});
+    }
+    for (const auto& counter : m_counters)
+    {
+        if (!counter->ocsEdge.has_value())
+        {
+            continue;
+        }
+        const auto edge = counter->ocsEdge.value();
+        counter->record.activeOcsLightpath = normalized.count(
+            {std::min(edge.first, edge.second), std::max(edge.first, edge.second)}) > 0;
+        if (counter->record.activeOcsLightpath)
+        {
+            counter->record.activeDurationS = activeDurationS;
+        }
     }
 }
 

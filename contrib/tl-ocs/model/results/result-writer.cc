@@ -168,6 +168,11 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     stream << ',';
     if (flowMetrics.has_value())
     {
+        WriteOptionalDouble(stream, flowMetrics->avgReceivedThroughputBps);
+    }
+    stream << ',';
+    if (flowMetrics.has_value())
+    {
         WriteOptionalDouble(stream, flowMetrics->avgFctS);
     }
     stream << ',';

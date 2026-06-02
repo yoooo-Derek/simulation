@@ -49,5 +49,26 @@ TrainingTrafficGenerator::GenerateStartTimes(const SimulationConfig& simulation,
     return startTimes;
 }
 
+std::vector<uint64_t>
+TrainingTrafficGenerator::GenerateFlowSizes(const TrafficGenerationConfig& traffic,
+                                            uint32_t flowCount)
+{
+    std::vector<uint64_t> sizes(flowCount, traffic.flowSizeBytes);
+    if (!traffic.enableMixedFlowSizes)
+    {
+        return sizes;
+    }
+
+    // Keep size selection reproducible without coupling it to endpoint or
+    // arrival random draws.
+    std::mt19937 generator(traffic.randomSeed + 0x5f3759dfU);
+    std::bernoulli_distribution selectSmall(traffic.smallFlowProbability);
+    for (auto& size : sizes)
+    {
+        size = selectSmall(generator) ? traffic.smallFlowSizeBytes : traffic.largeFlowSizeBytes;
+    }
+    return sizes;
+}
+
 } // namespace tl_ocs
 } // namespace ns3

@@ -58,7 +58,8 @@ MetricsCollector::Collect(const std::vector<FlowMetricSource>& sources,
 }
 
 FlowMetricsSummary
-MetricsCollector::Summarize(const std::vector<FlowMetricRecord>& records) const
+MetricsCollector::Summarize(const std::vector<FlowMetricRecord>& records,
+                            double measurementDurationS) const
 {
     FlowMetricsSummary summary;
     summary.totalFlows = static_cast<uint32_t>(records.size());
@@ -73,6 +74,13 @@ MetricsCollector::Summarize(const std::vector<FlowMetricRecord>& records) const
         }
     }
     summary.incompleteFlows = summary.totalFlows - summary.completedFlows;
+    if (measurementDurationS > 0.0)
+    {
+        // Whole-run received throughput: application bytes observed during
+        // the configured simulation duration.
+        summary.avgReceivedThroughputBps =
+            static_cast<double>(summary.totalReceivedBytes) * 8.0 / measurementDurationS;
+    }
 
     if (!completedFcts.empty())
     {

@@ -8,7 +8,7 @@ class TlOcsOcsMetricsTestCase : public TestCase
 {
   public:
     TlOcsOcsMetricsTestCase()
-        : TestCase("TL-OCS computes completed-flow OCS metrics")
+        : TestCase("TL-OCS computes installed-flow and received-byte OCS hit metrics")
     {
     }
 
@@ -30,10 +30,16 @@ class TlOcsOcsMetricsTestCase : public TestCase
 
         const OcsMetricsSummary summary =
             SummarizeOcsMetrics({ocs, eps, incompleteOcs}, 2, true);
-        NS_TEST_ASSERT_MSG_EQ(summary.completedFlows, 2, "incomplete flow entered denominator");
-        NS_TEST_ASSERT_MSG_EQ(summary.completedOcsFlows, 1, "OCS completed count mismatch");
-        NS_TEST_ASSERT_MSG_EQ(summary.ocsFlowHitRate.value(), 0.5, "OCS flow hit rate mismatch");
-        NS_TEST_ASSERT_MSG_EQ(summary.ocsByteHitRate.value(), 0.25, "OCS byte hit rate mismatch");
+        NS_TEST_ASSERT_MSG_EQ(summary.totalFlows, 3, "installed flow denominator mismatch");
+        NS_TEST_ASSERT_MSG_EQ(summary.ocsFlows, 2, "OCS assigned flow count mismatch");
+        NS_TEST_ASSERT_MSG_EQ_TOL(summary.ocsFlowHitRate.value(),
+                                  2.0 / 3.0,
+                                  1e-12,
+                                  "OCS flow hit rate mismatch");
+        NS_TEST_ASSERT_MSG_EQ_TOL(summary.ocsByteHitRate.value(),
+                                  150.0 / 450.0,
+                                  1e-12,
+                                  "OCS byte hit rate mismatch");
         NS_TEST_ASSERT_MSG_EQ(summary.ocsReconfigurationCount, 1, "single-cycle count mismatch");
         NS_TEST_ASSERT_MSG_EQ(SummarizeOcsMetrics({}, 0, false).ocsReconfigurationCount,
                               0,

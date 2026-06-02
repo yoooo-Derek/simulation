@@ -22,6 +22,7 @@ struct LinkMetricRecord
     uint64_t dataRateBps = 0;
     double activeDurationS = 0.0;
     std::optional<double> utilization;
+    bool activeOcsLightpath = false;
 };
 
 struct LinkUtilizationSummary

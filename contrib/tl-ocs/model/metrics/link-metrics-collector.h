@@ -6,6 +6,8 @@
 #include "ns3/simulation-config.h"
 
 #include <memory>
+#include <set>
+#include <utility>
 #include <vector>
 
 namespace ns3
@@ -17,6 +19,8 @@ class LinkMetricsCollector
 {
   public:
     void AttachToTopology(const NodeIndex& nodeIndex, const SimulationConfig& simulation);
+    void SetActiveOcsLightpaths(const std::vector<std::pair<uint32_t, uint32_t>>& activeEdges,
+                                double activeDurationS);
     std::vector<LinkMetricRecord> Collect() const;
     LinkUtilizationSummary Summarize() const;
 
@@ -24,6 +28,7 @@ class LinkMetricsCollector
     struct Counter
     {
         LinkMetricRecord record;
+        std::optional<std::pair<uint32_t, uint32_t>> ocsEdge;
     };
 
     static void DeviceMacTxTrace(std::shared_ptr<Counter> counter, Ptr<const Packet> packet);
@@ -33,7 +38,8 @@ class LinkMetricsCollector
                     const std::string& destinationEndpoint,
                     uint64_t dataRateBps,
                     double activeDurationS,
-                    Ptr<NetDevice> device);
+                    Ptr<NetDevice> device,
+                    std::optional<std::pair<uint32_t, uint32_t>> ocsEdge = std::nullopt);
 
     std::vector<std::shared_ptr<Counter>> m_counters;
 };

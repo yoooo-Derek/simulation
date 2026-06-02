@@ -15,6 +15,7 @@ AggregationTrafficGenerator::Generate(const SimulationConfig& simulation,
     const uint32_t numTors = simulation.GetNumTors();
     const uint32_t serversPerTor = simulation.GetServersPerTor();
     const uint32_t aggregatorTor = traffic.aggregatorTor;
+    const std::vector<uint64_t> flowSizes = GenerateFlowSizes(traffic, traffic.numFlows);
 
     if (traffic.arrivalMode == TrafficArrivalMode::ITERATION_BURST)
     {
@@ -36,7 +37,7 @@ AggregationTrafficGenerator::Generate(const SimulationConfig& simulation,
                                    server,
                                    aggregatorTor,
                                    server,
-                                   traffic.flowSizeBytes,
+                                   flowSizes[flowId],
                                    startTime,
                                    "parameter-aggregation",
                                    traffic.estimatedFlowRateBps);
@@ -47,7 +48,7 @@ AggregationTrafficGenerator::Generate(const SimulationConfig& simulation,
                                        server,
                                        workerTor,
                                        server,
-                                       traffic.flowSizeBytes,
+                                       flowSizes[flows.size()],
                                        startTime,
                                        "parameter-aggregation",
                                        traffic.estimatedFlowRateBps);
@@ -69,7 +70,7 @@ AggregationTrafficGenerator::Generate(const SimulationConfig& simulation,
                            sourceServer,
                            aggregatorTor,
                            destinationServer,
-                           traffic.flowSizeBytes,
+                           flowSizes[flowId],
                            startTimes[flowId],
                            "parameter-aggregation",
                            traffic.estimatedFlowRateBps);

@@ -34,7 +34,7 @@ SummarizeLinkUtilization(const std::vector<LinkMetricRecord>& records)
         {
             epsValues.push_back(record.utilization.value());
         }
-        else if (record.linkType == "ocs" && record.txBytes > 0)
+        else if (record.linkType == "ocs" && record.activeOcsLightpath)
         {
             ocsValues.push_back(record.utilization.value());
         }
@@ -57,6 +57,13 @@ SummarizeLinkUtilization(const std::vector<LinkMetricRecord>& records)
     };
     summarize(epsValues, summary.epsAvgLinkUtilization, summary.epsMaxLinkUtilization);
     summarize(ocsValues, summary.ocsAvgLinkUtilization, summary.ocsMaxLinkUtilization);
+    if (!summary.ocsAvgLinkUtilization.has_value())
+    {
+        // EPS-only or empty-active-set runs have a stable zero OCS
+        // utilization instead of an absent value.
+        summary.ocsAvgLinkUtilization = 0.0;
+        summary.ocsMaxLinkUtilization = 0.0;
+    }
     return summary;
 }
 

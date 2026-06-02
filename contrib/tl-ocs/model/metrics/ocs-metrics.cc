@@ -15,27 +15,22 @@ SummarizeOcsMetrics(const std::vector<FlowMetricRecord>& records,
     summary.ocsReconfigurationCount = activeSetApplied && ocsActiveEdges > 0 ? 1 : 0;
     for (const auto& record : records)
     {
-        if (!record.completed)
-        {
-            continue;
-        }
-        summary.completedFlows++;
-        summary.completedReceivedBytes += record.receivedBytes;
+        summary.totalFlows++;
+        summary.totalReceivedBytes += record.receivedBytes;
         if (record.pathType == "ocs")
         {
-            summary.completedOcsFlows++;
-            summary.completedOcsBytes += record.receivedBytes;
+            summary.ocsFlows++;
+            summary.ocsReceivedBytes += record.receivedBytes;
         }
     }
-    if (summary.completedFlows > 0)
+    if (summary.totalFlows > 0)
     {
-        summary.ocsFlowHitRate =
-            static_cast<double>(summary.completedOcsFlows) / summary.completedFlows;
+        summary.ocsFlowHitRate = static_cast<double>(summary.ocsFlows) / summary.totalFlows;
     }
-    if (summary.completedReceivedBytes > 0)
+    if (summary.totalReceivedBytes > 0)
     {
         summary.ocsByteHitRate =
-            static_cast<double>(summary.completedOcsBytes) / summary.completedReceivedBytes;
+            static_cast<double>(summary.ocsReceivedBytes) / summary.totalReceivedBytes;
     }
     return summary;
 }

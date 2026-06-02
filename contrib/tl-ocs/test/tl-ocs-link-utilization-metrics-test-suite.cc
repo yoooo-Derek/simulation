@@ -28,13 +28,22 @@ class TlOcsLinkUtilizationMetricsTestCase : public TestCase
         std::vector<LinkMetricRecord> records = {
             {"eps-0", "tor-spine", "tor0", "spine0", 125, std::nullopt, 1000, 1.0, 1.0},
             {"eps-1", "tor-spine", "spine0", "tor0", 0, std::nullopt, 1000, 1.0, 0.0},
-            {"ocs-0", "ocs", "tor0", "tor1", 250, std::nullopt, 1000, 1.0, 2.0},
-            {"ocs-1", "ocs", "tor1", "tor0", 0, std::nullopt, 1000, 1.0, 0.0}};
+            {"ocs-0", "ocs", "tor0", "tor1", 250, std::nullopt, 1000, 1.0, 2.0, true},
+            {"ocs-1", "ocs", "tor1", "tor0", 0, std::nullopt, 1000, 1.0, 0.0, true},
+            {"ocs-inactive", "ocs", "tor0", "tor2", 500, std::nullopt, 1000, 1.0, 4.0, false}};
         const LinkUtilizationSummary summary = SummarizeLinkUtilization(records);
         NS_TEST_ASSERT_MSG_EQ(summary.epsAvgLinkUtilization.value(), 0.5, "EPS average mismatch");
         NS_TEST_ASSERT_MSG_EQ(summary.epsMaxLinkUtilization.value(), 1.0, "EPS maximum mismatch");
-        NS_TEST_ASSERT_MSG_EQ(summary.ocsAvgLinkUtilization.value(), 2.0, "OCS average mismatch");
+        NS_TEST_ASSERT_MSG_EQ(summary.ocsAvgLinkUtilization.value(), 1.0, "OCS average mismatch");
         NS_TEST_ASSERT_MSG_EQ(summary.ocsMaxLinkUtilization.value(), 2.0, "OCS maximum mismatch");
+        const LinkUtilizationSummary epsOnly =
+            SummarizeLinkUtilization({records.front()});
+        NS_TEST_ASSERT_MSG_EQ(epsOnly.ocsAvgLinkUtilization.value(),
+                              0.0,
+                              "EPS-only OCS average should be zero");
+        NS_TEST_ASSERT_MSG_EQ(epsOnly.ocsMaxLinkUtilization.value(),
+                              0.0,
+                              "EPS-only OCS maximum should be zero");
     }
 };
 

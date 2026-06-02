@@ -104,11 +104,6 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
         VolumeScheduler scheduler;
         algorithmResult = scheduler.Run(observed, algorithmParameters.opticalPortsPerTor);
     }
-    else if (options.schedulingMode == OpticalSchedulingMode::COMMUNITY)
-    {
-        CommunityScheduler scheduler;
-        algorithmResult = scheduler.Run(observed, algorithmParameters);
-    }
     else
     {
         TlOcsAlgorithm algorithm;

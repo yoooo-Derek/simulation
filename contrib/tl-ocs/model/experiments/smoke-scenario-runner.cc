@@ -61,11 +61,13 @@ CopyTimelineResult(const ControllerTimelineResult& timeline, SmokeScenarioResult
 }
 
 void
-CollectFlowMetrics(const std::vector<FlowMetricSource>& sources, SmokeScenarioResult& result)
+CollectFlowMetrics(const std::vector<FlowMetricSource>& sources,
+                   double measurementDurationS,
+                   SmokeScenarioResult& result)
 {
     MetricsCollector collector;
     result.flowMetrics = collector.Collect(sources, result.schemeName);
-    result.flowMetricsSummary = collector.Summarize(result.flowMetrics);
+    result.flowMetricsSummary = collector.Summarize(result.flowMetrics, measurementDurationS);
 }
 
 void
@@ -117,7 +119,7 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
         result.receivedBytes = launch.GetTotalReceivedBytes();
         if (options.enableFlowMetrics)
         {
-            CollectFlowMetrics(launch.metricSources, result);
+            CollectFlowMetrics(launch.metricSources, simulation.GetStopTime().GetSeconds(), result);
         }
         CollectPostRunMetrics(options, linkMetricsCollector.get(), result);
         result.status = "scheme_eps_ecmp_smoke_ok";
@@ -153,9 +155,18 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
                                   linkManager,
                                   timelineOptions);
     CopyTimelineResult(timelineResult, result);
+    if (linkMetricsCollector != nullptr)
+    {
+        const double activeDurationS =
+            simulation.GetStopTime().GetSeconds() - timelineOptions.stage1Stop.GetSeconds() -
+            timelineOptions.stageGap.GetSeconds();
+        linkMetricsCollector->SetActiveOcsLightpaths(linkManager.GetActiveEdges(), activeDurationS);
+    }
     if (options.enableFlowMetrics)
     {
-        CollectFlowMetrics(timelineResult.metricSources, result);
+        CollectFlowMetrics(timelineResult.metricSources,
+                           simulation.GetStopTime().GetSeconds(),
+                           result);
     }
     CollectPostRunMetrics(options, linkMetricsCollector.get(), result);
     result.status = "scheme_" + scheme.ToString() + "_smoke_ok";

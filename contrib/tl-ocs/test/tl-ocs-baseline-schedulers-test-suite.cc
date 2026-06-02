@@ -49,12 +49,6 @@ TlOcsBaselineSchedulersTestCase::DoRun()
         NS_TEST_ASSERT_MSG_EQ(degree <= 1, true, "volume scheduler violated optical port constraint");
     }
 
-    TlOcsAlgorithmParameters parameters;
-    parameters.opticalPortsPerTor = 1;
-    CommunityScheduler community;
-    const TlOcsAlgorithmResult communityResult = community.Run(observed, parameters);
-    NS_TEST_ASSERT_MSG_GT(communityResult.selectedEdges.size(), 0, "community scheduler selected no edge");
-
     TlOcsAlgorithmParameters volumeOnly;
     volumeOnly.useVolumeOnlyScore = true;
     volumeOnly.opticalPortsPerTor = 1;
