@@ -267,6 +267,114 @@ class TlOcsIterationBurstTrafficGeneratorTestCase : public TestCase
     }
 };
 
+class TlOcsAggregationReturnFlowTrafficGeneratorTestCase : public TestCase
+{
+  public:
+    TlOcsAggregationReturnFlowTrafficGeneratorTestCase()
+        : TestCase("TL-OCS aggregation return flows are paired and reproducible")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(4);
+        simulation.SetServersPerTor(2);
+        simulation.SetStopTime(Seconds(1));
+
+        TrafficGenerationConfig traffic;
+        traffic.numFlows = 8;
+        traffic.arrivalMode = TrafficArrivalMode::ITERATION_BURST;
+        traffic.aggregatorTor = 0;
+        traffic.burstSize = 4;
+        traffic.numIterations = 1;
+        traffic.includeAggregationReturnFlows = true;
+        traffic.aggregationReturnDelay = MicroSeconds(50);
+        traffic.enableMixedFlowSizes = true;
+        traffic.smallFlowSizeBytes = 100;
+        traffic.largeFlowSizeBytes = 1000;
+        traffic.smallFlowProbability = 0.5;
+        traffic.randomSeed = 71;
+
+        const auto first = AggregationTrafficGenerator().Generate(simulation, traffic);
+        const auto repeated = AggregationTrafficGenerator().Generate(simulation, traffic);
+        NS_TEST_ASSERT_MSG_EQ(first.size(), 8, "unexpected return-flow burst count");
+        NS_TEST_ASSERT_MSG_EQ(first.size(), repeated.size(), "same seed changed return-flow count");
+
+        for (uint32_t index = 0; index < first.size(); index += 2)
+        {
+            const auto& forward = first[index];
+            const auto& returned = first[index + 1];
+            NS_TEST_ASSERT_MSG_EQ(forward.GetDestinationTorId(),
+                                  0,
+                                  "forward flow should target aggregator");
+            NS_TEST_ASSERT_MSG_EQ(returned.GetSourceTorId(),
+                                  0,
+                                  "return flow should start at aggregator");
+            NS_TEST_ASSERT_MSG_EQ(returned.GetDestinationTorId(),
+                                  forward.GetSourceTorId(),
+                                  "return flow should target forward worker");
+            NS_TEST_ASSERT_MSG_EQ(returned.GetDestinationServerId(),
+                                  forward.GetSourceServerId(),
+                                  "return flow should target forward worker server");
+            NS_TEST_ASSERT_MSG_GT(returned.GetStartTime(),
+                                  forward.GetStartTime(),
+                                  "return flow should start after forward flow");
+            NS_TEST_ASSERT_MSG_EQ(returned.GetSizeBytes(),
+                                  forward.GetSizeBytes(),
+                                  "return flow should preserve paired size");
+            NS_TEST_ASSERT_MSG_EQ(first[index].GetSizeBytes(),
+                                  repeated[index].GetSizeBytes(),
+                                  "same seed changed mixed forward size");
+            NS_TEST_ASSERT_MSG_EQ(first[index + 1].GetSizeBytes(),
+                                  repeated[index + 1].GetSizeBytes(),
+                                  "same seed changed mixed return size");
+            NS_TEST_ASSERT_MSG_EQ(forward.GetSizeBytes() == 100 || forward.GetSizeBytes() == 1000,
+                                  true,
+                                  "mixed forward size is not from configured distribution");
+        }
+    }
+};
+
+class TlOcsMultiAggregatorTrafficGeneratorTestCase : public TestCase
+{
+  public:
+    TlOcsMultiAggregatorTrafficGeneratorTestCase()
+        : TestCase("TL-OCS aggregation bursts can rotate across multiple aggregators")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(6);
+        simulation.SetServersPerTor(1);
+
+        TrafficGenerationConfig traffic;
+        traffic.numFlows = 4;
+        traffic.arrivalMode = TrafficArrivalMode::ITERATION_BURST;
+        traffic.aggregatorTor = 1;
+        traffic.aggregatorCount = 2;
+        traffic.burstSize = 1;
+        traffic.numIterations = 4;
+
+        const auto flows = AggregationTrafficGenerator().Generate(simulation, traffic);
+        NS_TEST_ASSERT_MSG_EQ(flows.size(), 4, "unexpected multi-aggregator flow count");
+        NS_TEST_ASSERT_MSG_EQ(flows[0].GetDestinationTorId(), 1, "iteration 0 aggregator changed");
+        NS_TEST_ASSERT_MSG_EQ(flows[1].GetDestinationTorId(), 2, "iteration 1 aggregator changed");
+        NS_TEST_ASSERT_MSG_EQ(flows[2].GetDestinationTorId(), 1, "iteration 2 aggregator changed");
+        NS_TEST_ASSERT_MSG_EQ(flows[3].GetDestinationTorId(), 2, "iteration 3 aggregator changed");
+        for (const auto& flow : flows)
+        {
+            NS_TEST_ASSERT_MSG_NE(flow.GetSourceTorId(),
+                                  flow.GetDestinationTorId(),
+                                  "worker should differ from selected aggregator");
+        }
+    }
+};
+
 class TlOcsMixedFlowSizeTrafficGeneratorTestCase : public TestCase
 {
   public:
@@ -355,6 +463,8 @@ TlOcsTrafficGeneratorTestSuite::TlOcsTrafficGeneratorTestSuite()
     AddTestCase(new TlOcsPoissonTrafficGeneratorTestCase);
     AddTestCase(new TlOcsPoissonCommunityTrafficGeneratorTestCase);
     AddTestCase(new TlOcsIterationBurstTrafficGeneratorTestCase);
+    AddTestCase(new TlOcsAggregationReturnFlowTrafficGeneratorTestCase);
+    AddTestCase(new TlOcsMultiAggregatorTrafficGeneratorTestCase);
     AddTestCase(new TlOcsMixedFlowSizeTrafficGeneratorTestCase);
 }
 

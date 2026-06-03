@@ -36,10 +36,12 @@ struct TrafficGenerationConfig
     uint32_t communityCount = 2;
     double communityLocalProbability = 0.8;
     uint32_t aggregatorTor = 0;
+    uint32_t aggregatorCount = 1;
     Time iterationPeriod = MilliSeconds(5);
     uint32_t burstSize = 4;
     uint32_t numIterations = 1;
     bool includeAggregationReturnFlows = false;
+    Time aggregationReturnDelay = MicroSeconds(100);
 };
 
 class TrainingTrafficGenerator

@@ -89,10 +89,12 @@ main(int argc, char* argv[])
     uint32_t communityCount = 2;
     double communityLocalProbability = 0.8;
     uint32_t aggregatorTor = 0;
+    uint32_t aggregatorCount = 1;
     double iterationPeriodSeconds = 0.005;
     uint32_t burstSize = 4;
     uint32_t numIterations = 1;
     bool includeAggregationReturnFlows = false;
+    double aggregationReturnDelaySeconds = 0.0001;
     double thetaF = 0.0;
     double eta = 1.0;
     double alpha = 0.5;
@@ -149,10 +151,12 @@ main(int argc, char* argv[])
     cmd.AddValue("communityCount", "Number of deterministic traffic communities", communityCount);
     cmd.AddValue("communityLocalProbability", "Probability that a Poisson community-local flow stays within its community", communityLocalProbability);
     cmd.AddValue("aggregatorTor", "Aggregator ToR for parameter-aggregation traffic", aggregatorTor);
+    cmd.AddValue("aggregatorCount", "Number of consecutive ToRs used as parameter-aggregation aggregators", aggregatorCount);
     cmd.AddValue("iterationPeriod", "Period between parameter-aggregation iterations in seconds", iterationPeriodSeconds);
     cmd.AddValue("burstSize", "Flows generated per parameter-aggregation iteration burst", burstSize);
     cmd.AddValue("numIterations", "Number of parameter-aggregation iteration bursts", numIterations);
     cmd.AddValue("includeAggregationReturnFlows", "Add aggregator-to-worker return flows to iteration bursts", includeAggregationReturnFlows);
+    cmd.AddValue("aggregationReturnDelay", "Delay between forward and return aggregation flows in seconds", aggregationReturnDelaySeconds);
     cmd.AddValue("thetaF", "Traffic graph sparsification threshold", thetaF);
     cmd.AddValue("eta", "Null-model resolution parameter", eta);
     cmd.AddValue("alpha", "Cross-community optical gain factor", alpha);
@@ -295,6 +299,20 @@ main(int argc, char* argv[])
                   << std::endl;
         return 1;
     }
+    if (enableTrainingTraffic && trafficPattern == "parameter-aggregation" &&
+        (aggregatorCount == 0 || aggregatorCount > config.GetNumTors()))
+    {
+        std::cerr << "Invalid training traffic configuration: aggregatorCount must be in [1, numTors]"
+                  << std::endl;
+        return 1;
+    }
+    if (enableTrainingTraffic && trafficPattern == "parameter-aggregation" &&
+        aggregationReturnDelaySeconds < 0.0)
+    {
+        std::cerr << "Invalid training traffic configuration: aggregationReturnDelay must be non-negative"
+                  << std::endl;
+        return 1;
+    }
     if (enableAlgorithmSmoke && opticalPortsPerTor == 0)
     {
         std::cerr << "Invalid TL-OCS algorithm configuration: opticalPortsPerTor must be positive"
@@ -399,10 +417,12 @@ main(int argc, char* argv[])
             trafficConfig.communityCount = communityCount;
             trafficConfig.communityLocalProbability = communityLocalProbability;
             trafficConfig.aggregatorTor = aggregatorTor;
+            trafficConfig.aggregatorCount = aggregatorCount;
             trafficConfig.iterationPeriod = Seconds(iterationPeriodSeconds);
             trafficConfig.burstSize = burstSize;
             trafficConfig.numIterations = numIterations;
             trafficConfig.includeAggregationReturnFlows = includeAggregationReturnFlows;
+            trafficConfig.aggregationReturnDelay = Seconds(aggregationReturnDelaySeconds);
 
             std::unique_ptr<TrainingTrafficGenerator> generator;
             if (trafficPattern == "uniform")

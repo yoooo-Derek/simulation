@@ -105,8 +105,15 @@ Parameter-aggregation workload:
 
 - Iteration bursts with fixed `iterationPeriod`, `burstSize`, `numIterations`,
   and `aggregatorTor`.
-- Include return flows only in a separate sensitivity point.
-- Sweep worker count through topology size, flow rate, and mixed flow sizes.
+- Include aggregator-to-worker return flows as a sensitivity point using
+  `includeAggregationReturnFlows`; this preserves the default one-way
+  parameter-server pattern while enabling the V5 worker/aggregator return-flow
+  readiness check.
+- Use `aggregatorCount` to rotate iteration bursts across consecutive
+  aggregators when testing whether one dominant parameter-server edge hides
+  TL-OCS / OCS-Volume structural differences.
+- Sweep worker count through topology size, flow rate, mixed flow sizes,
+  `opticalPortsPerTor`, and small positive `thetaF`.
 - Expected readiness metrics: null-model structural differentiation,
   completion/FCT summaries, OCS byte hit rate, and active lightpath utilization.
 
@@ -157,3 +164,43 @@ Recommended follow-up pilot parameters before paper-scale runs:
 
 These notes are data-quality and parameter-readiness observations. They are not
 paper results and should not be interpreted as performance conclusions.
+
+## Phase 14N Parameter-Aggregation Pilot Notes
+
+The parameter-aggregation generator now supports optional return flows and a
+small number of rotating aggregators for pilot calibration. Defaults remain
+compatible with earlier runs: return flows are disabled and `aggregatorCount=1`.
+When return flows are enabled, each worker-to-aggregator flow is paired with an
+aggregator-to-worker flow after `aggregationReturnDelay`; the pair uses the
+same worker, server, size, estimated rate, and random-seed-derived flow size.
+
+The Phase 14N 8-ToR sensitivity retained the Phase 14M topology and load shape
+and varied return flows, `opticalPortsPerTor`, rotating aggregators, and
+`thetaF`. The baseline, return-only, `k=2`, return+`k=2`, and
+multi-aggregator-return points still selected the same dominant aggregation
+lightpaths for OCS-Volume and TL-OCS. The return+positive-`thetaF` point created
+a small but reproducible difference: OCS-Volume assigned 8 OCS flows, while
+TL-OCS assigned 4 OCS flows because thresholded structural gain produced fewer
+non-empty scheduling rounds.
+
+Two 16-ToR pilot points were run. The rotating-aggregator return-flow point with
+positive `thetaF` produced non-empty scheduling rounds but no OCS assignments,
+which indicates the selected lightpaths did not align with later burst arrivals
+under that short readiness timing. A longer single-aggregator return-flow
+`k=2` point produced valid OCS assignments for both OCS schemes, but
+OCS-Volume and TL-OCS remained identical because the dominant aggregator edge
+continued to control the selected set.
+
+Recommended parameter-aggregation settings before paper-scale runs:
+
+- Keep return flows enabled for the V5 parameter-aggregation workload.
+- Use 16 ToR or larger with enough iterations after the first scheduling window
+  so selected lightpaths can affect later bursts.
+- Test both `k=1` for ordering sensitivity and `k=2` for capacity sensitivity.
+- Include a small positive `thetaF` sweep; the 8-ToR pilot showed this can expose
+  TL-OCS / OCS-Volume differences without changing the algorithm.
+- If single-aggregator runs remain dominated by one edge, use multiple
+  aggregators and tune `iterationPeriod` / `ocsPeriod` so each active set has
+  follow-on flows to assign.
+
+These are pilot calibration notes, not paper results.
