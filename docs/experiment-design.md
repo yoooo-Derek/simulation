@@ -121,3 +121,39 @@ completion summaries, whole-run average received throughput, received bytes,
 EPS and active-lightpath OCS link utilization aggregates, and OCS flow and byte
 hit rates. The OCS flow hit denominator is all installed flows; the byte hit
 denominator is all successfully received application bytes.
+
+## Phase 14M Pilot Notes
+
+The Phase 14M pilot matrix used the finite multi-cycle runtime on an 8-ToR
+readiness topology with 2 servers per ToR, 2 spines, 128 generated flows,
+`opticalPortsPerTor=1`, `observerWindow=5ms`, `ocsPeriod=10ms`,
+`stopTime=250ms`, mixed 20 KB / 200 KB flow sizes, `flowRateBps=1Gbps`, and
+`ocsAssignmentThresholdBps=2Gbps`. Each workload used the same seed and flow
+sequence across `eps-ecmp`, `ocs-volume`, and `tl-ocs`.
+
+The pilot confirmed the CSV schema and metric ranges for all three workloads.
+EPS-ECMP remained EPS-only with zero OCS assignments, zero OCS hit rates, and
+zero OCS utilization. OCS-Volume and TL-OCS produced non-empty scheduling rounds
+for all workloads and maintained valid hit-rate, utilization, FCT, and
+throughput fields.
+
+Uniform and community-local pilots showed measurable TL-OCS / OCS-Volume
+differences in OCS assignments, OCS byte hit rate, OCS utilization, and EPS
+utilization. The parameter-aggregation pilot ran cleanly but produced identical
+aggregate fields for OCS-Volume and TL-OCS under the tested 8-ToR, `k=1`
+configuration; the burst traffic concentrated on one dominant aggregator edge,
+so both schedulers selected the same active lightpath set.
+
+Recommended follow-up pilot parameters before paper-scale runs:
+
+- Increase parameter-aggregation diversity with return flows, more workers, or
+  multiple aggregators before comparing scheduler behavior.
+- Run `opticalPortsPerTor=2` as a capacity sensitivity point after `k=1`
+  ordering behavior is understood.
+- Include a small positive `thetaF` sensitivity point for workloads with noisy
+  low-volume edges.
+- Keep at least one 16-ToR pilot before moving to paper-main scale, because
+  4-ToR readiness cases are too concentrated to expose scheduler differences.
+
+These notes are data-quality and parameter-readiness observations. They are not
+paper results and should not be interpreted as performance conclusions.
