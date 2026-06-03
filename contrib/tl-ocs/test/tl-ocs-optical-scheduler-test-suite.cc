@@ -76,7 +76,7 @@ class OpticalSchedulerCommunityFactorTestCase : public TestCase
 {
   public:
     OpticalSchedulerCommunityFactorTestCase()
-        : TestCase("community factor changes optical edge scores")
+        : TestCase("community factor resolves port contention against distractor edges")
     {
     }
 
@@ -101,9 +101,18 @@ class OpticalSchedulerCommunityFactorTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(ContainsEdge(volume.selectedEdges, 0, 2),
                               true,
                               "volume score should select the larger cross-community edge");
+        NS_TEST_ASSERT_MSG_EQ(ContainsEdge(volume.selectedEdges, 0, 1),
+                              false,
+                              "volume score should reject the lower absolute same-community edge");
         NS_TEST_ASSERT_MSG_EQ(ContainsEdge(community.selectedEdges, 0, 1),
                               true,
                               "community-aware score should prefer the same-community edge");
+        NS_TEST_ASSERT_MSG_EQ(ContainsEdge(community.selectedEdges, 0, 2),
+                              false,
+                              "community-aware score should reject the discounted distractor edge");
+        NS_TEST_ASSERT_MSG_GT(GetCandidateScore(community.candidateEdges, 0, 1),
+                              GetCandidateScore(community.candidateEdges, 0, 2),
+                              "same-community score should outrank the discounted distractor");
         NS_TEST_ASSERT_MSG_EQ_TOL(GetCandidateScore(community.candidateEdges, 0, 2),
                                   5.5,
                                   1e-12,

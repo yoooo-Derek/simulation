@@ -1,3 +1,4 @@
+#include "ns3/baseline-schedulers.h"
 #include "ns3/tl-ocs-algorithm.h"
 #include "ns3/test.h"
 #include "ns3/traffic-matrix.h"
@@ -198,6 +199,7 @@ TlOcsAlgorithmNullModelRankingTestCase::DoRun()
 
     const auto volume = TlOcsAlgorithm().Run(observed, volumeScore);
     const auto excess = TlOcsAlgorithm().Run(observed, excessScore);
+    const auto volumeScheduler = VolumeScheduler().Run(observed, 1);
 
     // Node 1 communicates with 0, 3, and 4. Its higher degree makes the
     // absolute-volume 0-1 edge less structurally surprising than edge 0-2.
@@ -210,12 +212,18 @@ TlOcsAlgorithmNullModelRankingTestCase::DoRun()
     NS_TEST_ASSERT_MSG_EQ(ContainsEdge(volume.selectedEdges, 0, 1),
                           true,
                           "volume score should select edge 0-1");
+    NS_TEST_ASSERT_MSG_EQ(ContainsEdge(volumeScheduler.selectedEdges, 0, 1),
+                          true,
+                          "OCS-Volume should select the high absolute-volume aggregator edge");
     NS_TEST_ASSERT_MSG_EQ(ContainsEdge(excess.selectedEdges, 0, 2),
                           true,
                           "excess score should select edge 0-2");
     NS_TEST_ASSERT_MSG_EQ(ContainsEdge(excess.selectedEdges, 0, 1),
                           false,
                           "excess score should reject the lower-gain conflicting edge");
+    NS_TEST_ASSERT_MSG_EQ(ContainsEdge(volumeScheduler.selectedEdges, 0, 2),
+                          false,
+                          "OCS-Volume should not select the lower absolute-volume conflicting edge");
 }
 
 class TlOcsAlgorithmThetaFTestCase : public TestCase

@@ -7,6 +7,9 @@
 #include "ns3/test.h"
 #include "ns3/traffic-observer.h"
 
+#include <string>
+#include <vector>
+
 using namespace ns3;
 using namespace ns3::tl_ocs;
 
@@ -72,6 +75,75 @@ MakeFiniteOptions()
     SmokeScenarioOptions options = MakeOptions();
     options.enableFiniteMultiCycle = true;
     return options;
+}
+
+SimulationConfig
+MakeStructuralDifferenceSimulation()
+{
+    SimulationConfig simulation;
+    simulation.SetNumTors(5);
+    simulation.SetServersPerTor(1);
+    simulation.SetObserverWindow(MilliSeconds(5));
+    simulation.SetOcsReconfigurationPeriod(MilliSeconds(10));
+    simulation.SetStopTime(MilliSeconds(19));
+    simulation.SetOcsAssignmentThresholdBps(10000000000);
+    return simulation;
+}
+
+std::vector<FlowSpec>
+MakeStructuralDifferenceFlows()
+{
+    std::vector<FlowSpec> flows;
+    // These four observed flows produce a high-degree node 1. OCS-Volume sees
+    // 0-1 as the largest tied volume edge, while TL-OCS discounts node 1's
+    // high degree and prefers 0-2 under the null model.
+    flows.emplace_back(0, 0, 0, 1, 0, 20000, MilliSeconds(6), "structural-sanity", 1000000000);
+    flows.emplace_back(1, 0, 0, 2, 0, 18000, MilliSeconds(6), "structural-sanity", 1000000000);
+    flows.emplace_back(2, 1, 0, 3, 0, 20000, MilliSeconds(6), "structural-sanity", 1000000000);
+    flows.emplace_back(3, 1, 0, 4, 0, 20000, MilliSeconds(6), "structural-sanity", 1000000000);
+    // These new flows arrive after the first scheduling round and expose which
+    // selected edge became active in the actual path assignment layer.
+    flows.emplace_back(4, 0, 0, 1, 0, 10000, MilliSeconds(11), "structural-sanity", 1000000000);
+    flows.emplace_back(5, 0, 0, 2, 0, 10000, MilliSeconds(11), "structural-sanity", 1000000000);
+    return flows;
+}
+
+SmokeScenarioResult
+RunFiniteStructuralDifferenceScheme(const std::string& schemeName)
+{
+    const SimulationConfig simulation = MakeStructuralDifferenceSimulation();
+    EpsTopologyBuilder::BuildOptions buildOptions;
+    buildOptions.enableOcsLinks = true;
+    NodeIndex index = EpsTopologyBuilder().Build(simulation, 2, buildOptions);
+    TrafficObserver observer(simulation.GetNumTors(), simulation.GetObserverWindow());
+    observer.AttachToTopology(index);
+
+    TlOcsAlgorithmParameters parameters;
+    parameters.opticalPortsPerTor = 1;
+    parameters.eta = 1.0;
+    parameters.alpha = 0.5;
+
+    SmokeScenarioOptions options = MakeFiniteOptions();
+    return SmokeScenarioRunner().Run(simulation,
+                                     SchemeConfig::FromString(schemeName),
+                                     index,
+                                     MakeStructuralDifferenceFlows(),
+                                     &observer,
+                                     parameters,
+                                     options);
+}
+
+std::string
+GetPathTypeForFlow(const SmokeScenarioResult& result, uint32_t flowId)
+{
+    for (const auto& metric : result.flowMetrics)
+    {
+        if (metric.flowId == flowId)
+        {
+            return metric.pathType;
+        }
+    }
+    return "";
 }
 
 } // namespace
@@ -332,6 +404,58 @@ class TlOcsFiniteOcsSchemeScenarioTestCase : public TestCase
     std::string m_schemeName;
 };
 
+class TlOcsFiniteStructuralDifferenceScenarioTestCase : public TestCase
+{
+  public:
+    TlOcsFiniteStructuralDifferenceScenarioTestCase()
+        : TestCase("TL-OCS finite runtime exposes structural difference from OCS-Volume")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        const SmokeScenarioResult volume = RunFiniteStructuralDifferenceScheme("ocs-volume");
+        NS_TEST_ASSERT_MSG_EQ(volume.selectedEdgeList.find("0-1(") != std::string::npos,
+                              true,
+                              "OCS-Volume should activate the high absolute-volume edge");
+        NS_TEST_ASSERT_MSG_EQ(volume.selectedEdgeList.find("0-2(") == std::string::npos,
+                              true,
+                              "OCS-Volume should not activate the lower-volume conflicting edge");
+        NS_TEST_ASSERT_MSG_EQ(GetPathTypeForFlow(volume, 4),
+                              "ocs",
+                              "Volume-selected 0-1 flow should use OCS");
+        NS_TEST_ASSERT_MSG_EQ(GetPathTypeForFlow(volume, 5),
+                              "eps",
+                              "Non-selected 0-2 flow should fall back to EPS under Volume");
+        Simulator::Destroy();
+
+        const SmokeScenarioResult tlOcs = RunFiniteStructuralDifferenceScheme("tl-ocs");
+        NS_TEST_ASSERT_MSG_EQ(tlOcs.selectedEdgeList.find("0-2(") != std::string::npos,
+                              true,
+                              "TL-OCS should activate the null-model excess edge");
+        NS_TEST_ASSERT_MSG_EQ(tlOcs.selectedEdgeList.find("0-1(") == std::string::npos,
+                              true,
+                              "TL-OCS should reject the high-degree aggregator edge");
+        NS_TEST_ASSERT_MSG_EQ(GetPathTypeForFlow(tlOcs, 4),
+                              "eps",
+                              "Non-selected 0-1 flow should fall back to EPS under TL-OCS");
+        NS_TEST_ASSERT_MSG_EQ(GetPathTypeForFlow(tlOcs, 5),
+                              "ocs",
+                              "TL-OCS-selected 0-2 flow should use OCS");
+        NS_TEST_ASSERT_MSG_NE(volume.selectedEdgeList,
+                              tlOcs.selectedEdgeList,
+                              "Volume and TL-OCS should expose different selected edge sets");
+        NS_TEST_ASSERT_MSG_EQ(volume.nonEmptySchedulingRounds,
+                              1,
+                              "Volume structural test should have one non-empty round");
+        NS_TEST_ASSERT_MSG_EQ(tlOcs.nonEmptySchedulingRounds,
+                              1,
+                              "TL-OCS structural test should have one non-empty round");
+        Simulator::Destroy();
+    }
+};
+
 class TlOcsSmokeScenarioRunnerTestSuite : public TestSuite
 {
   public:
@@ -344,6 +468,7 @@ class TlOcsSmokeScenarioRunnerTestSuite : public TestSuite
         AddTestCase(new TlOcsFiniteEpsEcmpScenarioTestCase);
         AddTestCase(new TlOcsFiniteOcsSchemeScenarioTestCase("ocs-volume"));
         AddTestCase(new TlOcsFiniteOcsSchemeScenarioTestCase("tl-ocs"));
+        AddTestCase(new TlOcsFiniteStructuralDifferenceScenarioTestCase);
     }
 };
 
