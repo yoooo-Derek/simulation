@@ -54,6 +54,12 @@ CopyTimelineResult(const ControllerTimelineResult& timeline, SmokeScenarioResult
         timeline.communityInternalSelectedEdgeRatio;
     result.timelineCycles = timeline.timelineCycles;
     result.schedulingRoundCount = timeline.schedulingRoundCount;
+    result.nonEmptySchedulingRounds = timeline.nonEmptySchedulingRounds;
+    result.avgSelectedEdgeCount = timeline.avgSelectedEdgeCount;
+    result.maxSelectedEdgeCount = timeline.maxSelectedEdgeCount;
+    result.avgActiveEdgeCount = timeline.avgActiveEdgeCount;
+    result.maxActiveEdgeCount = timeline.maxActiveEdgeCount;
+    result.totalActiveLightpathSeconds = timeline.totalActiveLightpathSeconds;
     result.ocsReconfigurationCount = timeline.ocsReconfigurationCount;
     result.stage1InstalledFlows = timeline.stage1InstalledFlows;
     result.stage2InstalledFlows = timeline.stage2InstalledFlows;
@@ -119,6 +125,8 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
         Simulator::Run();
         result.installedFlows = launch.installedFlows;
         result.receivedBytes = launch.GetTotalReceivedBytes();
+        result.ocsAssignedFlows = 0;
+        result.epsFallbackFlows = launch.installedFlows;
         if (options.enableFlowMetrics)
         {
             CollectFlowMetrics(launch.metricSources, simulation.GetStopTime().GetSeconds(), result);

@@ -4,6 +4,7 @@
 #include "ns3/ocs-admission.h"
 #include "ns3/simulator.h"
 
+#include <algorithm>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -70,6 +71,8 @@ struct FiniteCycleContext
     bool hasCompletedWindow = false;
     Time lastActiveSetUpdate = Seconds(0);
     std::map<std::pair<uint32_t, uint32_t>, double> activeDurations;
+    uint64_t selectedEdgeCountSum = 0;
+    uint64_t activeEdgeCountSum = 0;
     uint16_t nextPort = 10000;
 
     FiniteCycleContext(const NodeIndex& nodeIndex,
@@ -149,6 +152,17 @@ RunSchedulingRound(const std::shared_ptr<FiniteCycleContext>& context)
     context->result.selectedEdgeList = FormatSelectedEdges(algorithmResult.selectedEdges);
     context->result.communityInternalSelectedEdgeRatio =
         algorithmResult.communityInternalSelectedEdgeRatio;
+    context->selectedEdgeCountSum += algorithmResult.selectedEdges.size();
+    context->result.avgSelectedEdgeCount =
+        static_cast<double>(context->selectedEdgeCountSum) /
+        context->result.schedulingRoundCount;
+    context->result.maxSelectedEdgeCount =
+        std::max(context->result.maxSelectedEdgeCount,
+                 static_cast<uint32_t>(algorithmResult.selectedEdges.size()));
+    if (!algorithmResult.selectedEdges.empty())
+    {
+        context->result.nonEmptySchedulingRounds++;
+    }
 
     if (context->options.enableOcsAdmission)
     {
@@ -161,6 +175,12 @@ RunSchedulingRound(const std::shared_ptr<FiniteCycleContext>& context)
         }
     }
     context->result.ocsActiveEdges = context->linkManager.GetActiveEdgeCount();
+    context->activeEdgeCountSum += context->result.ocsActiveEdges;
+    context->result.avgActiveEdgeCount =
+        static_cast<double>(context->activeEdgeCountSum) /
+        context->result.schedulingRoundCount;
+    context->result.maxActiveEdgeCount =
+        std::max(context->result.maxActiveEdgeCount, context->result.ocsActiveEdges);
 }
 
 void
@@ -278,6 +298,9 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
     result.selectedEdgeList = FormatSelectedEdges(algorithmResult.selectedEdges);
     result.communityInternalSelectedEdgeRatio =
         algorithmResult.communityInternalSelectedEdgeRatio;
+    result.nonEmptySchedulingRounds = result.algorithmSelectedEdges > 0 ? 1 : 0;
+    result.avgSelectedEdgeCount = result.algorithmSelectedEdges;
+    result.maxSelectedEdgeCount = result.algorithmSelectedEdges;
 
     if (options.enableOcsAdmission)
     {
@@ -285,6 +308,11 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
         result.ocsReconfigurationCount = linkManager.GetActiveEdgeCount() > 0 ? 1 : 0;
     }
     result.ocsActiveEdges = linkManager.GetActiveEdgeCount();
+    result.avgActiveEdgeCount = result.ocsActiveEdges;
+    result.maxActiveEdgeCount = result.ocsActiveEdges;
+    result.totalActiveLightpathSeconds =
+        result.ocsActiveEdges *
+        std::max(0.0, (simulation.GetStopTime() - Simulator::Now()).GetSeconds());
 
     const std::vector<FlowSpec> shiftedStage2Flows =
         OffsetStartTimes(stage2Flows, Simulator::Now() + options.stageGap);
@@ -375,6 +403,7 @@ ControllerTimeline::RunFiniteMultiCycle(
     for (const auto& [edge, durationS] : context->activeDurations)
     {
         context->result.activeLightpathDurations.push_back({edge, durationS});
+        context->result.totalActiveLightpathSeconds += durationS;
     }
     for (const auto& source : context->result.metricSources)
     {

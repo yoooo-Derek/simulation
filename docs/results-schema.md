@@ -24,6 +24,21 @@ in which that lightpath is active. Inactive candidate links are excluded.
 completed observer window. `ocs_reconfiguration_count` is the number of times
 that applying a periodic schedule changed the active lightpath set.
 
+Finite multi-cycle rows also include period-level aggregate scheduling fields:
+
+- `non_empty_scheduling_rounds`: scheduling rounds whose selected lightpath set
+  was non-empty.
+- `avg_selected_edge_count` and `max_selected_edge_count`: average and maximum
+  selected lightpaths across scheduling rounds.
+- `avg_active_edge_count` and `max_active_edge_count`: average and maximum
+  active lightpaths after applying each schedule.
+- `total_active_lightpath_seconds`: sum of active duration over lightpaths.
+
+`algorithm_selected_edges` and any printed selected-edge list describe the final
+scheduling round state. If the final observer window is idle, these final-state
+fields can be empty even when earlier rounds selected and used lightpaths. Use
+the period-level aggregate fields for finite multi-cycle readiness checks.
+
 ## Per-Flow CSV
 
 Per-flow rows include:

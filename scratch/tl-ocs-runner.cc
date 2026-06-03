@@ -330,6 +330,12 @@ main(int argc, char* argv[])
     std::optional<double> communityInternalSelectedEdgeRatio;
     std::optional<uint32_t> timelineCycles;
     std::optional<uint32_t> schedulingRoundCount;
+    std::optional<uint32_t> nonEmptySchedulingRounds;
+    std::optional<double> avgSelectedEdgeCount;
+    std::optional<uint32_t> maxSelectedEdgeCount;
+    std::optional<double> avgActiveEdgeCount;
+    std::optional<uint32_t> maxActiveEdgeCount;
+    std::optional<double> totalActiveLightpathSeconds;
     std::optional<uint32_t> stage1InstalledFlows;
     std::optional<uint32_t> stage2InstalledFlows;
     std::optional<uint64_t> stage1ReceivedBytes;
@@ -451,21 +457,24 @@ main(int argc, char* argv[])
                     observedMatrixBytes = scenarioResult.observedMatrixBytes;
                     algorithmCandidateEdges = scenarioResult.algorithmCandidateEdges;
                     algorithmSelectedEdges = scenarioResult.algorithmSelectedEdges;
-                    timelineCycles = scenarioResult.timelineCycles;
-                    schedulingRoundCount = scenarioResult.schedulingRoundCount;
                     stage1InstalledFlows = scenarioResult.stage1InstalledFlows;
                     stage2InstalledFlows = scenarioResult.stage2InstalledFlows;
                     stage1ReceivedBytes = scenarioResult.stage1ReceivedBytes;
                     stage2ReceivedBytes = scenarioResult.stage2ReceivedBytes;
                 }
-                if (scheme->EnableOcsAdmission())
-                {
-                    ocsActiveEdges = scenarioResult.ocsActiveEdges;
-                    ocsAssignedFlows = scenarioResult.ocsAssignedFlows;
-                    epsFallbackFlows = scenarioResult.epsFallbackFlows;
-                    communityInternalSelectedEdgeRatio =
-                        scenarioResult.communityInternalSelectedEdgeRatio;
-                }
+                timelineCycles = scenarioResult.timelineCycles;
+                schedulingRoundCount = scenarioResult.schedulingRoundCount;
+                nonEmptySchedulingRounds = scenarioResult.nonEmptySchedulingRounds;
+                avgSelectedEdgeCount = scenarioResult.avgSelectedEdgeCount;
+                maxSelectedEdgeCount = scenarioResult.maxSelectedEdgeCount;
+                avgActiveEdgeCount = scenarioResult.avgActiveEdgeCount;
+                maxActiveEdgeCount = scenarioResult.maxActiveEdgeCount;
+                totalActiveLightpathSeconds = scenarioResult.totalActiveLightpathSeconds;
+                ocsActiveEdges = scenarioResult.ocsActiveEdges;
+                ocsAssignedFlows = scenarioResult.ocsAssignedFlows;
+                epsFallbackFlows = scenarioResult.epsFallbackFlows;
+                communityInternalSelectedEdgeRatio =
+                    scenarioResult.communityInternalSelectedEdgeRatio;
                 status = scenarioResult.status;
                 flowMetrics = scenarioResult.flowMetrics;
                 flowMetricsSummary = scenarioResult.flowMetricsSummary;
@@ -478,6 +487,14 @@ main(int argc, char* argv[])
                           << ", ocsAssigned=" << scenarioResult.ocsAssignedFlows
                           << ", epsFallback=" << scenarioResult.epsFallbackFlows;
                 std::cout << ", schedulingRounds=" << scenarioResult.schedulingRoundCount
+                          << ", nonEmptySchedulingRounds="
+                          << scenarioResult.nonEmptySchedulingRounds
+                          << ", avgSelectedEdges=" << scenarioResult.avgSelectedEdgeCount
+                          << ", maxSelectedEdges=" << scenarioResult.maxSelectedEdgeCount
+                          << ", avgActiveEdges=" << scenarioResult.avgActiveEdgeCount
+                          << ", maxActiveEdges=" << scenarioResult.maxActiveEdgeCount
+                          << ", totalActiveLightpathSeconds="
+                          << scenarioResult.totalActiveLightpathSeconds
                           << ", reconfigurations=" << scenarioResult.ocsReconfigurationCount;
                 std::cout << ", communityInternalSelectedEdgeRatio="
                           << scenarioResult.communityInternalSelectedEdgeRatio;
@@ -616,6 +633,13 @@ main(int argc, char* argv[])
                 communityInternalSelectedEdgeRatio =
                     timelineResult.communityInternalSelectedEdgeRatio;
                 timelineCycles = timelineResult.timelineCycles;
+                schedulingRoundCount = timelineResult.schedulingRoundCount;
+                nonEmptySchedulingRounds = timelineResult.nonEmptySchedulingRounds;
+                avgSelectedEdgeCount = timelineResult.avgSelectedEdgeCount;
+                maxSelectedEdgeCount = timelineResult.maxSelectedEdgeCount;
+                avgActiveEdgeCount = timelineResult.avgActiveEdgeCount;
+                maxActiveEdgeCount = timelineResult.maxActiveEdgeCount;
+                totalActiveLightpathSeconds = timelineResult.totalActiveLightpathSeconds;
                 stage1InstalledFlows = timelineResult.stage1InstalledFlows;
                 stage2InstalledFlows = timelineResult.stage2InstalledFlows;
                 stage1ReceivedBytes = timelineResult.stage1ReceivedBytes;
@@ -818,6 +842,12 @@ main(int argc, char* argv[])
                                  communityInternalSelectedEdgeRatio,
                                  timelineCycles,
                                  schedulingRoundCount,
+                                 nonEmptySchedulingRounds,
+                                 avgSelectedEdgeCount,
+                                 maxSelectedEdgeCount,
+                                 avgActiveEdgeCount,
+                                 maxActiveEdgeCount,
+                                 totalActiveLightpathSeconds,
                                  stage1InstalledFlows,
                                  stage2InstalledFlows,
                                  stage1ReceivedBytes,

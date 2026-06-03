@@ -50,6 +50,12 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 std::optional<double> communityInternalSelectedEdgeRatio,
                                 std::optional<uint32_t> timelineCycles,
                                 std::optional<uint32_t> schedulingRoundCount,
+                                std::optional<uint32_t> nonEmptySchedulingRounds,
+                                std::optional<double> avgSelectedEdgeCount,
+                                std::optional<uint32_t> maxSelectedEdgeCount,
+                                std::optional<double> avgActiveEdgeCount,
+                                std::optional<uint32_t> maxActiveEdgeCount,
+                                std::optional<double> totalActiveLightpathSeconds,
                                 std::optional<uint32_t> stage1InstalledFlows,
                                 std::optional<uint32_t> stage2InstalledFlows,
                                 std::optional<uint64_t> stage1ReceivedBytes,
@@ -136,6 +142,27 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     {
         stream << schedulingRoundCount.value();
     }
+    stream << ',';
+    if (nonEmptySchedulingRounds.has_value())
+    {
+        stream << nonEmptySchedulingRounds.value();
+    }
+    stream << ',';
+    WriteOptionalDouble(stream, avgSelectedEdgeCount);
+    stream << ',';
+    if (maxSelectedEdgeCount.has_value())
+    {
+        stream << maxSelectedEdgeCount.value();
+    }
+    stream << ',';
+    WriteOptionalDouble(stream, avgActiveEdgeCount);
+    stream << ',';
+    if (maxActiveEdgeCount.has_value())
+    {
+        stream << maxActiveEdgeCount.value();
+    }
+    stream << ',';
+    WriteOptionalDouble(stream, totalActiveLightpathSeconds);
     stream << ',';
     if (stage1InstalledFlows.has_value())
     {

@@ -42,6 +42,12 @@ struct SmokeScenarioResult
     double communityInternalSelectedEdgeRatio = 0.0;
     uint32_t timelineCycles = 0;
     uint32_t schedulingRoundCount = 0;
+    uint32_t nonEmptySchedulingRounds = 0;
+    double avgSelectedEdgeCount = 0.0;
+    uint32_t maxSelectedEdgeCount = 0;
+    double avgActiveEdgeCount = 0.0;
+    uint32_t maxActiveEdgeCount = 0;
+    double totalActiveLightpathSeconds = 0.0;
     uint32_t ocsReconfigurationCount = 0;
     uint32_t stage1InstalledFlows = 0;
     uint32_t stage2InstalledFlows = 0;

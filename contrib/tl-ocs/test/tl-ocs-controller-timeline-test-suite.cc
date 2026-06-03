@@ -491,6 +491,24 @@ class TlOcsControllerTimelineFiniteMultiCycleTestCase : public TestCase
         const auto records = MetricsCollector().Collect(result.metricSources, "tl-ocs");
 
         NS_TEST_ASSERT_MSG_EQ(result.schedulingRoundCount, 4, "unexpected scheduling round count");
+        NS_TEST_ASSERT_MSG_GT(result.nonEmptySchedulingRounds,
+                              0,
+                              "expected at least one non-empty scheduling round");
+        NS_TEST_ASSERT_MSG_GT(result.avgSelectedEdgeCount,
+                              0.0,
+                              "expected nonzero average selected edges");
+        NS_TEST_ASSERT_MSG_GT(result.maxSelectedEdgeCount,
+                              0,
+                              "expected nonzero max selected edges");
+        NS_TEST_ASSERT_MSG_GT(result.avgActiveEdgeCount,
+                              0.0,
+                              "expected nonzero average active edges");
+        NS_TEST_ASSERT_MSG_GT(result.maxActiveEdgeCount,
+                              0,
+                              "expected nonzero max active edges");
+        NS_TEST_ASSERT_MSG_GT(result.totalActiveLightpathSeconds,
+                              0.0,
+                              "expected accumulated active lightpath time");
         NS_TEST_ASSERT_MSG_EQ(result.ocsReconfigurationCount >= 2,
                               true,
                               "expected periodic active-set updates");

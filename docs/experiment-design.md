@@ -35,6 +35,11 @@ boundary, the controller consumes the most recent completed window, derives
 `A(t-1)`, and updates `E_o(t)`. A flow chooses its optical or EPS path only when
 its start-time event occurs. Later lightpath updates do not reroute that flow.
 
+Finite multi-cycle dry-runs can be executed for the three supported schemes and
+the three supported traffic patterns. These dry-runs are readiness checks for
+the V5 control loop and metric schema. They are not paper results and do not
+provide statistical comparisons.
+
 Metrics are derived from application and device traces. They include flow
 completion summaries, whole-run average received throughput, received bytes,
 EPS and active-lightpath OCS link utilization aggregates, and OCS flow and byte

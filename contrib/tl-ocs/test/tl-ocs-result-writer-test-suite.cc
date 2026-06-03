@@ -57,6 +57,12 @@ TlOcsResultWriterSmokeSummaryTestCase::DoRun()
     NS_TEST_ASSERT_MSG_NE(text.find("scheduling_round_count"),
                           std::string::npos,
                           "missing periodic scheduling CSV field");
+    NS_TEST_ASSERT_MSG_NE(text.find("non_empty_scheduling_rounds"),
+                          std::string::npos,
+                          "missing non-empty scheduling CSV field");
+    NS_TEST_ASSERT_MSG_NE(text.find("total_active_lightpath_seconds"),
+                          std::string::npos,
+                          "missing active lightpath time CSV field");
     NS_TEST_ASSERT_MSG_NE(text.find("smoke_ok"), std::string::npos, "missing smoke status");
 }
 
