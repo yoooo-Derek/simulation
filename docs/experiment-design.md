@@ -204,3 +204,64 @@ Recommended parameter-aggregation settings before paper-scale runs:
   follow-on flows to assign.
 
 These are pilot calibration notes, not paper results.
+
+## Phase 14O Command Matrix Lock
+
+The pre-paper command matrix is locked in
+`docs/experiment-command-plan.md`. The locked readiness point uses 16 ToR, 2
+servers per ToR, 4 spines, finite multi-cycle control, mixed 20 KB / 200 KB flow
+sizes, `flowRateBps=1Gbps`, `ocsAssignmentThresholdBps=2Gbps`,
+`observerWindow=5ms`, `ocsPeriod=10ms`, and fixed seeds `1401`, `1417`, and
+`1433`.
+
+Main workloads:
+
+- uniform background: Poisson arrivals with `numFlows=256`.
+- community-local: Poisson arrivals with `communityCount=4` and
+  `communityLocalProbability=0.9`.
+- parameter-aggregation: iteration bursts with return flows enabled,
+  `numFlows=512`, `burstSize=16`, `numIterations=32`, and
+  `aggregationReturnDelay=100us`.
+
+Main schemes remain `eps-ecmp`, `ocs-volume`, and `tl-ocs`. The main optical
+port point is `opticalPortsPerTor=1`. The first sensitivity points are
+`opticalPortsPerTor=2`, `thetaF=50000`, and `aggregatorCount=2` for
+parameter-aggregation.
+
+Phase 14O repeat-seed validation is a command-quality and data-quality check.
+It verifies CSV schema alignment, completion counts, EPS-only OCS zeros, OCS
+hit/utilization ranges, and whether OCS-Volume / TL-OCS differences appear in
+the locked small matrix. It is not a paper result and should not be interpreted
+as a performance conclusion.
+
+The Phase 14O 16-ToR repeat-seed validation ran seeds `1401`, `1417`, and
+`1433` for all three schemes. Uniform and community-local used the main
+`thetaF=0` point. Parameter-aggregation used both `thetaF=0` and
+`thetaF=50000`. All generated summary CSV files passed header/value count and
+metric-range checks, and all flows completed in the locked readiness matrix.
+
+Pilot observations:
+
+- EPS-ECMP stayed EPS-only for all workloads: `ocs_assigned_flows=0`, OCS hit
+  rates were zero, and OCS utilization was zero.
+- Uniform showed weak structure. OCS-Volume and TL-OCS had the same average OCS
+  assignments across seeds, with only minor selected/active edge aggregate
+  differences.
+- Community-local showed small but visible TL-OCS / OCS-Volume differences over
+  three seeds: TL-OCS averaged 48.33 OCS assignments versus 47.00 for
+  OCS-Volume, and had slightly higher OCS byte hit rate and lower average FCT
+  in this readiness point.
+- Parameter-aggregation with `thetaF=0` remained identical between OCS-Volume
+  and TL-OCS. With `thetaF=50000`, TL-OCS averaged 17.33 OCS assignments versus
+  18.00 for OCS-Volume and used slightly fewer non-empty scheduling rounds.
+  This confirms the positive-threshold sensitivity can expose a structural
+  difference, but the single-aggregator workload remains dominated by one edge.
+
+Recommended locked interpretation:
+
+- Use `thetaF=0` as the main baseline for all workloads.
+- Include `thetaF=50000` as a required parameter-aggregation sensitivity point.
+- Keep `k=2` and `aggregatorCount=2` as follow-up sensitivity points if the
+  paper-main scale still shows a dominant single aggregator edge.
+- Do not treat Phase 14O numbers as paper results; they only validate command
+  reproducibility and metric quality.
