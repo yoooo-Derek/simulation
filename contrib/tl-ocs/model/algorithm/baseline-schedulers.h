@@ -13,7 +13,8 @@ namespace tl_ocs
 enum class OpticalSchedulingMode
 {
     TL_OCS,
-    VOLUME
+    VOLUME,
+    ORACLE
 };
 
 class VolumeScheduler

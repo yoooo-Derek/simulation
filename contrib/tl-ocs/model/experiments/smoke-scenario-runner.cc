@@ -66,6 +66,7 @@ CopyTimelineResult(const ControllerTimelineResult& timeline, SmokeScenarioResult
     result.stage1ReceivedBytes = timeline.stage1ReceivedBytes;
     result.stage2ReceivedBytes = timeline.stage2ReceivedBytes;
     result.selectedEdgeList = timeline.selectedEdgeList;
+    result.schedulingDiagnostics = timeline.schedulingDiagnostics;
 }
 
 void
@@ -150,6 +151,11 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
     {
         timelineOptions.schedulingMode = OpticalSchedulingMode::VOLUME;
     }
+    else if (scheme.UseOracleScheduler())
+    {
+        timelineOptions.schedulingMode = OpticalSchedulingMode::ORACLE;
+    }
+    timelineOptions.oracleMode = options.oracleMode;
     ControllerState state;
     ControllerTimeline timeline(state);
     OcsLinkManager linkManager;

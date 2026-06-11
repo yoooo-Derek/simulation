@@ -22,6 +22,9 @@ class SimulationConfig
     void SetServersPerTor(uint32_t serversPerTor);
     uint32_t GetServersPerTor() const;
 
+    void SetServerAccessDataRate(std::string serverAccessDataRate);
+    const std::string& GetServerAccessDataRate() const;
+
     void SetEpsDataRate(std::string epsDataRate);
     const std::string& GetEpsDataRate() const;
 
@@ -52,6 +55,7 @@ class SimulationConfig
   private:
     uint32_t m_numTors;
     uint32_t m_serversPerTor;
+    std::string m_serverAccessDataRate;
     std::string m_epsDataRate;
     std::string m_ocsDataRate;
     uint64_t m_ocsAssignmentThresholdBps;

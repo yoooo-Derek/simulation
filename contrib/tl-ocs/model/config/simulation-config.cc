@@ -12,6 +12,7 @@ namespace tl_ocs
 SimulationConfig::SimulationConfig()
     : m_numTors(4),
       m_serversPerTor(2),
+      m_serverAccessDataRate("10Gbps"),
       m_epsDataRate("25Gbps"),
       m_ocsDataRate("100Gbps"),
       m_ocsAssignmentThresholdBps(std::numeric_limits<uint64_t>::max()),
@@ -45,6 +46,18 @@ uint32_t
 SimulationConfig::GetServersPerTor() const
 {
     return m_serversPerTor;
+}
+
+void
+SimulationConfig::SetServerAccessDataRate(std::string serverAccessDataRate)
+{
+    m_serverAccessDataRate = std::move(serverAccessDataRate);
+}
+
+const std::string&
+SimulationConfig::GetServerAccessDataRate() const
+{
+    return m_serverAccessDataRate;
 }
 
 void
@@ -156,6 +169,7 @@ SimulationConfig::GetSummary() const
 {
     std::ostringstream os;
     os << "numTors=" << m_numTors << ", serversPerTor=" << m_serversPerTor
+       << ", serverAccessDataRate=" << m_serverAccessDataRate
        << ", epsDataRate=" << m_epsDataRate << ", ocsDataRate=" << m_ocsDataRate
        << ", ocsAssignmentThresholdBps=" << m_ocsAssignmentThresholdBps
        << ", stopTime=" << m_stopTime.As(Time::S)

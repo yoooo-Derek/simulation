@@ -1,10 +1,19 @@
 #include "ns3/core-module.h"
+#include "ns3/aggregation-distractor-traffic-generator.h"
+#include "ns3/datapath-diagnostic-traffic-generator.h"
+#include "ns3/matrix-replay-traffic-generator.h"
+#include "ns3/mechanism-separation-traffic-generator.h"
 #include "ns3/tl-ocs-module.h"
 
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <limits>
 #include <memory>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -15,6 +24,12 @@ using namespace ns3::tl_ocs;
 
 namespace
 {
+
+std::string
+FormatDataRateBps(uint64_t bps)
+{
+    return std::to_string(bps) + "bps";
+}
 
 std::vector<FlowSpec>
 OffsetFlows(const std::vector<FlowSpec>& flows, uint32_t flowIdOffset, Time startOffset)
@@ -36,6 +51,156 @@ OffsetFlows(const std::vector<FlowSpec>& flows, uint32_t flowIdOffset, Time star
     return shifted;
 }
 
+std::vector<OpticalEdge>
+BuildDiagnosticOcsEdges(const std::vector<FlowSpec>& flows, uint32_t opticalPortsPerTor)
+{
+    std::vector<OpticalEdge> selectedEdges;
+    std::vector<uint32_t> portUse;
+    uint32_t torCount = 0;
+    for (const auto& flow : flows)
+    {
+        torCount = std::max(torCount,
+                            std::max(flow.GetSourceTorId(), flow.GetDestinationTorId()) + 1);
+    }
+    portUse.assign(torCount, 0);
+    std::set<std::pair<uint32_t, uint32_t>> selectedPairs;
+    for (const auto& flow : flows)
+    {
+        if (flow.GetSourceTorId() == flow.GetDestinationTorId())
+        {
+            continue;
+        }
+        const std::pair<uint32_t, uint32_t> pair = {
+            std::min(flow.GetSourceTorId(), flow.GetDestinationTorId()),
+            std::max(flow.GetSourceTorId(), flow.GetDestinationTorId())};
+        if (selectedPairs.find(pair) != selectedPairs.end())
+        {
+            continue;
+        }
+        if (portUse[pair.first] >= opticalPortsPerTor || portUse[pair.second] >= opticalPortsPerTor)
+        {
+            continue;
+        }
+        selectedPairs.insert(pair);
+        portUse[pair.first]++;
+        portUse[pair.second]++;
+        selectedEdges.push_back({pair.first, pair.second, 1.0, 1.0, true, true});
+    }
+    return selectedEdges;
+}
+
+std::vector<FlowPathDecision>
+BuildForceOcsDecisions(const std::vector<FlowSpec>& flows,
+                       const OcsLinkManager& linkManager,
+                       const NodeIndex& nodeIndex)
+{
+    std::vector<FlowPathDecision> decisions;
+    decisions.reserve(flows.size());
+    for (const auto& flow : flows)
+    {
+        FlowPathDecision decision;
+        decision.flowId = flow.GetFlowId();
+        decision.sourceTor = flow.GetSourceTorId();
+        decision.destinationTor = flow.GetDestinationTorId();
+        decision.destinationAddress =
+            nodeIndex.GetServerIpv4Address(flow.GetDestinationTorId(),
+                                           flow.GetDestinationServerId());
+        if (linkManager.IsActive(flow.GetSourceTorId(), flow.GetDestinationTorId()) &&
+            nodeIndex.HasOcsLink(flow.GetSourceTorId(), flow.GetDestinationTorId()))
+        {
+            decision.pathType = "ocs";
+            decision.admittedToOcs = true;
+            decision.destinationAddress =
+                nodeIndex.GetOcsServerIpv4Address(flow.GetDestinationTorId(),
+                                                  flow.GetDestinationServerId());
+        }
+        decisions.push_back(decision);
+    }
+    return decisions;
+}
+
+void
+WriteSchedulingDiagnostics(const std::string& outputDir,
+                           const std::string& fileName,
+                           const ExperimentConfig& experiment,
+                           const std::string& schemeName,
+                           double offeredLoadFactor,
+                           const std::string& oracleMode,
+                           const std::vector<SchedulingDiagnosticRecord>& records)
+{
+    if (fileName.empty())
+    {
+        return;
+    }
+    const std::filesystem::path outputPath = std::filesystem::path(outputDir) / fileName;
+    std::filesystem::create_directories(outputPath.parent_path());
+    std::ofstream stream(outputPath, std::ios::out);
+    if (!stream.is_open())
+    {
+        throw std::runtime_error("failed to open TL-OCS scheduling diagnostics CSV: " +
+                                 outputPath.string());
+    }
+
+    stream << "experiment,scenario,scheme,diagnostic_only,oracle_mode,offered_load_factor,"
+              "seed,run_id,cycle,time_s,round_start_s,round_end_s,observed_matrix_bytes,"
+              "future_demand_bytes,selected_edge_count,active_edge_count,"
+              "ocs_assigned_flows,ocs_assigned_bytes,volume_selected_edge_count,"
+              "tl_ocs_selected_edge_count,oracle_selected_edge_count,selected_edge_jaccard,"
+              "selected_oracle_jaccard,volume_oracle_jaccard,tl_oracle_jaccard,"
+              "selected_future_top_jaccard,historical_future_pearson,"
+              "historical_future_topk_jaccard,demand_drift_ratio,"
+              "selected_future_demand_coverage,"
+              "volume_future_demand_coverage,tl_future_demand_coverage,"
+              "oracle_future_demand_coverage,selected_hit_flows,selected_hit_bytes,"
+              "selected_but_unused_lightpaths,oracle_possible_ocs_flows_missed,"
+              "oracle_possible_ocs_bytes_missed,volume_oracle_possible_bytes_missed,"
+              "tl_oracle_possible_bytes_missed,selected_edges,volume_selected_edges,"
+              "tl_ocs_selected_edges,oracle_selected_edges,raw_a_top_edges,tl_g_top_edges,"
+              "future_demand_top_edges\n";
+    for (const auto& record : records)
+    {
+        const bool diagnosticOnly = schemeName == "ocs-oracle";
+        stream << EscapeCsvField(experiment.GetExperimentName()) << ','
+               << EscapeCsvField(experiment.GetTrafficPattern()) << ','
+               << EscapeCsvField(schemeName) << ','
+               << (diagnosticOnly ? "true" : "false") << ','
+               << EscapeCsvField(oracleMode.empty() ? record.oracleMode : oracleMode) << ','
+               << std::setprecision(12) << offeredLoadFactor << ','
+               << experiment.GetRandomSeed() << ',' << experiment.GetRunId() << ','
+               << record.cycle << ',' << std::setprecision(12) << record.timeS << ','
+               << record.roundStartS << ',' << record.roundEndS << ','
+               << record.observedMatrixBytes << ',' << record.futureDemandBytes << ','
+               << record.selectedEdgeCount << ',' << record.activeEdgeCount << ','
+               << record.ocsAssignedFlows << ',' << record.ocsAssignedBytes << ','
+               << record.volumeSelectedEdgeCount << ',' << record.tlOcsSelectedEdgeCount << ','
+               << record.oracleSelectedEdgeCount << ',' << std::setprecision(12)
+               << record.selectedEdgeJaccard << ',' << record.selectedOracleJaccard << ','
+               << record.volumeOracleJaccard << ',' << record.tlOracleJaccard << ','
+               << record.selectedFutureTopJaccard << ','
+               << record.historicalFuturePearson << ','
+               << record.historicalFutureTopKJaccard << ','
+               << record.demandDriftRatio << ','
+               << record.selectedFutureDemandCoverage << ','
+               << record.volumeFutureDemandCoverage << ','
+               << record.tlFutureDemandCoverage << ','
+               << record.oracleFutureDemandCoverage << ','
+               << record.selectedHitFlows << ',' << record.selectedHitBytes << ','
+               << record.selectedButUnusedLightpaths << ','
+               << record.oraclePossibleOcsFlowsMissed << ','
+               << record.oraclePossibleOcsBytesMissed << ','
+               << record.volumeOraclePossibleBytesMissed << ','
+               << record.tlOraclePossibleBytesMissed << ','
+               << EscapeCsvField(record.selectedEdges) << ','
+               << EscapeCsvField(record.volumeSelectedEdges) << ','
+               << EscapeCsvField(record.tlOcsSelectedEdges) << ','
+               << EscapeCsvField(record.oracleSelectedEdges) << ','
+               << EscapeCsvField(record.rawATopEdges) << ','
+               << EscapeCsvField(record.tlGTopEdges) << ','
+               << EscapeCsvField(record.futureDemandTopEdges) << '\n';
+    }
+    std::cout << "TL-OCS scheduling diagnostics CSV: " << outputPath << std::endl;
+}
+
 } // namespace
 
 int
@@ -54,6 +219,9 @@ main(int argc, char* argv[])
     std::string outputDir = "results/raw";
     std::string summaryFile = "summary.csv";
     std::string flowResultFile;
+    std::string schedulingDiagnosticsFile;
+    std::string diagnosticMode = "none";
+    std::string oracleMode = "period-future";
     bool overwrite = true;
     bool enableEpsTopology = false;
     bool enableTcpSmoke = false;
@@ -71,7 +239,12 @@ main(int argc, char* argv[])
     bool observerDumpMatrix = false;
     bool printOcsDecisions = false;
     uint32_t spines = 1;
+    std::string serverAccessDataRate = "10Gbps";
+    std::string epsDataRate = "25Gbps";
     std::string ocsDataRate = "100Gbps";
+    uint64_t serverAccessRateBps = 0;
+    uint64_t epsLinkRateBps = 0;
+    uint64_t ocsLinkRateBps = 0;
     uint64_t ocsAssignmentThresholdBps = std::numeric_limits<uint64_t>::max();
     double ocsDelaySeconds = 0.000005;
     double timelineStageGapSeconds = 0.001;
@@ -85,6 +258,8 @@ main(int argc, char* argv[])
     uint64_t flowRateBps = 1000000000;
     double flowStartIntervalSeconds = 0.001;
     std::string arrivalMode = "deterministic";
+    bool continuousWorkload = false;
+    uint32_t maxGeneratedFlows = 100000;
     double poissonMeanInterArrivalSeconds = 0.001;
     uint32_t communityCount = 2;
     double communityLocalProbability = 0.8;
@@ -99,6 +274,7 @@ main(int argc, char* argv[])
     double eta = 1.0;
     double alpha = 0.5;
     uint32_t opticalPortsPerTor = 1;
+    double offeredLoadFactor = 0.0;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("numTors", "Number of ToR/access nodes", numTors);
@@ -114,6 +290,15 @@ main(int argc, char* argv[])
     cmd.AddValue("outputDir", "Directory for TL-OCS smoke artifacts", outputDir);
     cmd.AddValue("summaryFile", "Summary CSV file name", summaryFile);
     cmd.AddValue("flowResultFile", "Per-flow CSV file name; defaults to <experimentName>-flows.csv", flowResultFile);
+    cmd.AddValue("schedulingDiagnosticsFile",
+                 "Scheduling diagnostic CSV file name; empty disables diagnostic export",
+                 schedulingDiagnosticsFile);
+    cmd.AddValue("diagnosticMode",
+                 "Datapath diagnostic mode: none, force-eps, or force-ocs",
+                 diagnosticMode);
+    cmd.AddValue("oracleMode",
+                 "Diagnostic oracle mode for ocs-oracle: period-future or whole-run",
+                 oracleMode);
     cmd.AddValue("overwrite", "Overwrite summary CSV before writing", overwrite);
     cmd.AddValue("enableEpsTopology", "Build the minimum EPS topology", enableEpsTopology);
     cmd.AddValue("enableTcpSmoke", "Run one cross-ToR TCP smoke flow", enableTcpSmoke);
@@ -131,7 +316,18 @@ main(int argc, char* argv[])
     cmd.AddValue("observerDumpMatrix", "Print the observed W(t) matrix after the run", observerDumpMatrix);
     cmd.AddValue("printOcsDecisions", "Print per-flow OCS/EPS path decisions", printOcsDecisions);
     cmd.AddValue("spines", "Number of EPS spine nodes", spines);
+    cmd.AddValue("serverAccessDataRate", "Server-ToR access link data rate", serverAccessDataRate);
+    cmd.AddValue("epsDataRate", "EPS ToR-spine link data rate", epsDataRate);
     cmd.AddValue("ocsDataRate", "OCS candidate link data rate", ocsDataRate);
+    cmd.AddValue("serverAccessRateBps",
+                 "Server-ToR access link data rate in bps; overrides serverAccessDataRate when nonzero",
+                 serverAccessRateBps);
+    cmd.AddValue("epsLinkRateBps",
+                 "EPS ToR-spine link data rate in bps; overrides epsDataRate when nonzero",
+                 epsLinkRateBps);
+    cmd.AddValue("ocsLinkRateBps",
+                 "OCS candidate link data rate in bps; overrides ocsDataRate when nonzero",
+                 ocsLinkRateBps);
     cmd.AddValue("ocsAssignmentThresholdBps",
                  "Maximum assigned flow rate in bps per active OCS lightpath",
                  ocsAssignmentThresholdBps);
@@ -147,6 +343,12 @@ main(int argc, char* argv[])
     cmd.AddValue("flowRateBps", "Estimated rate in bps per generated training traffic flow", flowRateBps);
     cmd.AddValue("flowStartInterval", "Interval between generated flow start times in seconds", flowStartIntervalSeconds);
     cmd.AddValue("arrivalMode", "Training flow arrival mode: deterministic, poisson, or iteration-burst", arrivalMode);
+    cmd.AddValue("continuousWorkload",
+                 "Generate training traffic until the next start time reaches stopTime",
+                 continuousWorkload);
+    cmd.AddValue("maxGeneratedFlows",
+                 "Safety cap for continuous workload generation",
+                 maxGeneratedFlows);
     cmd.AddValue("poissonMeanInterArrival", "Mean Poisson inter-arrival time in seconds", poissonMeanInterArrivalSeconds);
     cmd.AddValue("communityCount", "Number of deterministic traffic communities", communityCount);
     cmd.AddValue("communityLocalProbability", "Probability that a Poisson community-local flow stays within its community", communityLocalProbability);
@@ -161,7 +363,46 @@ main(int argc, char* argv[])
     cmd.AddValue("eta", "Null-model resolution parameter", eta);
     cmd.AddValue("alpha", "Cross-community optical gain factor", alpha);
     cmd.AddValue("opticalPortsPerTor", "Optical port limit per ToR for pure scheduling", opticalPortsPerTor);
+    cmd.AddValue("offeredLoadFactor",
+                 "Traffic intensity multiplier recorded in diagnostics",
+                 offeredLoadFactor);
     cmd.Parse(argc, argv);
+
+    if (serverAccessRateBps > 0)
+    {
+        serverAccessDataRate = FormatDataRateBps(serverAccessRateBps);
+    }
+    if (epsLinkRateBps > 0)
+    {
+        epsDataRate = FormatDataRateBps(epsLinkRateBps);
+    }
+    if (ocsLinkRateBps > 0)
+    {
+        ocsDataRate = FormatDataRateBps(ocsLinkRateBps);
+    }
+
+    const bool enableDiagnosticMode = diagnosticMode != "none";
+    if (enableDiagnosticMode)
+    {
+        if (diagnosticMode != "force-eps" && diagnosticMode != "force-ocs")
+        {
+            std::cerr << "Unsupported datapath diagnostic mode: " << diagnosticMode
+                      << std::endl;
+            return 1;
+        }
+        enableEpsTopology = true;
+        enableTrainingTraffic = true;
+        enableFlowMetrics = true;
+        if (diagnosticMode == "force-ocs")
+        {
+            enableOcsLinks = true;
+        }
+    }
+    if (oracleMode != "period-future" && oracleMode != "whole-run")
+    {
+        std::cerr << "Unsupported oracleMode: " << oracleMode << std::endl;
+        return 1;
+    }
 
     std::optional<SchemeConfig> scheme;
     if (enableSchemeRunner)
@@ -186,6 +427,8 @@ main(int argc, char* argv[])
     SimulationConfig config;
     config.SetNumTors(numTors);
     config.SetServersPerTor(serversPerTor);
+    config.SetServerAccessDataRate(serverAccessDataRate);
+    config.SetEpsDataRate(epsDataRate);
     config.SetObserverWindow(Seconds(observerWindowSeconds));
     config.SetOcsReconfigurationPeriod(Seconds(ocsPeriodSeconds));
     config.SetOcsDataRate(ocsDataRate);
@@ -264,9 +507,10 @@ main(int argc, char* argv[])
         std::cerr << "Use either --enableTrainingTraffic=true or --enableTcpSmoke=true" << std::endl;
         return 1;
     }
-    if (enableFlowMetrics && !enableSchemeRunner)
+    if (enableFlowMetrics && !enableSchemeRunner && !enableDiagnosticMode)
     {
-        std::cerr << "Flow metrics require --enableSchemeRunner=true" << std::endl;
+        std::cerr << "Flow metrics require --enableSchemeRunner=true or diagnosticMode"
+                  << std::endl;
         return 1;
     }
     if (enableFiniteMultiCycle && !enableSchemeRunner)
@@ -290,6 +534,12 @@ main(int argc, char* argv[])
                                   !Seconds(flowStartIntervalSeconds).IsPositive()))
     {
         std::cerr << "Invalid training traffic configuration" << std::endl;
+        return 1;
+    }
+    if (enableTrainingTraffic && continuousWorkload && maxGeneratedFlows == 0)
+    {
+        std::cerr << "Invalid training traffic configuration: maxGeneratedFlows must be positive"
+                  << std::endl;
         return 1;
     }
     if (enableTrainingTraffic && trafficPattern == "parameter-aggregation" &&
@@ -394,6 +644,8 @@ main(int argc, char* argv[])
             trafficConfig.smallFlowProbability = smallFlowProbability;
             trafficConfig.estimatedFlowRateBps = flowRateBps;
             trafficConfig.flowStartInterval = Seconds(flowStartIntervalSeconds);
+            trafficConfig.continuousWorkload = continuousWorkload;
+            trafficConfig.maxGeneratedFlows = maxGeneratedFlows;
             if (arrivalMode == "deterministic" || arrivalMode == "interval")
             {
                 trafficConfig.arrivalMode = TrafficArrivalMode::DETERMINISTIC;
@@ -437,6 +689,40 @@ main(int argc, char* argv[])
             {
                 generator = std::make_unique<AggregationTrafficGenerator>();
             }
+            else if (trafficPattern == "aggregation-distractor")
+            {
+                generator = std::make_unique<AggregationDistractorTrafficGenerator>();
+            }
+            else if (trafficPattern == "single-pair-heavy")
+            {
+                generator = std::make_unique<DatapathDiagnosticTrafficGenerator>(
+                    DatapathDiagnosticPattern::SINGLE_PAIR_HEAVY);
+            }
+            else if (trafficPattern == "near-neighbor-heavy")
+            {
+                generator = std::make_unique<DatapathDiagnosticTrafficGenerator>(
+                    DatapathDiagnosticPattern::NEAR_NEIGHBOR_HEAVY);
+            }
+            else if (trafficPattern == "community-distractor-training")
+            {
+                generator = std::make_unique<MechanismSeparationTrafficGenerator>(
+                    MechanismSeparationPattern::COMMUNITY_DISTRACTOR);
+            }
+            else if (trafficPattern == "aggregator-bias-training")
+            {
+                generator = std::make_unique<MechanismSeparationTrafficGenerator>(
+                    MechanismSeparationPattern::AGGREGATOR_BIAS);
+            }
+            else if (trafficPattern == "high-degree-aggregator-bias-replay")
+            {
+                generator = std::make_unique<MatrixReplayTrafficGenerator>(
+                    MatrixReplayProfile::HIGH_DEGREE_AGGREGATOR_BIAS);
+            }
+            else if (trafficPattern == "cross-community-distractor-replay")
+            {
+                generator = std::make_unique<MatrixReplayTrafficGenerator>(
+                    MatrixReplayProfile::CROSS_COMMUNITY_DISTRACTOR);
+            }
             else
             {
                 std::cerr << "Unsupported training traffic pattern: " << trafficPattern
@@ -445,7 +731,56 @@ main(int argc, char* argv[])
             }
 
             const std::vector<FlowSpec> flows = generator->Generate(config, trafficConfig);
-            if (enableSchemeRunner)
+            if (enableDiagnosticMode)
+            {
+                FlowLauncher launcher;
+                std::vector<FlowPathDecision> decisions;
+                OcsLinkManager linkManager;
+                FlowLaunchResult launchResult;
+                if (diagnosticMode == "force-ocs")
+                {
+                    const std::vector<OpticalEdge> selectedEdges =
+                        BuildDiagnosticOcsEdges(flows, opticalPortsPerTor);
+                    linkManager.ApplySelectedEdges(selectedEdges);
+                    ocsActiveEdges = linkManager.GetActiveEdgeCount();
+                    decisions = BuildForceOcsDecisions(flows, linkManager, index);
+                    InstallOcsHostRoutes(flows, decisions, index);
+                    launchResult = launcher.Install(flows,
+                                                    decisions,
+                                                    index,
+                                                    config.GetStopTime(),
+                                                    10000);
+                    installedFlows = launchResult.installedFlows;
+                    ocsAssignedFlows = launchResult.assignedOcsFlows;
+                    epsFallbackFlows = launchResult.epsFlows;
+                    status = "diagnostic_force_ocs_ok";
+                }
+                else
+                {
+                    launchResult = launcher.Install(flows, index, config.GetStopTime());
+                    installedFlows = launchResult.installedFlows;
+                    ocsActiveEdges = 0;
+                    ocsAssignedFlows = launchResult.assignedOcsFlows;
+                    epsFallbackFlows = launchResult.epsFlows;
+                    status = "diagnostic_force_eps_ok";
+                }
+
+                Simulator::Stop(config.GetStopTime());
+                Simulator::Run();
+                receivedBytes = launchResult.GetTotalReceivedBytes();
+                flowMetrics = MetricsCollector().Collect(launchResult.metricSources, schemeName);
+                flowMetricsSummary =
+                    MetricsCollector().Summarize(flowMetrics, config.GetStopTime().GetSeconds());
+                std::cout << "TL-OCS datapath diagnostic: mode=" << diagnosticMode
+                          << ", diagnostic_only=true"
+                          << ", flows=" << installedFlows.value()
+                          << ", ocsActiveEdges=" << ocsActiveEdges.value()
+                          << ", ocsAssigned=" << ocsAssignedFlows.value()
+                          << ", epsFallback=" << epsFallbackFlows.value()
+                          << ", receivedBytes=" << receivedBytes.value() << std::endl;
+                Simulator::Destroy();
+            }
+            else if (enableSchemeRunner)
             {
                 TlOcsAlgorithmParameters algorithmParameters;
                 algorithmParameters.thetaF = thetaF;
@@ -460,6 +795,7 @@ main(int argc, char* argv[])
                 scenarioOptions.enableLinkMetrics = enableLinkMetrics;
                 scenarioOptions.enableOcsMetrics = enableOcsMetrics;
                 scenarioOptions.enableFiniteMultiCycle = enableFiniteMultiCycle;
+                scenarioOptions.oracleMode = oracleMode;
 
                 SmokeScenarioRunner scenarioRunner;
                 const SmokeScenarioResult scenarioResult =
@@ -500,6 +836,13 @@ main(int argc, char* argv[])
                 flowMetricsSummary = scenarioResult.flowMetricsSummary;
                 linkUtilizationSummary = scenarioResult.linkUtilizationSummary;
                 ocsMetricsSummary = scenarioResult.ocsMetricsSummary;
+                WriteSchedulingDiagnostics(output.GetOutputDir(),
+                                           schedulingDiagnosticsFile,
+                                           experiment,
+                                           scenarioResult.schemeName,
+                                           offeredLoadFactor,
+                                           oracleMode,
+                                           scenarioResult.schedulingDiagnostics);
 
                 std::cout << "TL-OCS scheme runner: scheme=" << scenarioResult.schemeName
                           << ", status=" << scenarioResult.status

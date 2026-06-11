@@ -31,6 +31,8 @@ struct TrafficGenerationConfig
     uint64_t estimatedFlowRateBps = 1000000000;
     Time flowStartInterval = MilliSeconds(1);
     TrafficArrivalMode arrivalMode = TrafficArrivalMode::DETERMINISTIC;
+    bool continuousWorkload = false;
+    uint32_t maxGeneratedFlows = 0;
     uint32_t randomSeed = 1;
     Time poissonMeanInterArrival = MilliSeconds(1);
     uint32_t communityCount = 2;
@@ -52,6 +54,7 @@ class TrainingTrafficGenerator
                                            const TrafficGenerationConfig& traffic) const = 0;
 
   protected:
+    static uint32_t GetGenerationLimit(const TrafficGenerationConfig& traffic);
     static Time GetStartTime(const TrafficGenerationConfig& traffic, uint32_t flowIndex);
     static std::vector<Time> GenerateStartTimes(const SimulationConfig& simulation,
                                                 const TrafficGenerationConfig& traffic);

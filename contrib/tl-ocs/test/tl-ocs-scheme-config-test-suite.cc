@@ -34,6 +34,14 @@ TlOcsSchemeConfigTestCase::DoRun()
     NS_TEST_ASSERT_MSG_EQ(tlOcs.ToString(), "tl-ocs", "TL-OCS string round-trip failed");
     NS_TEST_ASSERT_MSG_EQ(tlOcs.EnableOcsAdmission(), true, "TL-OCS should enable OCS admission");
 
+    const SchemeConfig oracle = SchemeConfig::FromString("ocs-oracle");
+    NS_TEST_ASSERT_MSG_EQ(oracle.ToString(), "ocs-oracle", "OCS oracle string round-trip failed");
+    NS_TEST_ASSERT_MSG_EQ(oracle.EnableOcsLinks(), true, "OCS oracle should build OCS links");
+    NS_TEST_ASSERT_MSG_EQ(oracle.EnableTrafficObserver(), true, "OCS oracle should attach observer");
+    NS_TEST_ASSERT_MSG_EQ(oracle.EnableOcsAdmission(), true, "OCS oracle should use OCS admission");
+    NS_TEST_ASSERT_MSG_EQ(oracle.UseOracleScheduler(), true, "OCS oracle should select oracle scheduler");
+    NS_TEST_ASSERT_MSG_EQ(oracle.UseVolumeScheduler(), false, "OCS oracle should not be OCS volume");
+
     bool threw = false;
     try
     {

@@ -1,5 +1,9 @@
 #include "ns3/aggregation-traffic-generator.h"
+#include "ns3/aggregation-distractor-traffic-generator.h"
 #include "ns3/community-traffic-generator.h"
+#include "ns3/datapath-diagnostic-traffic-generator.h"
+#include "ns3/matrix-replay-traffic-generator.h"
+#include "ns3/mechanism-separation-traffic-generator.h"
 #include "ns3/simulation-config.h"
 #include "ns3/test.h"
 #include "ns3/uniform-traffic-generator.h"
@@ -448,6 +452,253 @@ class TlOcsMixedFlowSizeTrafficGeneratorTestCase : public TestCase
     }
 };
 
+class TlOcsAggregationDistractorTrafficGeneratorTestCase : public TestCase
+{
+  public:
+    TlOcsAggregationDistractorTrafficGeneratorTestCase()
+        : TestCase("TL-OCS aggregation-distractor traffic combines aggregators and worker groups")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(12);
+        simulation.SetServersPerTor(2);
+
+        TrafficGenerationConfig traffic;
+        traffic.numFlows = 20;
+        traffic.arrivalMode = TrafficArrivalMode::ITERATION_BURST;
+        traffic.aggregatorTor = 0;
+        traffic.aggregatorCount = 2;
+        traffic.communityCount = 2;
+        traffic.burstSize = 5;
+        traffic.numIterations = 2;
+        traffic.includeAggregationReturnFlows = true;
+        traffic.flowSizeBytes = 1000;
+        traffic.largeFlowSizeBytes = 2000;
+
+        const auto flows = AggregationDistractorTrafficGenerator().Generate(simulation, traffic);
+        NS_TEST_ASSERT_MSG_EQ(flows.size(), 20, "unexpected distractor workload flow count");
+        NS_TEST_ASSERT_MSG_EQ(flows[0].GetDestinationTorId(), 0, "first distractor aggregator changed");
+        NS_TEST_ASSERT_MSG_EQ(flows[1].GetSourceTorId(), 0, "first return flow changed");
+        NS_TEST_ASSERT_MSG_EQ(flows[2].GetDestinationTorId(), 1, "second distractor aggregator changed");
+        NS_TEST_ASSERT_MSG_EQ(flows[0].GetSizeBytes(), 2000, "distractor flow is not large");
+        NS_TEST_ASSERT_MSG_EQ(flows[4].GetPatternName(),
+                              "aggregation-distractor",
+                              "unexpected pattern name");
+        bool sawStructuralWorkerPair = false;
+        for (const auto& flow : flows)
+        {
+            sawStructuralWorkerPair =
+                sawStructuralWorkerPair ||
+                (flow.GetSourceTorId() >= 4 && flow.GetDestinationTorId() >= 4 &&
+                 flow.GetSizeBytes() == 1000);
+        }
+        NS_TEST_ASSERT_MSG_EQ(sawStructuralWorkerPair,
+                              true,
+                              "distractor workload lacks structural worker-group edges");
+    }
+};
+
+class TlOcsContinuousPoissonTrafficGeneratorTestCase : public TestCase
+{
+  public:
+    TlOcsContinuousPoissonTrafficGeneratorTestCase()
+        : TestCase("TL-OCS continuous Poisson traffic ignores numFlows as a normal load cap")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(4);
+        simulation.SetServersPerTor(1);
+        simulation.SetStopTime(MilliSeconds(10));
+
+        TrafficGenerationConfig traffic;
+        traffic.numFlows = 2;
+        traffic.continuousWorkload = true;
+        traffic.maxGeneratedFlows = 1000;
+        traffic.arrivalMode = TrafficArrivalMode::POISSON;
+        traffic.poissonMeanInterArrival = MicroSeconds(100);
+        traffic.randomSeed = 7;
+
+        const auto flows = UniformTrafficGenerator().Generate(simulation, traffic);
+        NS_TEST_ASSERT_MSG_GT(flows.size(), 2, "continuous Poisson stopped at numFlows");
+        for (const auto& flow : flows)
+        {
+            NS_TEST_ASSERT_MSG_LT(flow.GetStartTime(),
+                                  simulation.GetStopTime(),
+                                  "continuous Poisson generated past stopTime");
+        }
+    }
+};
+
+class TlOcsDatapathDiagnosticTrafficGeneratorTestCase : public TestCase
+{
+  public:
+    TlOcsDatapathDiagnosticTrafficGeneratorTestCase()
+        : TestCase("TL-OCS datapath diagnostic traffic creates heavy fixed ToR pairs")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(8);
+        simulation.SetServersPerTor(2);
+        simulation.SetStopTime(MilliSeconds(6));
+
+        TrafficGenerationConfig traffic;
+        traffic.continuousWorkload = true;
+        traffic.maxGeneratedFlows = 100;
+        traffic.flowStartInterval = MilliSeconds(1);
+        traffic.communityCount = 4;
+
+        const auto flows = DatapathDiagnosticTrafficGenerator(
+                               DatapathDiagnosticPattern::NEAR_NEIGHBOR_HEAVY)
+                               .Generate(simulation, traffic);
+        NS_TEST_ASSERT_MSG_EQ(flows.size(), 5, "unexpected continuous diagnostic flow count");
+        NS_TEST_ASSERT_MSG_EQ(flows[0].GetSourceTorId(), 0, "first diagnostic source changed");
+        NS_TEST_ASSERT_MSG_EQ(flows[0].GetDestinationTorId(), 1, "first diagnostic destination changed");
+        NS_TEST_ASSERT_MSG_EQ(flows[1].GetSourceTorId(), 2, "second diagnostic source changed");
+        NS_TEST_ASSERT_MSG_EQ(flows[1].GetDestinationTorId(), 3, "second diagnostic destination changed");
+        NS_TEST_ASSERT_MSG_EQ(flows[0].GetPatternName(),
+                              "near-neighbor-heavy",
+                              "unexpected diagnostic pattern");
+    }
+};
+
+class TlOcsMechanismSeparationTrafficGeneratorTestCase : public TestCase
+{
+  public:
+    TlOcsMechanismSeparationTrafficGeneratorTestCase()
+        : TestCase("TL-OCS mechanism-separation traffic repeats stable training phases")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(8);
+        simulation.SetServersPerTor(1);
+        simulation.SetStopTime(MilliSeconds(16));
+
+        TrafficGenerationConfig traffic;
+        traffic.continuousWorkload = true;
+        traffic.maxGeneratedFlows = 1000;
+        traffic.iterationPeriod = MilliSeconds(5);
+        traffic.burstSize = 1;
+        traffic.flowSizeBytes = 1000;
+
+        const auto communityFlows =
+            MechanismSeparationTrafficGenerator(
+                MechanismSeparationPattern::COMMUNITY_DISTRACTOR)
+                .Generate(simulation, traffic);
+        const auto aggregatorFlows =
+            MechanismSeparationTrafficGenerator(MechanismSeparationPattern::AGGREGATOR_BIAS)
+                .Generate(simulation, traffic);
+        NS_TEST_ASSERT_MSG_GT(communityFlows.size(), 0, "community-distractor workload is empty");
+        NS_TEST_ASSERT_MSG_GT(aggregatorFlows.size(), communityFlows.size(), "aggregator-bias should contain more phase edges");
+        NS_TEST_ASSERT_MSG_EQ(communityFlows.front().GetPatternName(),
+                              "community-distractor-training",
+                              "unexpected community-distractor pattern name");
+        NS_TEST_ASSERT_MSG_EQ(aggregatorFlows.front().GetPatternName(),
+                              "aggregator-bias-training",
+                              "unexpected aggregator-bias pattern name");
+
+        for (const auto& flow : aggregatorFlows)
+        {
+            NS_TEST_ASSERT_MSG_LT(flow.GetStartTime(),
+                                  simulation.GetStopTime(),
+                                  "mechanism workload generated past stopTime");
+            NS_TEST_ASSERT_MSG_NE(flow.GetSourceTorId(),
+                                  flow.GetDestinationTorId(),
+                                  "mechanism workload generated intra-ToR flow");
+        }
+
+        traffic.burstSize = 2;
+        const auto heavier =
+            MechanismSeparationTrafficGenerator(MechanismSeparationPattern::AGGREGATOR_BIAS)
+                .Generate(simulation, traffic);
+        NS_TEST_ASSERT_MSG_GT(heavier.size(),
+                              aggregatorFlows.size(),
+                              "burstSize should increase mechanism workload flow count");
+    }
+};
+
+class TlOcsMatrixReplayTrafficGeneratorTestCase : public TestCase
+{
+  public:
+    TlOcsMatrixReplayTrafficGeneratorTestCase()
+        : TestCase("TL-OCS matrix-replay traffic preserves repeated replay periods")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(8);
+        simulation.SetServersPerTor(1);
+        simulation.SetStopTime(MilliSeconds(12));
+
+        TrafficGenerationConfig traffic;
+        traffic.continuousWorkload = true;
+        traffic.maxGeneratedFlows = 1000;
+        traffic.iterationPeriod = MilliSeconds(5);
+        traffic.burstSize = 1;
+        traffic.flowSizeBytes = 100000;
+        traffic.estimatedFlowRateBps = 1000000000;
+
+        const auto highDegreeFlows =
+            MatrixReplayTrafficGenerator(MatrixReplayProfile::HIGH_DEGREE_AGGREGATOR_BIAS)
+                .Generate(simulation, traffic);
+        const auto crossFlows =
+            MatrixReplayTrafficGenerator(MatrixReplayProfile::CROSS_COMMUNITY_DISTRACTOR)
+                .Generate(simulation, traffic);
+        NS_TEST_ASSERT_MSG_GT(highDegreeFlows.size(), 0, "high-degree replay workload is empty");
+        NS_TEST_ASSERT_MSG_GT(crossFlows.size(), 0, "cross-community replay workload is empty");
+        NS_TEST_ASSERT_MSG_GT(highDegreeFlows.size(),
+                              crossFlows.size(),
+                              "high-degree replay should contain more target edges");
+        NS_TEST_ASSERT_MSG_EQ(highDegreeFlows.front().GetPatternName(),
+                              "high-degree-aggregator-bias-replay",
+                              "unexpected high-degree replay pattern");
+        NS_TEST_ASSERT_MSG_EQ(crossFlows.front().GetPatternName(),
+                              "cross-community-distractor-replay",
+                              "unexpected cross-community replay pattern");
+
+        bool sawLargeFutureReplay = false;
+        for (const auto& flow : highDegreeFlows)
+        {
+            NS_TEST_ASSERT_MSG_LT(flow.GetStartTime(),
+                                  simulation.GetStopTime(),
+                                  "matrix replay generated past stopTime");
+            NS_TEST_ASSERT_MSG_NE(flow.GetSourceTorId(),
+                                  flow.GetDestinationTorId(),
+                                  "matrix replay generated intra-ToR flow");
+            sawLargeFutureReplay = sawLargeFutureReplay || flow.GetSizeBytes() > traffic.flowSizeBytes;
+        }
+        NS_TEST_ASSERT_MSG_EQ(sawLargeFutureReplay,
+                              true,
+                              "matrix replay did not amplify future utility burst");
+
+        traffic.burstSize = 2;
+        const auto heavier =
+            MatrixReplayTrafficGenerator(MatrixReplayProfile::HIGH_DEGREE_AGGREGATOR_BIAS)
+                .Generate(simulation, traffic);
+        NS_TEST_ASSERT_MSG_GT(heavier.size(),
+                              highDegreeFlows.size(),
+                              "burstSize should increase matrix replay flow count");
+    }
+};
+
 class TlOcsTrafficGeneratorTestSuite : public TestSuite
 {
   public:
@@ -466,6 +717,11 @@ TlOcsTrafficGeneratorTestSuite::TlOcsTrafficGeneratorTestSuite()
     AddTestCase(new TlOcsAggregationReturnFlowTrafficGeneratorTestCase);
     AddTestCase(new TlOcsMultiAggregatorTrafficGeneratorTestCase);
     AddTestCase(new TlOcsMixedFlowSizeTrafficGeneratorTestCase);
+    AddTestCase(new TlOcsAggregationDistractorTrafficGeneratorTestCase);
+    AddTestCase(new TlOcsContinuousPoissonTrafficGeneratorTestCase);
+    AddTestCase(new TlOcsDatapathDiagnosticTrafficGeneratorTestCase);
+    AddTestCase(new TlOcsMechanismSeparationTrafficGeneratorTestCase);
+    AddTestCase(new TlOcsMatrixReplayTrafficGeneratorTestCase);
 }
 
 static TlOcsTrafficGeneratorTestSuite g_tlOcsTrafficGeneratorTestSuite;

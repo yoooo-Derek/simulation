@@ -9,6 +9,16 @@ namespace tl_ocs
 
 TrainingTrafficGenerator::~TrainingTrafficGenerator() = default;
 
+uint32_t
+TrainingTrafficGenerator::GetGenerationLimit(const TrafficGenerationConfig& traffic)
+{
+    if (!traffic.continuousWorkload)
+    {
+        return traffic.numFlows;
+    }
+    return traffic.maxGeneratedFlows == 0 ? traffic.numFlows : traffic.maxGeneratedFlows;
+}
+
 Time
 TrainingTrafficGenerator::GetStartTime(const TrafficGenerationConfig& traffic, uint32_t flowIndex)
 {
@@ -20,12 +30,18 @@ TrainingTrafficGenerator::GenerateStartTimes(const SimulationConfig& simulation,
                                              const TrafficGenerationConfig& traffic)
 {
     std::vector<Time> startTimes;
-    startTimes.reserve(traffic.numFlows);
+    const uint32_t generationLimit = GetGenerationLimit(traffic);
+    startTimes.reserve(generationLimit);
     if (traffic.arrivalMode != TrafficArrivalMode::POISSON)
     {
-        for (uint32_t flowIndex = 0; flowIndex < traffic.numFlows; ++flowIndex)
+        for (uint32_t flowIndex = 0; flowIndex < generationLimit; ++flowIndex)
         {
-            startTimes.push_back(GetStartTime(traffic, flowIndex));
+            const Time startTime = GetStartTime(traffic, flowIndex);
+            if (traffic.continuousWorkload && startTime >= simulation.GetStopTime())
+            {
+                break;
+            }
+            startTimes.push_back(startTime);
         }
         return startTimes;
     }
@@ -34,13 +50,13 @@ TrainingTrafficGenerator::GenerateStartTimes(const SimulationConfig& simulation,
     std::exponential_distribution<double> interArrival(
         1.0 / traffic.poissonMeanInterArrival.GetSeconds());
     Time startTime = MilliSeconds(1);
-    for (uint32_t flowIndex = 0; flowIndex < traffic.numFlows; ++flowIndex)
+    for (uint32_t flowIndex = 0; flowIndex < generationLimit; ++flowIndex)
     {
         if (flowIndex > 0)
         {
             startTime += Seconds(interArrival(generator));
         }
-        if (startTime > simulation.GetStopTime())
+        if (startTime >= simulation.GetStopTime())
         {
             break;
         }

@@ -12,7 +12,8 @@ enum class SchemeType
 {
     EPS_ECMP,
     OCS_VOLUME,
-    TL_OCS
+    TL_OCS,
+    OCS_ORACLE
 };
 
 class SchemeConfig
@@ -29,6 +30,7 @@ class SchemeConfig
     bool EnableAlgorithm() const;
     bool EnableOcsAdmission() const;
     bool UseVolumeScheduler() const;
+    bool UseOracleScheduler() const;
 
   private:
     SchemeType m_type;

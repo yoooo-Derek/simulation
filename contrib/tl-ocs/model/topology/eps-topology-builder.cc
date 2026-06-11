@@ -49,7 +49,7 @@ EpsTopologyBuilder::Build(const SimulationConfig& config,
     internet.Install(allNodes);
 
     PointToPointHelper serverTorLink;
-    serverTorLink.SetDeviceAttribute("DataRate", StringValue("10Gbps"));
+    serverTorLink.SetDeviceAttribute("DataRate", StringValue(config.GetServerAccessDataRate()));
     serverTorLink.SetChannelAttribute("Delay", StringValue("10us"));
 
     PointToPointHelper torSpineLink;

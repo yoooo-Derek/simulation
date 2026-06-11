@@ -1,6 +1,7 @@
 #include "aggregation-traffic-generator.h"
 
 #include <algorithm>
+#include <limits>
 
 namespace ns3
 {
@@ -12,24 +13,31 @@ AggregationTrafficGenerator::Generate(const SimulationConfig& simulation,
                                       const TrafficGenerationConfig& traffic) const
 {
     std::vector<FlowSpec> flows;
-    flows.reserve(traffic.numFlows);
+    const uint32_t generationLimit = GetGenerationLimit(traffic);
+    flows.reserve(generationLimit);
 
     const uint32_t numTors = simulation.GetNumTors();
     const uint32_t serversPerTor = simulation.GetServersPerTor();
     const uint32_t aggregatorCount = std::max<uint32_t>(1, traffic.aggregatorCount);
-    const std::vector<uint64_t> flowSizes = GenerateFlowSizes(traffic, traffic.numFlows);
+    const std::vector<uint64_t> flowSizes = GenerateFlowSizes(traffic, generationLimit);
 
     if (traffic.arrivalMode == TrafficArrivalMode::ITERATION_BURST)
     {
-        for (uint32_t iteration = 0;
-             iteration < traffic.numIterations && flows.size() < traffic.numFlows;
+        const uint32_t iterationLimit =
+            traffic.continuousWorkload ? std::numeric_limits<uint32_t>::max()
+                                       : traffic.numIterations;
+        for (uint32_t iteration = 0; iteration < iterationLimit && flows.size() < generationLimit;
              ++iteration)
         {
             const Time startTime = MilliSeconds(1) + traffic.iterationPeriod * iteration;
+            if (traffic.continuousWorkload && startTime >= simulation.GetStopTime())
+            {
+                break;
+            }
             const uint32_t aggregatorTor =
                 (traffic.aggregatorTor + (iteration % aggregatorCount)) % numTors;
             for (uint32_t burstIndex = 0;
-                 burstIndex < traffic.burstSize && flows.size() < traffic.numFlows;
+                 burstIndex < traffic.burstSize && flows.size() < generationLimit;
                  ++burstIndex)
             {
                 const uint32_t flowId = static_cast<uint32_t>(flows.size());
@@ -45,7 +53,7 @@ AggregationTrafficGenerator::Generate(const SimulationConfig& simulation,
                                    startTime,
                                    "parameter-aggregation",
                                    traffic.estimatedFlowRateBps);
-                if (traffic.includeAggregationReturnFlows && flows.size() < traffic.numFlows)
+                if (traffic.includeAggregationReturnFlows && flows.size() < generationLimit)
                 {
                     flows.emplace_back(static_cast<uint32_t>(flows.size()),
                                        aggregatorTor,

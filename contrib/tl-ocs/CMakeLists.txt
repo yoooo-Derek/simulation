@@ -31,9 +31,13 @@ build_lib(
     model/routing/ocs-link-manager.cc
     model/topology/eps-topology-builder.cc
     model/topology/node-index.cc
+    model/traffic/aggregation-distractor-traffic-generator.cc
     model/traffic/aggregation-traffic-generator.cc
     model/traffic/community-traffic-generator.cc
+    model/traffic/datapath-diagnostic-traffic-generator.cc
     model/traffic/flow-spec.cc
+    model/traffic/matrix-replay-traffic-generator.cc
+    model/traffic/mechanism-separation-traffic-generator.cc
     model/traffic/training-traffic-generator.cc
     model/traffic/uniform-traffic-generator.cc
   HEADER_FILES
@@ -67,9 +71,13 @@ build_lib(
     model/routing/ocs-link-manager.h
     model/topology/eps-topology-builder.h
     model/topology/node-index.h
+    model/traffic/aggregation-distractor-traffic-generator.h
     model/traffic/aggregation-traffic-generator.h
     model/traffic/community-traffic-generator.h
+    model/traffic/datapath-diagnostic-traffic-generator.h
     model/traffic/flow-spec.h
+    model/traffic/matrix-replay-traffic-generator.h
+    model/traffic/mechanism-separation-traffic-generator.h
     model/traffic/training-traffic-generator.h
     model/traffic/uniform-traffic-generator.h
   LIBRARIES_TO_LINK

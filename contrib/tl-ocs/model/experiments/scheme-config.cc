@@ -22,6 +22,10 @@ SchemeConfig::FromString(const std::string& name)
     {
         return SchemeConfig(SchemeType::TL_OCS);
     }
+    if (name == "ocs-oracle")
+    {
+        return SchemeConfig(SchemeType::OCS_ORACLE);
+    }
     throw std::runtime_error("unknown TL-OCS smoke scheme: " + name);
 }
 
@@ -47,6 +51,8 @@ SchemeConfig::ToString() const
         return "ocs-volume";
     case SchemeType::TL_OCS:
         return "tl-ocs";
+    case SchemeType::OCS_ORACLE:
+        return "ocs-oracle";
     }
     throw std::runtime_error("invalid TL-OCS smoke scheme");
 }
@@ -54,7 +60,8 @@ SchemeConfig::ToString() const
 bool
 SchemeConfig::EnableOcsLinks() const
 {
-    return m_type == SchemeType::OCS_VOLUME || m_type == SchemeType::TL_OCS;
+    return m_type == SchemeType::OCS_VOLUME || m_type == SchemeType::TL_OCS ||
+           m_type == SchemeType::OCS_ORACLE;
 }
 
 bool
@@ -79,6 +86,12 @@ bool
 SchemeConfig::UseVolumeScheduler() const
 {
     return m_type == SchemeType::OCS_VOLUME;
+}
+
+bool
+SchemeConfig::UseOracleScheduler() const
+{
+    return m_type == SchemeType::OCS_ORACLE;
 }
 
 } // namespace tl_ocs

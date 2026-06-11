@@ -25,6 +25,7 @@ struct SmokeScenarioOptions
     bool enableLinkMetrics = false;
     bool enableOcsMetrics = false;
     bool enableFiniteMultiCycle = false;
+    std::string oracleMode = "period-future";
 };
 
 struct SmokeScenarioResult
@@ -54,6 +55,7 @@ struct SmokeScenarioResult
     uint64_t stage1ReceivedBytes = 0;
     uint64_t stage2ReceivedBytes = 0;
     std::string selectedEdgeList;
+    std::vector<SchedulingDiagnosticRecord> schedulingDiagnostics;
     std::vector<FlowMetricRecord> flowMetrics;
     std::optional<FlowMetricsSummary> flowMetricsSummary;
     std::optional<LinkUtilizationSummary> linkUtilizationSummary;
