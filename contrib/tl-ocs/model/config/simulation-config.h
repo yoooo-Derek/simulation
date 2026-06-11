@@ -37,6 +37,15 @@ class SimulationConfig
     void SetStopTime(Time stopTime);
     Time GetStopTime() const;
 
+    void SetTrafficStopTime(Time trafficStopTime);
+    Time GetTrafficStopTime() const;
+
+    void SetMeasurementStartTime(Time measurementStartTime);
+    Time GetMeasurementStartTime() const;
+
+    void SetMeasurementEndTime(Time measurementEndTime);
+    Time GetMeasurementEndTime() const;
+
     void SetObserverWindow(Time observerWindow);
     Time GetObserverWindow() const;
 
@@ -60,10 +69,15 @@ class SimulationConfig
     std::string m_ocsDataRate;
     uint64_t m_ocsAssignmentThresholdBps;
     Time m_stopTime;
+    Time m_trafficStopTime;
+    Time m_measurementStartTime;
+    Time m_measurementEndTime;
     Time m_observerWindow;
     Time m_ocsReconfigurationPeriod;
     uint32_t m_randomSeed;
     uint32_t m_runId;
+    bool m_trafficStopTimeExplicit;
+    bool m_measurementEndTimeExplicit;
 };
 
 } // namespace tl_ocs

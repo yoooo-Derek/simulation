@@ -130,7 +130,10 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
         result.epsFallbackFlows = launch.installedFlows;
         if (options.enableFlowMetrics)
         {
-            CollectFlowMetrics(launch.metricSources, simulation.GetStopTime().GetSeconds(), result);
+            CollectFlowMetrics(launch.metricSources,
+                               (simulation.GetMeasurementEndTime() -
+                                simulation.GetMeasurementStartTime()).GetSeconds(),
+                               result);
         }
         CollectPostRunMetrics(options, linkMetricsCollector.get(), result);
         result.status = "scheme_eps_ecmp_smoke_ok";
@@ -196,7 +199,8 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
     if (options.enableFlowMetrics)
     {
         CollectFlowMetrics(timelineResult.metricSources,
-                           simulation.GetStopTime().GetSeconds(),
+                           (simulation.GetMeasurementEndTime() -
+                            simulation.GetMeasurementStartTime()).GetSeconds(),
                            result);
     }
     CollectPostRunMetrics(options, linkMetricsCollector.get(), result);

@@ -18,6 +18,27 @@ namespace ns3
 namespace tl_ocs
 {
 
+struct OfferedLoadSummary
+{
+    double offeredLoadFactor = 0.0;
+    double trafficStopTimeS = 0.0;
+    double simStopTimeS = 0.0;
+    double drainTimeS = 0.0;
+    double measurementStartTimeS = 0.0;
+    double measurementEndTimeS = 0.0;
+    double measurementDurationS = 0.0;
+    uint64_t offeredBytesMeasurement = 0;
+    uint64_t crossTorOfferedBytesMeasurement = 0;
+    double actualOfferedBps = 0.0;
+    double actualCrossTorOfferedBps = 0.0;
+    double actualReceivedBps = 0.0;
+    double normalizedAccessLoad = 0.0;
+    double normalizedEpsLoad = 0.0;
+    double maxTorOfferedBps = 0.0;
+    double maxTorOfferedLoadEps = 0.0;
+    double maxTorOfferedLoadHybrid = 0.0;
+};
+
 class ResultWriter
 {
   public:
@@ -49,7 +70,8 @@ class ResultWriter
                                             std::optional<FlowMetricsSummary> flowMetrics = std::nullopt,
                                             std::optional<LinkUtilizationSummary> linkMetrics = std::nullopt,
                                             std::optional<OcsMetricsSummary> ocsMetrics = std::nullopt,
-                                            std::optional<uint32_t> spines = std::nullopt) const;
+                                            std::optional<uint32_t> spines = std::nullopt,
+                                            std::optional<OfferedLoadSummary> offeredLoad = std::nullopt) const;
 };
 
 } // namespace tl_ocs

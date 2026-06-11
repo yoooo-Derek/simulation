@@ -37,7 +37,7 @@ TrainingTrafficGenerator::GenerateStartTimes(const SimulationConfig& simulation,
         for (uint32_t flowIndex = 0; flowIndex < generationLimit; ++flowIndex)
         {
             const Time startTime = GetStartTime(traffic, flowIndex);
-            if (traffic.continuousWorkload && startTime >= simulation.GetStopTime())
+            if (traffic.continuousWorkload && startTime >= simulation.GetTrafficStopTime())
             {
                 break;
             }
@@ -56,7 +56,7 @@ TrainingTrafficGenerator::GenerateStartTimes(const SimulationConfig& simulation,
         {
             startTime += Seconds(interArrival(generator));
         }
-        if (startTime >= simulation.GetStopTime())
+        if (startTime >= simulation.GetTrafficStopTime())
         {
             break;
         }

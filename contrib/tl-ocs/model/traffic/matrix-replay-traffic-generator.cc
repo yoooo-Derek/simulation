@@ -35,7 +35,7 @@ AppendWeightedPairs(std::vector<FlowSpec>& flows,
                     double replayScale,
                     const std::string& patternName)
 {
-    if (baseTime >= simulation.GetStopTime())
+    if (baseTime >= simulation.GetTrafficStopTime())
     {
         return;
     }
@@ -55,7 +55,7 @@ AppendWeightedPairs(std::vector<FlowSpec>& flows,
             }
             const Time startTime =
                 baseTime + MicroSeconds(20 * (repeat * pairs.size() + pairIndex));
-            if (startTime >= simulation.GetStopTime())
+            if (startTime >= simulation.GetTrafficStopTime())
             {
                 continue;
             }
@@ -189,7 +189,7 @@ MatrixReplayTrafficGenerator::Generate(const SimulationConfig& simulation,
     {
         const Time periodStart = period * iteration;
         const Time historyTime = periodStart - historyOffset;
-        if (historyTime >= simulation.GetStopTime())
+        if (historyTime >= simulation.GetTrafficStopTime())
         {
             break;
         }
@@ -201,7 +201,7 @@ MatrixReplayTrafficGenerator::Generate(const SimulationConfig& simulation,
                             historyTime,
                             historyScale,
                             patternName);
-        if (periodStart < simulation.GetStopTime())
+        if (periodStart < simulation.GetTrafficStopTime())
         {
             AppendWeightedPairs(flows,
                                 simulation,

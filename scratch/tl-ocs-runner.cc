@@ -6,6 +6,7 @@
 #include "ns3/tl-ocs-module.h"
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -29,6 +30,115 @@ std::string
 FormatDataRateBps(uint64_t bps)
 {
     return std::to_string(bps) + "bps";
+}
+
+uint64_t
+ParseDataRateBps(const std::string& value)
+{
+    std::string numeric;
+    std::string unit;
+    for (char c : value)
+    {
+        if (std::isdigit(static_cast<unsigned char>(c)) || c == '.')
+        {
+            numeric += c;
+        }
+        else if (!std::isspace(static_cast<unsigned char>(c)))
+        {
+            unit += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+    }
+    if (numeric.empty())
+    {
+        return 0;
+    }
+    double multiplier = 1.0;
+    if (unit == "gbps" || unit == "gbit/s")
+    {
+        multiplier = 1000000000.0;
+    }
+    else if (unit == "mbps" || unit == "mbit/s")
+    {
+        multiplier = 1000000.0;
+    }
+    else if (unit == "kbps" || unit == "kbit/s")
+    {
+        multiplier = 1000.0;
+    }
+    return static_cast<uint64_t>(std::stod(numeric) * multiplier);
+}
+
+OfferedLoadSummary
+BuildOfferedLoadSummary(const std::vector<FlowSpec>& flows,
+                        const SimulationConfig& simulation,
+                        uint32_t spines,
+                        uint64_t serverAccessRateBps,
+                        uint64_t epsLinkRateBps,
+                        uint64_t ocsLinkRateBps,
+                        uint32_t opticalPortsPerTor,
+                        double offeredLoadFactor)
+{
+    OfferedLoadSummary summary;
+    summary.offeredLoadFactor = offeredLoadFactor;
+    summary.trafficStopTimeS = simulation.GetTrafficStopTime().GetSeconds();
+    summary.simStopTimeS = simulation.GetStopTime().GetSeconds();
+    summary.drainTimeS =
+        std::max(0.0, summary.simStopTimeS - summary.trafficStopTimeS);
+    summary.measurementStartTimeS = simulation.GetMeasurementStartTime().GetSeconds();
+    summary.measurementEndTimeS = simulation.GetMeasurementEndTime().GetSeconds();
+    summary.measurementDurationS =
+        std::max(0.0, summary.measurementEndTimeS - summary.measurementStartTimeS);
+
+    std::vector<uint64_t> torOfferedBytes(simulation.GetNumTors(), 0);
+    for (const auto& flow : flows)
+    {
+        const double startS = flow.GetStartTime().GetSeconds();
+        if (startS < summary.measurementStartTimeS || startS >= summary.measurementEndTimeS)
+        {
+            continue;
+        }
+        summary.offeredBytesMeasurement += flow.GetSizeBytes();
+        if (flow.GetSourceTorId() != flow.GetDestinationTorId())
+        {
+            summary.crossTorOfferedBytesMeasurement += flow.GetSizeBytes();
+            torOfferedBytes[flow.GetSourceTorId()] += flow.GetSizeBytes();
+            torOfferedBytes[flow.GetDestinationTorId()] += flow.GetSizeBytes();
+        }
+    }
+
+    if (summary.measurementDurationS > 0.0)
+    {
+        summary.actualOfferedBps =
+            static_cast<double>(summary.offeredBytesMeasurement) * 8.0 /
+            summary.measurementDurationS;
+        summary.actualCrossTorOfferedBps =
+            static_cast<double>(summary.crossTorOfferedBytesMeasurement) * 8.0 /
+            summary.measurementDurationS;
+        for (uint64_t bytes : torOfferedBytes)
+        {
+            summary.maxTorOfferedBps =
+                std::max(summary.maxTorOfferedBps,
+                         static_cast<double>(bytes) * 8.0 / summary.measurementDurationS);
+        }
+    }
+
+    const double accessCapacity =
+        static_cast<double>(simulation.GetNumTors()) * simulation.GetServersPerTor() *
+        serverAccessRateBps;
+    const double epsCapacity =
+        static_cast<double>(simulation.GetNumTors()) * spines * epsLinkRateBps;
+    const double torEpsCapacity = static_cast<double>(spines) * epsLinkRateBps;
+    const double torHybridCapacity =
+        torEpsCapacity + static_cast<double>(opticalPortsPerTor) * ocsLinkRateBps;
+    summary.normalizedAccessLoad =
+        accessCapacity > 0.0 ? summary.actualOfferedBps / accessCapacity : 0.0;
+    summary.normalizedEpsLoad =
+        epsCapacity > 0.0 ? summary.actualCrossTorOfferedBps / epsCapacity : 0.0;
+    summary.maxTorOfferedLoadEps =
+        torEpsCapacity > 0.0 ? summary.maxTorOfferedBps / torEpsCapacity : 0.0;
+    summary.maxTorOfferedLoadHybrid =
+        torHybridCapacity > 0.0 ? summary.maxTorOfferedBps / torHybridCapacity : 0.0;
+    return summary;
 }
 
 std::vector<FlowSpec>
@@ -211,6 +321,9 @@ main(int argc, char* argv[])
     double observerWindowSeconds = 0.001;
     double ocsPeriodSeconds = 0.005;
     double stopTimeSeconds = 0.01;
+    double trafficStopTimeSeconds = -1.0;
+    double measurementStartTimeSeconds = 0.0;
+    double measurementEndTimeSeconds = -1.0;
     uint32_t randomSeed = 1;
     uint32_t runId = 1;
     std::string experimentName = "smoke";
@@ -282,6 +395,16 @@ main(int argc, char* argv[])
     cmd.AddValue("observerWindow", "Traffic observer window in seconds", observerWindowSeconds);
     cmd.AddValue("ocsPeriod", "OCS reconfiguration period in seconds", ocsPeriodSeconds);
     cmd.AddValue("stopTime", "Simulation stop time in seconds", stopTimeSeconds);
+    cmd.AddValue("trafficStopTime",
+                 "Time in seconds after which no new workload flow is generated or started; "
+                 "defaults to stopTime",
+                 trafficStopTimeSeconds);
+    cmd.AddValue("measurementStartTime",
+                 "Measurement window start time in seconds",
+                 measurementStartTimeSeconds);
+    cmd.AddValue("measurementEndTime",
+                 "Measurement window end time in seconds; defaults to trafficStopTime",
+                 measurementEndTimeSeconds);
     cmd.AddValue("randomSeed", "Random seed recorded in the smoke configuration", randomSeed);
     cmd.AddValue("runId", "Run id recorded in the smoke configuration", runId);
     cmd.AddValue("experimentName", "Experiment name recorded in the smoke summary", experimentName);
@@ -380,6 +503,17 @@ main(int argc, char* argv[])
     {
         ocsDataRate = FormatDataRateBps(ocsLinkRateBps);
     }
+    const double effectiveTrafficStopTimeSeconds =
+        trafficStopTimeSeconds >= 0.0 ? trafficStopTimeSeconds : stopTimeSeconds;
+    const double effectiveMeasurementEndTimeSeconds =
+        measurementEndTimeSeconds >= 0.0 ? measurementEndTimeSeconds
+                                         : effectiveTrafficStopTimeSeconds;
+    const uint64_t effectiveServerAccessRateBps =
+        serverAccessRateBps > 0 ? serverAccessRateBps : ParseDataRateBps(serverAccessDataRate);
+    const uint64_t effectiveEpsLinkRateBps =
+        epsLinkRateBps > 0 ? epsLinkRateBps : ParseDataRateBps(epsDataRate);
+    const uint64_t effectiveOcsLinkRateBps =
+        ocsLinkRateBps > 0 ? ocsLinkRateBps : ParseDataRateBps(ocsDataRate);
 
     const bool enableDiagnosticMode = diagnosticMode != "none";
     if (enableDiagnosticMode)
@@ -434,6 +568,15 @@ main(int argc, char* argv[])
     config.SetOcsDataRate(ocsDataRate);
     config.SetOcsAssignmentThresholdBps(ocsAssignmentThresholdBps);
     config.SetStopTime(Seconds(stopTimeSeconds));
+    if (trafficStopTimeSeconds >= 0.0)
+    {
+        config.SetTrafficStopTime(Seconds(effectiveTrafficStopTimeSeconds));
+    }
+    config.SetMeasurementStartTime(Seconds(measurementStartTimeSeconds));
+    if (measurementEndTimeSeconds >= 0.0)
+    {
+        config.SetMeasurementEndTime(Seconds(effectiveMeasurementEndTimeSeconds));
+    }
     config.SetRandomSeed(randomSeed);
     config.SetRunId(runId);
 
@@ -611,6 +754,7 @@ main(int argc, char* argv[])
     std::optional<FlowMetricsSummary> flowMetricsSummary;
     std::optional<LinkUtilizationSummary> linkUtilizationSummary;
     std::optional<OcsMetricsSummary> ocsMetricsSummary;
+    std::optional<OfferedLoadSummary> offeredLoadSummary;
     std::vector<FlowMetricRecord> flowMetrics;
 
     if (enableEpsTopology)
@@ -731,6 +875,15 @@ main(int argc, char* argv[])
             }
 
             const std::vector<FlowSpec> flows = generator->Generate(config, trafficConfig);
+            offeredLoadSummary =
+                BuildOfferedLoadSummary(flows,
+                                        config,
+                                        spines,
+                                        effectiveServerAccessRateBps,
+                                        effectiveEpsLinkRateBps,
+                                        effectiveOcsLinkRateBps,
+                                        opticalPortsPerTor,
+                                        offeredLoadFactor);
             if (enableDiagnosticMode)
             {
                 FlowLauncher launcher;
@@ -770,7 +923,10 @@ main(int argc, char* argv[])
                 receivedBytes = launchResult.GetTotalReceivedBytes();
                 flowMetrics = MetricsCollector().Collect(launchResult.metricSources, schemeName);
                 flowMetricsSummary =
-                    MetricsCollector().Summarize(flowMetrics, config.GetStopTime().GetSeconds());
+                    MetricsCollector().Summarize(
+                        flowMetrics,
+                        (config.GetMeasurementEndTime() - config.GetMeasurementStartTime())
+                            .GetSeconds());
                 std::cout << "TL-OCS datapath diagnostic: mode=" << diagnosticMode
                           << ", diagnostic_only=true"
                           << ", flows=" << installedFlows.value()
@@ -1188,6 +1344,14 @@ main(int argc, char* argv[])
         Simulator::Destroy();
     }
 
+    if (offeredLoadSummary.has_value() && receivedBytes.has_value() &&
+        offeredLoadSummary->measurementDurationS > 0.0)
+    {
+        offeredLoadSummary->actualReceivedBps =
+            static_cast<double>(receivedBytes.value()) * 8.0 /
+            offeredLoadSummary->measurementDurationS;
+    }
+
     ResultWriter writer;
     const auto summaryPath =
         writer.WriteSmokeSummary(config,
@@ -1218,7 +1382,8 @@ main(int argc, char* argv[])
                                  flowMetricsSummary,
                                  linkUtilizationSummary,
                                  ocsMetricsSummary,
-                                 spines);
+                                 spines,
+                                 offeredLoadSummary);
     std::cout << "TL-OCS smoke summary: " << summaryPath << std::endl;
     if (enableFlowMetrics)
     {

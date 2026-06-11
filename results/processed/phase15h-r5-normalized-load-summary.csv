@@ -1,0 +1,5 @@
+scenario,seed,offered_load_factor,drain_label,traffic_stop_time_s,measurement_duration_s,offered_bytes_measurement,cross_tor_offered_bytes_measurement,actual_offered_bps,actual_cross_tor_offered_bps,normalized_access_load,normalized_eps_load,max_tor_offered_load_eps,max_tor_offered_load_hybrid
+cross-community-distractor-replay,1401,0.5,D0,0.05,0.05,524128800,524128800,83860608000,83860608000,0.10482576,1.0482576,2.866944,0.260631272727
+cross-community-distractor-replay,1401,0.5,D1,0.05,0.05,524128800,524128800,83860608000,83860608000,0.10482576,1.0482576,2.866944,0.260631272727
+cross-community-distractor-replay,1401,0.5,D2,0.05,0.05,524128800,524128800,83860608000,83860608000,0.10482576,1.0482576,2.866944,0.260631272727
+cross-community-distractor-replay,1401,0.5,D3,0.05,0.05,524128800,524128800,83860608000,83860608000,0.10482576,1.0482576,2.866944,0.260631272727

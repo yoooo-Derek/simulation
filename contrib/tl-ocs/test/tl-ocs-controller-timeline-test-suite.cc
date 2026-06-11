@@ -537,6 +537,66 @@ class TlOcsControllerTimelineFiniteMultiCycleTestCase : public TestCase
     }
 };
 
+class TlOcsControllerTimelineTrafficStopDrainTestCase : public TestCase
+{
+  public:
+    TlOcsControllerTimelineTrafficStopDrainTestCase()
+        : TestCase("TL-OCS finite controller drains pre-trafficStop flows without launching later flows")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(4);
+        simulation.SetServersPerTor(1);
+        simulation.SetObserverWindow(MilliSeconds(5));
+        simulation.SetOcsReconfigurationPeriod(MilliSeconds(10));
+        simulation.SetTrafficStopTime(MilliSeconds(20));
+        simulation.SetStopTime(MilliSeconds(80));
+
+        EpsTopologyBuilder::BuildOptions buildOptions;
+        buildOptions.enableOcsLinks = true;
+        NodeIndex index = EpsTopologyBuilder().Build(simulation, 1, buildOptions);
+        TrafficObserver observer(simulation.GetNumTors(), simulation.GetObserverWindow());
+        observer.AttachToTopology(index);
+
+        const std::vector<FlowSpec> flows = {
+            {0, 0, 0, 1, 0, 50000, MilliSeconds(15), "traffic-stop-drain", 1000000000},
+            {1, 2, 0, 3, 0, 50000, MilliSeconds(30), "traffic-stop-drain", 1000000000}};
+
+        ControllerTimelineOptions options;
+        options.enableOcsAdmission = true;
+        ControllerState state;
+        OcsLinkManager linkManager;
+        const ControllerTimelineResult result =
+            ControllerTimeline(state).RunFiniteMultiCycle(index,
+                                                          simulation,
+                                                          flows,
+                                                          observer,
+                                                          TlOcsAlgorithmParameters(),
+                                                          linkManager,
+                                                          options);
+        const auto records = MetricsCollector().Collect(result.metricSources, "tl-ocs");
+
+        NS_TEST_ASSERT_MSG_EQ(result.stage2InstalledFlows,
+                              1,
+                              "flow after trafficStopTime should not be launched");
+        NS_TEST_ASSERT_MSG_EQ(records.size(), 1, "unexpected metric count after trafficStopTime");
+        NS_TEST_ASSERT_MSG_EQ(records.front().flowId,
+                              0,
+                              "wrong flow launched before drain");
+        NS_TEST_ASSERT_MSG_EQ(records.front().completed,
+                              true,
+                              "pre-trafficStop flow should complete during drain");
+        NS_TEST_ASSERT_MSG_LT(records.front().startTimeS,
+                              simulation.GetTrafficStopTime().GetSeconds(),
+                              "launched flow starts outside traffic window");
+        Simulator::Destroy();
+    }
+};
+
 class TlOcsControllerTimelineTestSuite : public TestSuite
 {
   public:
@@ -551,6 +611,7 @@ TlOcsControllerTimelineTestSuite::TlOcsControllerTimelineTestSuite()
     AddTestCase(new TlOcsControllerTimelineUniformReadinessTestCase);
     AddTestCase(new TlOcsControllerTimelineAggregationReadinessTestCase);
     AddTestCase(new TlOcsControllerTimelineFiniteMultiCycleTestCase);
+    AddTestCase(new TlOcsControllerTimelineTrafficStopDrainTestCase);
 }
 
 static TlOcsControllerTimelineTestSuite g_tlOcsControllerTimelineTestSuite;

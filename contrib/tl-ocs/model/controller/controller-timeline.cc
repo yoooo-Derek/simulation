@@ -330,7 +330,9 @@ RunOracleScheduler(const std::vector<FlowSpec>& flows,
                    TrafficMatrix& futureDemand)
 {
     const Time demandStart = oracleMode == "whole-run" ? Seconds(0) : roundStart;
-    const Time demandEnd = oracleMode == "whole-run" ? simulation.GetStopTime() : roundEnd;
+    const Time demandEnd =
+        oracleMode == "whole-run" ? simulation.GetTrafficStopTime()
+                                  : std::min(roundEnd, simulation.GetTrafficStopTime());
     futureDemand =
         BuildDemandMatrix(flows, simulation.GetNumTors(), demandStart, demandEnd);
     return RunScheduler(futureDemand, parameters, OpticalSchedulingMode::ORACLE);
@@ -538,8 +540,9 @@ RunSchedulingRound(const std::shared_ptr<FiniteCycleContext>& context)
                      context->algorithmParameters,
                      OpticalSchedulingMode::TL_OCS);
     const Time roundStart = Simulator::Now();
-    const Time roundEnd = std::min(roundStart + context->simulation.GetOcsReconfigurationPeriod(),
-                                   context->simulation.GetStopTime());
+    const Time roundEnd =
+        std::min(roundStart + context->simulation.GetOcsReconfigurationPeriod(),
+                 context->simulation.GetTrafficStopTime());
     TrafficMatrix futureDemand(context->simulation.GetNumTors());
     const TlOcsAlgorithmResult oracleResult =
         RunOracleScheduler(context->flows,
@@ -844,19 +847,19 @@ ControllerTimeline::RunFiniteMultiCycle(
     // Window snapshots are registered before scheduling rounds and arrivals.
     // At coincident timestamps the controller therefore consumes the window
     // that has just completed before assigning newly arriving flows.
-    for (Time at = simulation.GetObserverWindow(); at <= simulation.GetStopTime();
+    for (Time at = simulation.GetObserverWindow(); at <= simulation.GetTrafficStopTime();
          at += simulation.GetObserverWindow())
     {
         Simulator::Schedule(at, &SnapshotWindow, context);
     }
-    for (Time at = simulation.GetOcsReconfigurationPeriod(); at < simulation.GetStopTime();
+    for (Time at = simulation.GetOcsReconfigurationPeriod(); at < simulation.GetTrafficStopTime();
          at += simulation.GetOcsReconfigurationPeriod())
     {
         Simulator::Schedule(at, &RunSchedulingRound, context);
     }
     for (const auto& flow : flows)
     {
-        if (flow.GetStartTime() < simulation.GetStopTime())
+        if (flow.GetStartTime() < simulation.GetTrafficStopTime())
         {
             Simulator::Schedule(flow.GetStartTime(), &LaunchFlow, context, flow);
         }

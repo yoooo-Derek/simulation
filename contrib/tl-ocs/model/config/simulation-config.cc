@@ -17,10 +17,15 @@ SimulationConfig::SimulationConfig()
       m_ocsDataRate("100Gbps"),
       m_ocsAssignmentThresholdBps(std::numeric_limits<uint64_t>::max()),
       m_stopTime(MilliSeconds(10)),
+      m_trafficStopTime(MilliSeconds(10)),
+      m_measurementStartTime(Seconds(0)),
+      m_measurementEndTime(MilliSeconds(10)),
       m_observerWindow(MilliSeconds(1)),
       m_ocsReconfigurationPeriod(MilliSeconds(5)),
       m_randomSeed(1),
-      m_runId(1)
+      m_runId(1),
+      m_trafficStopTimeExplicit(false),
+      m_measurementEndTimeExplicit(false)
 {
 }
 
@@ -100,12 +105,62 @@ void
 SimulationConfig::SetStopTime(Time stopTime)
 {
     m_stopTime = stopTime;
+    if (!m_trafficStopTimeExplicit)
+    {
+        m_trafficStopTime = stopTime;
+    }
+    if (!m_measurementEndTimeExplicit)
+    {
+        m_measurementEndTime = m_trafficStopTime;
+    }
 }
 
 Time
 SimulationConfig::GetStopTime() const
 {
     return m_stopTime;
+}
+
+void
+SimulationConfig::SetTrafficStopTime(Time trafficStopTime)
+{
+    m_trafficStopTime = trafficStopTime;
+    m_trafficStopTimeExplicit = true;
+    if (!m_measurementEndTimeExplicit)
+    {
+        m_measurementEndTime = trafficStopTime;
+    }
+}
+
+Time
+SimulationConfig::GetTrafficStopTime() const
+{
+    return m_trafficStopTime;
+}
+
+void
+SimulationConfig::SetMeasurementStartTime(Time measurementStartTime)
+{
+    m_measurementStartTime = measurementStartTime;
+}
+
+Time
+SimulationConfig::GetMeasurementStartTime() const
+{
+    return m_measurementStartTime;
+}
+
+void
+SimulationConfig::SetMeasurementEndTime(Time measurementEndTime)
+{
+    m_measurementEndTime = measurementEndTime;
+    m_measurementEndTimeExplicit = true;
+}
+
+Time
+SimulationConfig::GetMeasurementEndTime() const
+{
+    return m_measurementEndTime;
 }
 
 void
@@ -159,7 +214,15 @@ SimulationConfig::GetRunId() const
 bool
 SimulationConfig::IsConsistent() const
 {
+    constexpr double epsilonS = 1e-12;
+    const double stopS = m_stopTime.GetSeconds();
+    const double trafficStopS = m_trafficStopTime.GetSeconds();
+    const double measurementStartS = m_measurementStartTime.GetSeconds();
+    const double measurementEndS = m_measurementEndTime.GetSeconds();
     return m_numTors >= 2 && m_serversPerTor >= 1 && m_stopTime.IsPositive() &&
+           m_trafficStopTime.IsPositive() && trafficStopS <= stopS + epsilonS &&
+           measurementStartS >= -epsilonS && measurementEndS > measurementStartS &&
+           measurementEndS <= trafficStopS + epsilonS &&
            m_observerWindow.IsPositive() && m_ocsReconfigurationPeriod.IsPositive() &&
            m_ocsReconfigurationPeriod >= m_observerWindow;
 }
@@ -173,6 +236,9 @@ SimulationConfig::GetSummary() const
        << ", epsDataRate=" << m_epsDataRate << ", ocsDataRate=" << m_ocsDataRate
        << ", ocsAssignmentThresholdBps=" << m_ocsAssignmentThresholdBps
        << ", stopTime=" << m_stopTime.As(Time::S)
+       << ", trafficStopTime=" << m_trafficStopTime.As(Time::S)
+       << ", measurementStartTime=" << m_measurementStartTime.As(Time::S)
+       << ", measurementEndTime=" << m_measurementEndTime.As(Time::S)
        << ", observerWindow=" << m_observerWindow.As(Time::S)
        << ", ocsPeriod=" << m_ocsReconfigurationPeriod.As(Time::S)
        << ", randomSeed=" << m_randomSeed << ", runId=" << m_runId;

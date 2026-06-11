@@ -537,6 +537,48 @@ class TlOcsContinuousPoissonTrafficGeneratorTestCase : public TestCase
     }
 };
 
+class TlOcsTrafficStopTimeGeneratorTestCase : public TestCase
+{
+  public:
+    TlOcsTrafficStopTimeGeneratorTestCase()
+        : TestCase("TL-OCS continuous traffic generation stops at trafficStopTime")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(4);
+        simulation.SetServersPerTor(1);
+        simulation.SetStopTime(MilliSeconds(20));
+        simulation.SetTrafficStopTime(MilliSeconds(10));
+
+        TrafficGenerationConfig traffic;
+        traffic.continuousWorkload = true;
+        traffic.maxGeneratedFlows = 1000;
+        traffic.flowStartInterval = MilliSeconds(1);
+
+        const auto flows = UniformTrafficGenerator().Generate(simulation, traffic);
+        NS_TEST_ASSERT_MSG_GT(flows.size(), 0, "trafficStopTime workload is empty");
+        for (const auto& flow : flows)
+        {
+            NS_TEST_ASSERT_MSG_LT(flow.GetStartTime(),
+                                  simulation.GetTrafficStopTime(),
+                                  "generated flow starts at or after trafficStopTime");
+        }
+
+        SimulationConfig compatible;
+        compatible.SetNumTors(4);
+        compatible.SetServersPerTor(1);
+        compatible.SetStopTime(MilliSeconds(20));
+        const auto oldDefaultFlows = UniformTrafficGenerator().Generate(compatible, traffic);
+        NS_TEST_ASSERT_MSG_GT(oldDefaultFlows.size(),
+                              flows.size(),
+                              "default trafficStopTime should follow stopTime");
+    }
+};
+
 class TlOcsDatapathDiagnosticTrafficGeneratorTestCase : public TestCase
 {
   public:
@@ -719,6 +761,7 @@ TlOcsTrafficGeneratorTestSuite::TlOcsTrafficGeneratorTestSuite()
     AddTestCase(new TlOcsMixedFlowSizeTrafficGeneratorTestCase);
     AddTestCase(new TlOcsAggregationDistractorTrafficGeneratorTestCase);
     AddTestCase(new TlOcsContinuousPoissonTrafficGeneratorTestCase);
+    AddTestCase(new TlOcsTrafficStopTimeGeneratorTestCase);
     AddTestCase(new TlOcsDatapathDiagnosticTrafficGeneratorTestCase);
     AddTestCase(new TlOcsMechanismSeparationTrafficGeneratorTestCase);
     AddTestCase(new TlOcsMatrixReplayTrafficGeneratorTestCase);

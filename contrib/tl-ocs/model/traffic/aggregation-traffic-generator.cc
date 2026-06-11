@@ -30,7 +30,7 @@ AggregationTrafficGenerator::Generate(const SimulationConfig& simulation,
              ++iteration)
         {
             const Time startTime = MilliSeconds(1) + traffic.iterationPeriod * iteration;
-            if (traffic.continuousWorkload && startTime >= simulation.GetStopTime())
+            if (traffic.continuousWorkload && startTime >= simulation.GetTrafficStopTime())
             {
                 break;
             }

@@ -44,13 +44,13 @@ AppendWeightedPairs(std::vector<FlowSpec>& flows,
         {
             const WeightedPair& pair = pairs[pairIndex];
             if (pair.sourceTor == pair.destinationTor ||
-                baseTime >= simulation.GetStopTime())
+                baseTime >= simulation.GetTrafficStopTime())
             {
                 continue;
             }
             const uint32_t server = (repeat + pairIndex) % serversPerTor;
             const Time startTime = baseTime + MicroSeconds(20 * (repeat * pairs.size() + pairIndex));
-            if (startTime >= simulation.GetStopTime())
+            if (startTime >= simulation.GetTrafficStopTime())
             {
                 continue;
             }
@@ -168,7 +168,7 @@ MechanismSeparationTrafficGenerator::Generate(const SimulationConfig& simulation
          ++iteration)
     {
         const Time periodStart = period * iteration;
-        if (periodStart >= simulation.GetStopTime())
+        if (periodStart >= simulation.GetTrafficStopTime())
         {
             break;
         }

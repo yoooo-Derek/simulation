@@ -21,7 +21,13 @@ GetSmokeSummaryCsvHeader()
            "avg_received_throughput_bps,"
            "avg_fct_s,p90_fct_s,p95_fct_s,eps_avg_link_utilization,"
            "eps_max_link_utilization,ocs_avg_link_utilization,ocs_max_link_utilization,"
-           "ocs_flow_hit_rate,ocs_byte_hit_rate,ocs_reconfiguration_count,spines";
+           "ocs_flow_hit_rate,ocs_byte_hit_rate,ocs_reconfiguration_count,spines"
+           ",offered_load_factor,traffic_stop_time_s,sim_stop_time_s,drain_time_s,"
+           "measurement_start_time_s,measurement_end_time_s,measurement_duration_s,"
+           "offered_bytes_measurement,cross_tor_offered_bytes_measurement,"
+           "actual_offered_bps,actual_cross_tor_offered_bps,actual_received_bps,"
+           "normalized_access_load,normalized_eps_load,max_tor_offered_bps,"
+           "max_tor_offered_load_eps,max_tor_offered_load_hybrid";
 }
 
 std::string

@@ -63,7 +63,8 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 std::optional<FlowMetricsSummary> flowMetrics,
                                 std::optional<LinkUtilizationSummary> linkMetrics,
                                 std::optional<OcsMetricsSummary> ocsMetrics,
-                                std::optional<uint32_t> spines) const
+                                std::optional<uint32_t> spines,
+                                std::optional<OfferedLoadSummary> offeredLoad) const
 {
     const std::filesystem::path outputDir(output.GetOutputDir());
     std::filesystem::create_directories(outputDir);
@@ -257,6 +258,91 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     if (spines.has_value())
     {
         stream << spines.value();
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->offeredLoadFactor;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->trafficStopTimeS;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->simStopTimeS;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->drainTimeS;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->measurementStartTimeS;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->measurementEndTimeS;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->measurementDurationS;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << offeredLoad->offeredBytesMeasurement;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << offeredLoad->crossTorOfferedBytesMeasurement;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->actualOfferedBps;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->actualCrossTorOfferedBps;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->actualReceivedBps;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->normalizedAccessLoad;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->normalizedEpsLoad;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->maxTorOfferedBps;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->maxTorOfferedLoadEps;
+    }
+    stream << ',';
+    if (offeredLoad.has_value())
+    {
+        stream << std::setprecision(12) << offeredLoad->maxTorOfferedLoadHybrid;
     }
     stream << '\n';
 
