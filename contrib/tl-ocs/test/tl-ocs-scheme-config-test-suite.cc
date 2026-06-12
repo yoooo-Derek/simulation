@@ -42,6 +42,15 @@ TlOcsSchemeConfigTestCase::DoRun()
     NS_TEST_ASSERT_MSG_EQ(oracle.UseOracleScheduler(), true, "OCS oracle should select oracle scheduler");
     NS_TEST_ASSERT_MSG_EQ(oracle.UseVolumeScheduler(), false, "OCS oracle should not be OCS volume");
 
+    const SchemeConfig fixed = SchemeConfig::FromString("fixed-ocs");
+    NS_TEST_ASSERT_MSG_EQ(fixed.ToString(), "fixed-ocs", "fixed OCS string round-trip failed");
+    NS_TEST_ASSERT_MSG_EQ(fixed.EnableOcsLinks(), true, "fixed OCS should build OCS links");
+    NS_TEST_ASSERT_MSG_EQ(fixed.EnableTrafficObserver(), true, "fixed OCS should attach observer");
+    NS_TEST_ASSERT_MSG_EQ(fixed.EnableOcsAdmission(), true, "fixed OCS should use OCS admission");
+    NS_TEST_ASSERT_MSG_EQ(fixed.UseFixedScheduler(), true, "fixed OCS should select fixed scheduler");
+    NS_TEST_ASSERT_MSG_EQ(fixed.UseOracleScheduler(), false, "fixed OCS should not use oracle scheduler");
+    NS_TEST_ASSERT_MSG_EQ(fixed.UseVolumeScheduler(), false, "fixed OCS should not be OCS volume");
+
     bool threw = false;
     try
     {

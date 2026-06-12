@@ -1,0 +1,8 @@
+finding,value,interpretation
+tl_minus_volume_avg_fct_s,0.00159601326053,positive means TL has worse average FCT than Volume
+tl_minus_volume_p95_fct_s,0.003933861,positive means TL has worse tail FCT than Volume
+fct_oracle_closer_to,tl,computed from selected-edge union Jaccard to avg-FCT oracle
+category_tl_only_edge_tl_vs_volume_avg_fct_s,-0.0092673909375,category-level TL average FCT minus Volume average FCT
+category_volume_only_edge_tl_vs_volume_avg_fct_s,0.033558057875,category-level TL average FCT minus Volume average FCT
+category_selected_but_eps_fallback_tl_vs_volume_avg_fct_s,,category-level TL average FCT minus Volume average FCT
+category_ocs_admitted_tl_vs_volume_avg_fct_s,-4.10140400327e-06,category-level TL average FCT minus Volume average FCT

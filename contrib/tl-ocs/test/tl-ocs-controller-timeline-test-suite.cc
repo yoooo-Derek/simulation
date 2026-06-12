@@ -597,6 +597,62 @@ class TlOcsControllerTimelineTrafficStopDrainTestCase : public TestCase
     }
 };
 
+class TlOcsControllerTimelineFixedOcsTestCase : public TestCase
+{
+  public:
+    TlOcsControllerTimelineFixedOcsTestCase()
+        : TestCase("TL-OCS finite controller applies fixed diagnostic OCS matching")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation;
+        simulation.SetNumTors(4);
+        simulation.SetServersPerTor(1);
+        simulation.SetObserverWindow(MilliSeconds(5));
+        simulation.SetOcsReconfigurationPeriod(MilliSeconds(10));
+        simulation.SetOcsAssignmentThresholdBps(1000000000);
+        simulation.SetStopTime(MilliSeconds(60));
+
+        EpsTopologyBuilder::BuildOptions buildOptions;
+        buildOptions.enableOcsLinks = true;
+        NodeIndex index = EpsTopologyBuilder().Build(simulation, 1, buildOptions);
+        TrafficObserver observer(simulation.GetNumTors(), simulation.GetObserverWindow());
+        observer.AttachToTopology(index);
+
+        const std::vector<FlowSpec> flows = {
+            {0, 0, 0, 1, 0, 50000, MilliSeconds(12), "fixed-ocs", 1000000000},
+            {1, 2, 0, 3, 0, 50000, MilliSeconds(13), "fixed-ocs", 1000000000}};
+
+        ControllerTimelineOptions options;
+        options.schedulingMode = OpticalSchedulingMode::FIXED;
+        options.fixedOcsEdges = {{0, 1}};
+        options.enableOcsAdmission = true;
+        ControllerState state;
+        OcsLinkManager linkManager;
+        const ControllerTimelineResult result =
+            ControllerTimeline(state).RunFiniteMultiCycle(index,
+                                                          simulation,
+                                                          flows,
+                                                          observer,
+                                                          TlOcsAlgorithmParameters(),
+                                                          linkManager,
+                                                          options);
+
+        NS_TEST_ASSERT_MSG_EQ(result.schedulingRoundCount, 5, "unexpected scheduling rounds");
+        NS_TEST_ASSERT_MSG_EQ(result.maxSelectedEdgeCount, 1, "fixed matching should select one edge");
+        NS_TEST_ASSERT_MSG_EQ(FindDecision(result.stage2Decisions, 0).pathType,
+                              "ocs",
+                              "fixed matching flow did not use OCS");
+        NS_TEST_ASSERT_MSG_EQ(FindDecision(result.stage2Decisions, 1).pathType,
+                              "eps",
+                              "non-fixed matching flow should use EPS fallback");
+        Simulator::Destroy();
+    }
+};
+
 class TlOcsControllerTimelineTestSuite : public TestSuite
 {
   public:
@@ -612,6 +668,7 @@ TlOcsControllerTimelineTestSuite::TlOcsControllerTimelineTestSuite()
     AddTestCase(new TlOcsControllerTimelineAggregationReadinessTestCase);
     AddTestCase(new TlOcsControllerTimelineFiniteMultiCycleTestCase);
     AddTestCase(new TlOcsControllerTimelineTrafficStopDrainTestCase);
+    AddTestCase(new TlOcsControllerTimelineFixedOcsTestCase);
 }
 
 static TlOcsControllerTimelineTestSuite g_tlOcsControllerTimelineTestSuite;

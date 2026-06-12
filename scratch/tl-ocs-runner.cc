@@ -229,6 +229,51 @@ BuildForceOcsDecisions(const std::vector<FlowSpec>& flows,
     return decisions;
 }
 
+std::vector<std::pair<uint32_t, uint32_t>>
+ParseFixedOcsEdges(const std::string& value, uint32_t numTors)
+{
+    std::vector<std::pair<uint32_t, uint32_t>> edges;
+    if (value.empty())
+    {
+        return edges;
+    }
+    std::set<std::pair<uint32_t, uint32_t>> seen;
+    std::vector<uint32_t> portUse(numTors, 0);
+    std::stringstream stream(value);
+    std::string token;
+    while (std::getline(stream, token, ';'))
+    {
+        token.erase(std::remove_if(token.begin(), token.end(), [](char c) {
+                        return std::isspace(static_cast<unsigned char>(c));
+                    }),
+                    token.end());
+        if (token.empty())
+        {
+            continue;
+        }
+        const std::size_t dash = token.find('-');
+        if (dash == std::string::npos)
+        {
+            throw std::runtime_error("invalid fixed OCS edge token: " + token);
+        }
+        const uint32_t left = static_cast<uint32_t>(std::stoul(token.substr(0, dash)));
+        const uint32_t right = static_cast<uint32_t>(std::stoul(token.substr(dash + 1)));
+        if (left == right || left >= numTors || right >= numTors)
+        {
+            throw std::runtime_error("fixed OCS edge endpoint out of range: " + token);
+        }
+        const auto pair = std::minmax(left, right);
+        if (!seen.insert(pair).second)
+        {
+            continue;
+        }
+        portUse[pair.first]++;
+        portUse[pair.second]++;
+        edges.push_back({pair.first, pair.second});
+    }
+    return edges;
+}
+
 void
 WriteSchedulingDiagnostics(const std::string& outputDir,
                            const std::string& fileName,
@@ -335,6 +380,7 @@ main(int argc, char* argv[])
     std::string schedulingDiagnosticsFile;
     std::string diagnosticMode = "none";
     std::string oracleMode = "period-future";
+    std::string fixedOcsEdges;
     bool overwrite = true;
     bool enableEpsTopology = false;
     bool enableTcpSmoke = false;
@@ -422,6 +468,9 @@ main(int argc, char* argv[])
     cmd.AddValue("oracleMode",
                  "Diagnostic oracle mode for ocs-oracle: period-future or whole-run",
                  oracleMode);
+    cmd.AddValue("fixedOcsEdges",
+                 "Static diagnostic OCS edge set for fixed-ocs, formatted as 0-1;2-3",
+                 fixedOcsEdges);
     cmd.AddValue("overwrite", "Overwrite summary CSV before writing", overwrite);
     cmd.AddValue("enableEpsTopology", "Build the minimum EPS topology", enableEpsTopology);
     cmd.AddValue("enableTcpSmoke", "Run one cross-ToR TCP smoke flow", enableTcpSmoke);
@@ -556,6 +605,16 @@ main(int argc, char* argv[])
         enableTrafficObserver = scheme->EnableTrafficObserver();
         enableAlgorithmSmoke = scheme->EnableAlgorithm();
         enableOcsAssignmentSmoke = scheme->EnableOcsAdmission();
+    }
+    std::vector<std::pair<uint32_t, uint32_t>> fixedOcsEdgePairs;
+    try
+    {
+        fixedOcsEdgePairs = ParseFixedOcsEdges(fixedOcsEdges, numTors);
+    }
+    catch (const std::runtime_error& error)
+    {
+        std::cerr << error.what() << std::endl;
+        return 1;
     }
 
     SimulationConfig config;
@@ -711,6 +770,22 @@ main(int argc, char* argv[])
         std::cerr << "Invalid TL-OCS algorithm configuration: opticalPortsPerTor must be positive"
                   << std::endl;
         return 1;
+    }
+    if (scheme.has_value() && scheme->UseFixedScheduler())
+    {
+        std::vector<uint32_t> fixedPortUse(numTors, 0);
+        for (const auto& edge : fixedOcsEdgePairs)
+        {
+            fixedPortUse[edge.first]++;
+            fixedPortUse[edge.second]++;
+            if (fixedPortUse[edge.first] > opticalPortsPerTor ||
+                fixedPortUse[edge.second] > opticalPortsPerTor)
+            {
+                std::cerr << "Invalid fixed OCS edge set: endpoint exceeds opticalPortsPerTor"
+                          << std::endl;
+                return 1;
+            }
+        }
     }
     if (enableOcsLinks && !Seconds(ocsDelaySeconds).IsPositive())
     {
@@ -952,6 +1027,7 @@ main(int argc, char* argv[])
                 scenarioOptions.enableOcsMetrics = enableOcsMetrics;
                 scenarioOptions.enableFiniteMultiCycle = enableFiniteMultiCycle;
                 scenarioOptions.oracleMode = oracleMode;
+                scenarioOptions.fixedOcsEdges = fixedOcsEdgePairs;
 
                 SmokeScenarioRunner scenarioRunner;
                 const SmokeScenarioResult scenarioResult =

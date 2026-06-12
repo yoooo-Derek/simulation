@@ -26,6 +26,7 @@ struct ControllerTimelineOptions
 {
     OpticalSchedulingMode schedulingMode = OpticalSchedulingMode::TL_OCS;
     std::string oracleMode = "period-future";
+    std::vector<std::pair<uint32_t, uint32_t>> fixedOcsEdges;
     bool enableOcsAdmission = true;
     bool printOcsDecisions = false;
     Time stage1Stop;

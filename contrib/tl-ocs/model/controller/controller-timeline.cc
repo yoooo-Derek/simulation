@@ -321,6 +321,31 @@ RunScheduler(const TrafficMatrix& observed,
 }
 
 TlOcsAlgorithmResult
+BuildFixedSchedulerResult(uint32_t numTors,
+                          const std::vector<std::pair<uint32_t, uint32_t>>& fixedEdges)
+{
+    TlOcsAlgorithmResult result;
+    result.A = DenseMatrix(numTors);
+    result.B = DenseMatrix(numTors);
+    result.trafficGraph = TrafficGraph(numTors);
+    result.communityLabels.resize(numTors, 0);
+    for (const auto& [left, right] : fixedEdges)
+    {
+        if (left == right || left >= numTors || right >= numTors)
+        {
+            continue;
+        }
+        const auto pair = CanonicalPair(left, right);
+        OpticalEdge edge{pair.first, pair.second, 1.0, 1.0, true, true};
+        result.candidateEdges.push_back(edge);
+        result.selectedEdges.push_back(edge);
+    }
+    result.communityInternalSelectedEdgeRatio =
+        CalculateCommunityInternalSelectedEdgeRatio(result.selectedEdges);
+    return result;
+}
+
+TlOcsAlgorithmResult
 RunOracleScheduler(const std::vector<FlowSpec>& flows,
                    const SimulationConfig& simulation,
                    const TlOcsAlgorithmParameters& parameters,
@@ -562,6 +587,13 @@ RunSchedulingRound(const std::shared_ptr<FiniteCycleContext>& context)
     {
         algorithmResult = &oracleResult;
     }
+    const TlOcsAlgorithmResult fixedResult =
+        BuildFixedSchedulerResult(context->simulation.GetNumTors(),
+                                  context->options.fixedOcsEdges);
+    if (context->options.schedulingMode == OpticalSchedulingMode::FIXED)
+    {
+        algorithmResult = &fixedResult;
+    }
 
     context->state.UpdateFromAlgorithmResult(*algorithmResult,
                                              context->latestObserved.GetTotalBytes());
@@ -732,6 +764,12 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
     else if (options.schedulingMode == OpticalSchedulingMode::ORACLE)
     {
         algorithmResult = &oracleResult;
+    }
+    const TlOcsAlgorithmResult fixedResult =
+        BuildFixedSchedulerResult(simulation.GetNumTors(), options.fixedOcsEdges);
+    if (options.schedulingMode == OpticalSchedulingMode::FIXED)
+    {
+        algorithmResult = &fixedResult;
     }
     m_state.UpdateFromAlgorithmResult(*algorithmResult, result.observedMatrixBytes);
 

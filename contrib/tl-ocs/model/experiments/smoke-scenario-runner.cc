@@ -158,6 +158,11 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
     {
         timelineOptions.schedulingMode = OpticalSchedulingMode::ORACLE;
     }
+    else if (scheme.UseFixedScheduler())
+    {
+        timelineOptions.schedulingMode = OpticalSchedulingMode::FIXED;
+        timelineOptions.fixedOcsEdges = options.fixedOcsEdges;
+    }
     timelineOptions.oracleMode = options.oracleMode;
     ControllerState state;
     ControllerTimeline timeline(state);

@@ -14,7 +14,8 @@ enum class OpticalSchedulingMode
 {
     TL_OCS,
     VOLUME,
-    ORACLE
+    ORACLE,
+    FIXED
 };
 
 class VolumeScheduler

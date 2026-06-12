@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ns3
@@ -26,6 +27,7 @@ struct SmokeScenarioOptions
     bool enableOcsMetrics = false;
     bool enableFiniteMultiCycle = false;
     std::string oracleMode = "period-future";
+    std::vector<std::pair<uint32_t, uint32_t>> fixedOcsEdges;
 };
 
 struct SmokeScenarioResult
