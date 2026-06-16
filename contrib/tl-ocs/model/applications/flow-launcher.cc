@@ -105,6 +105,10 @@ FlowLauncher::Install(const std::vector<FlowSpec>& flows,
         {
             throw std::runtime_error("TL-OCS flow path decision does not match FlowSpec");
         }
+        if (!decision.installable)
+        {
+            continue;
+        }
         const uint16_t port = static_cast<uint16_t>(portBase + index);
         Ptr<Node> source = nodeIndex.GetServer(flow.GetSourceTorId(), flow.GetSourceServerId());
         Ptr<Node> destination =

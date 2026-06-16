@@ -1,0 +1,4 @@
+experiment,scheme,num_tors,servers_per_tor,traffic_pattern,total_flows,completed_flows,avg_receiver_throughput_bps,avg_fct_s,avg_network_link_utilization
+v2-smoke-electrical-only,electrical-only,8,16,community-local,32,32,160000000,0.00079608,0.000463568
+v2-smoke-static-ocs,static-ocs,8,16,community-local,56,56,280000000,0.000690214714286,0.000376519794872
+v2-smoke-tl-hoc,tl-hoc,8,16,community-local,64,64,320000000,0.0006725705,0.000399011282051

@@ -3,6 +3,6 @@ set -euo pipefail
 
 cd "$(dirname "$0")/../.."
 
-for scheme in eps-ecmp ocs-volume tl-ocs; do
+for scheme in electrical-only static-ocs tl-hoc; do
     ./experiments/scripts/run-scheme-smoke.sh "${scheme}"
 done

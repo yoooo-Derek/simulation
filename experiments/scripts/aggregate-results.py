@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Combine TL-OCS summary CSV rows into one deterministic summary table."""
+"""Combine TL-HOC V2 summary CSV rows into one deterministic summary table."""
 
 import argparse
 import csv
@@ -11,20 +11,12 @@ OUTPUT_FIELDS = [
     "scheme",
     "num_tors",
     "servers_per_tor",
-    "spines",
     "traffic_pattern",
     "total_flows",
     "completed_flows",
+    "avg_receiver_throughput_bps",
     "avg_fct_s",
-    "p90_fct_s",
-    "p95_fct_s",
-    "eps_avg_link_utilization",
-    "eps_max_link_utilization",
-    "ocs_avg_link_utilization",
-    "ocs_max_link_utilization",
-    "ocs_flow_hit_rate",
-    "ocs_byte_hit_rate",
-    "ocs_reconfiguration_count",
+    "avg_network_link_utilization",
 ]
 
 
@@ -57,7 +49,7 @@ def read_summary_rows(path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Aggregate TL-OCS summary CSV rows.")
+    parser = argparse.ArgumentParser(description="Aggregate TL-HOC V2 summary CSV rows.")
     parser.add_argument("inputs", nargs="+", help="summary CSV files or directories")
     parser.add_argument("--output", default="results/tables/summary-table.csv")
     args = parser.parse_args()

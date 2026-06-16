@@ -15,14 +15,6 @@ namespace tl_ocs
 namespace
 {
 
-std::string
-FormatSeconds(Time value)
-{
-    std::ostringstream os;
-    os << std::setprecision(12) << value.GetSeconds();
-    return os.str();
-}
-
 void
 WriteOptionalDouble(std::ostream& stream, const std::optional<double>& value)
 {
@@ -30,6 +22,32 @@ WriteOptionalDouble(std::ostream& stream, const std::optional<double>& value)
     {
         stream << std::setprecision(12) << value.value();
     }
+}
+
+std::optional<double>
+GetAvgNetworkLinkUtilization(const std::optional<LinkUtilizationSummary>& linkMetrics)
+{
+    if (!linkMetrics.has_value())
+    {
+        return std::nullopt;
+    }
+    if (linkMetrics->avgNetworkLinkUtilization.has_value())
+    {
+        return linkMetrics->avgNetworkLinkUtilization;
+    }
+    double total = 0.0;
+    uint32_t count = 0;
+    if (linkMetrics->epsAvgLinkUtilization.has_value())
+    {
+        total += linkMetrics->epsAvgLinkUtilization.value();
+        count++;
+    }
+    if (linkMetrics->ocsAvgLinkUtilization.has_value())
+    {
+        total += linkMetrics->ocsAvgLinkUtilization.value();
+        count++;
+    }
+    return count == 0 ? std::nullopt : std::optional<double>(total / count);
 }
 
 } // namespace
@@ -66,6 +84,31 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 std::optional<uint32_t> spines,
                                 std::optional<OfferedLoadSummary> offeredLoad) const
 {
+    (void)receivedBytes;
+    (void)installedFlows;
+    (void)observedMatrixBytes;
+    (void)algorithmCandidateEdges;
+    (void)algorithmSelectedEdges;
+    (void)ocsActiveEdges;
+    (void)ocsAssignedFlows;
+    (void)epsFallbackFlows;
+    (void)communityInternalSelectedEdgeRatio;
+    (void)timelineCycles;
+    (void)schedulingRoundCount;
+    (void)nonEmptySchedulingRounds;
+    (void)avgSelectedEdgeCount;
+    (void)maxSelectedEdgeCount;
+    (void)avgActiveEdgeCount;
+    (void)maxActiveEdgeCount;
+    (void)totalActiveLightpathSeconds;
+    (void)stage1InstalledFlows;
+    (void)stage2InstalledFlows;
+    (void)stage1ReceivedBytes;
+    (void)stage2ReceivedBytes;
+    (void)ocsMetrics;
+    (void)spines;
+    (void)offeredLoad;
+
     const std::filesystem::path outputDir(output.GetOutputDir());
     std::filesystem::create_directories(outputDir);
 
@@ -88,103 +131,7 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
            << EscapeCsvField(experiment.GetSchemeName()) << ','
            << EscapeCsvField(experiment.GetTrafficPattern()) << ',' << experiment.GetRunId() << ','
            << experiment.GetRandomSeed() << ',' << simulation.GetNumTors() << ','
-           << simulation.GetServersPerTor() << ','
-           << FormatSeconds(simulation.GetObserverWindow()) << ','
-           << FormatSeconds(simulation.GetOcsReconfigurationPeriod()) << ','
-           << FormatSeconds(simulation.GetStopTime()) << ',' << EscapeCsvField(status) << ',';
-    if (installedFlows.has_value())
-    {
-        stream << installedFlows.value();
-    }
-    stream << ',';
-    if (receivedBytes.has_value())
-    {
-        stream << receivedBytes.value();
-    }
-    stream << ',';
-    if (observedMatrixBytes.has_value())
-    {
-        stream << observedMatrixBytes.value();
-    }
-    stream << ',';
-    if (algorithmCandidateEdges.has_value())
-    {
-        stream << algorithmCandidateEdges.value();
-    }
-    stream << ',';
-    if (algorithmSelectedEdges.has_value())
-    {
-        stream << algorithmSelectedEdges.value();
-    }
-    stream << ',';
-    if (ocsActiveEdges.has_value())
-    {
-        stream << ocsActiveEdges.value();
-    }
-    stream << ',';
-    if (ocsAssignedFlows.has_value())
-    {
-        stream << ocsAssignedFlows.value();
-    }
-    stream << ',';
-    if (epsFallbackFlows.has_value())
-    {
-        stream << epsFallbackFlows.value();
-    }
-    stream << ',';
-    WriteOptionalDouble(stream, communityInternalSelectedEdgeRatio);
-    stream << ',';
-    if (timelineCycles.has_value())
-    {
-        stream << timelineCycles.value();
-    }
-    stream << ',';
-    if (schedulingRoundCount.has_value())
-    {
-        stream << schedulingRoundCount.value();
-    }
-    stream << ',';
-    if (nonEmptySchedulingRounds.has_value())
-    {
-        stream << nonEmptySchedulingRounds.value();
-    }
-    stream << ',';
-    WriteOptionalDouble(stream, avgSelectedEdgeCount);
-    stream << ',';
-    if (maxSelectedEdgeCount.has_value())
-    {
-        stream << maxSelectedEdgeCount.value();
-    }
-    stream << ',';
-    WriteOptionalDouble(stream, avgActiveEdgeCount);
-    stream << ',';
-    if (maxActiveEdgeCount.has_value())
-    {
-        stream << maxActiveEdgeCount.value();
-    }
-    stream << ',';
-    WriteOptionalDouble(stream, totalActiveLightpathSeconds);
-    stream << ',';
-    if (stage1InstalledFlows.has_value())
-    {
-        stream << stage1InstalledFlows.value();
-    }
-    stream << ',';
-    if (stage2InstalledFlows.has_value())
-    {
-        stream << stage2InstalledFlows.value();
-    }
-    stream << ',';
-    if (stage1ReceivedBytes.has_value())
-    {
-        stream << stage1ReceivedBytes.value();
-    }
-    stream << ',';
-    if (stage2ReceivedBytes.has_value())
-    {
-        stream << stage2ReceivedBytes.value();
-    }
-    stream << ',';
+           << simulation.GetServersPerTor() << ',' << EscapeCsvField(status) << ',';
     if (flowMetrics.has_value())
     {
         stream << flowMetrics->totalFlows;
@@ -197,11 +144,6 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     stream << ',';
     if (flowMetrics.has_value())
     {
-        stream << flowMetrics->incompleteFlows;
-    }
-    stream << ',';
-    if (flowMetrics.has_value())
-    {
         WriteOptionalDouble(stream, flowMetrics->avgReceivedThroughputBps);
     }
     stream << ',';
@@ -210,140 +152,7 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
         WriteOptionalDouble(stream, flowMetrics->avgFctS);
     }
     stream << ',';
-    if (flowMetrics.has_value())
-    {
-        WriteOptionalDouble(stream, flowMetrics->p90FctS);
-    }
-    stream << ',';
-    if (flowMetrics.has_value())
-    {
-        WriteOptionalDouble(stream, flowMetrics->p95FctS);
-    }
-    stream << ',';
-    if (linkMetrics.has_value())
-    {
-        WriteOptionalDouble(stream, linkMetrics->epsAvgLinkUtilization);
-    }
-    stream << ',';
-    if (linkMetrics.has_value())
-    {
-        WriteOptionalDouble(stream, linkMetrics->epsMaxLinkUtilization);
-    }
-    stream << ',';
-    if (linkMetrics.has_value())
-    {
-        WriteOptionalDouble(stream, linkMetrics->ocsAvgLinkUtilization);
-    }
-    stream << ',';
-    if (linkMetrics.has_value())
-    {
-        WriteOptionalDouble(stream, linkMetrics->ocsMaxLinkUtilization);
-    }
-    stream << ',';
-    if (ocsMetrics.has_value())
-    {
-        WriteOptionalDouble(stream, ocsMetrics->ocsFlowHitRate);
-    }
-    stream << ',';
-    if (ocsMetrics.has_value())
-    {
-        WriteOptionalDouble(stream, ocsMetrics->ocsByteHitRate);
-    }
-    stream << ',';
-    if (ocsMetrics.has_value())
-    {
-        stream << ocsMetrics->ocsReconfigurationCount;
-    }
-    stream << ',';
-    if (spines.has_value())
-    {
-        stream << spines.value();
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->offeredLoadFactor;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->trafficStopTimeS;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->simStopTimeS;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->drainTimeS;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->measurementStartTimeS;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->measurementEndTimeS;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->measurementDurationS;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << offeredLoad->offeredBytesMeasurement;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << offeredLoad->crossTorOfferedBytesMeasurement;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->actualOfferedBps;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->actualCrossTorOfferedBps;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->actualReceivedBps;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->normalizedAccessLoad;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->normalizedEpsLoad;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->maxTorOfferedBps;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->maxTorOfferedLoadEps;
-    }
-    stream << ',';
-    if (offeredLoad.has_value())
-    {
-        stream << std::setprecision(12) << offeredLoad->maxTorOfferedLoadHybrid;
-    }
+    WriteOptionalDouble(stream, GetAvgNetworkLinkUtilization(linkMetrics));
     stream << '\n';
 
     return summaryPath;

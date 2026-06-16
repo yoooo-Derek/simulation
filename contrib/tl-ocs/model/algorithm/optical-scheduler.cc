@@ -13,6 +13,7 @@ OpticalScheduler::SelectEdges(const DenseMatrix& modularityGain,
                               const OpticalSchedulerParameters& parameters) const
 {
     OpticalScheduleResult result;
+    result.scheduleGain = DenseMatrix(modularityGain.GetSize());
     for (uint32_t i = 0; i < modularityGain.GetSize(); ++i)
     {
         for (uint32_t j = i + 1; j < modularityGain.GetSize(); ++j)
@@ -22,6 +23,8 @@ OpticalScheduler::SelectEdges(const DenseMatrix& modularityGain,
             const double communityFactor =
                 !parameters.enableCommunityFactor || sameCommunity ? 1.0 : parameters.alpha;
             const double score = baseGain * communityFactor;
+            result.scheduleGain.Set(i, j, score);
+            result.scheduleGain.Set(j, i, score);
             if (score > 0.0)
             {
                 result.candidateEdges.push_back({i, j, score, score, sameCommunity, false});
@@ -43,16 +46,21 @@ OpticalScheduler::SelectEdges(const DenseMatrix& modularityGain,
                   return left.destinationTor < right.destinationTor;
               });
 
-    std::vector<uint32_t> selectedDegree(modularityGain.GetSize(), 0);
+    result.selectedDegree.assign(modularityGain.GetSize(), 0);
     for (OpticalEdge& edge : result.candidateEdges)
     {
-        if (selectedDegree[edge.sourceTor] >= parameters.opticalPortsPerTor ||
-            selectedDegree[edge.destinationTor] >= parameters.opticalPortsPerTor)
+        if (parameters.maxOpticalLinks > 0 &&
+            result.selectedEdges.size() >= parameters.maxOpticalLinks)
+        {
+            break;
+        }
+        if (result.selectedDegree[edge.sourceTor] >= parameters.opticalPortsPerTor ||
+            result.selectedDegree[edge.destinationTor] >= parameters.opticalPortsPerTor)
         {
             continue;
         }
-        selectedDegree[edge.sourceTor]++;
-        selectedDegree[edge.destinationTor]++;
+        result.selectedDegree[edge.sourceTor]++;
+        result.selectedDegree[edge.destinationTor]++;
         edge.selected = true;
         result.selectedEdges.push_back(edge);
     }

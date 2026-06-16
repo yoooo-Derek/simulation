@@ -1,0 +1,2 @@
+experiment,scheme,traffic_pattern,run_id,random_seed,num_tors,servers_per_tor,status,total_flows,completed_flows,avg_receiver_throughput_bps,avg_fct_s,avg_network_link_utilization
+v2-main-static-ocs,static-ocs,community-local,1,1,8,16,scheme_static-ocs_finite_multi_cycle_ok,192,192,384000000,0.000550194125,8.6207847619e-05

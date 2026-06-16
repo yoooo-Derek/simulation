@@ -23,7 +23,7 @@ class TlOcsFlowResultWriterTestCase : public TestCase
     {
         ExperimentConfig experiment;
         experiment.SetExperimentName("flow-writer-test");
-        experiment.SetSchemeName("eps-ecmp");
+        experiment.SetSchemeName("electrical-only");
         experiment.SetTrafficPattern("uniform");
 
         OutputConfig output;
@@ -31,7 +31,7 @@ class TlOcsFlowResultWriterTestCase : public TestCase
 
         FlowMetricRecord completed;
         completed.flowId = 1;
-        completed.schemeName = "eps-ecmp";
+        completed.schemeName = "electrical-only";
         completed.patternName = "uniform";
         completed.pathType = "eps";
         completed.sizeBytes = 100;
@@ -43,7 +43,7 @@ class TlOcsFlowResultWriterTestCase : public TestCase
 
         FlowMetricRecord incomplete;
         incomplete.flowId = 2;
-        incomplete.schemeName = "eps-ecmp";
+        incomplete.schemeName = "electrical-only";
         incomplete.patternName = "uniform";
         incomplete.pathType = "eps";
         incomplete.sizeBytes = 100;
@@ -59,8 +59,13 @@ class TlOcsFlowResultWriterTestCase : public TestCase
         content << stream.rdbuf();
         const std::string text = content.str();
         NS_TEST_ASSERT_MSG_NE(text.find("experiment,scheme,traffic_pattern"), std::string::npos, "missing flow CSV header");
-        NS_TEST_ASSERT_MSG_NE(text.find("eps,100,100"), std::string::npos, "missing completed EPS row");
-        NS_TEST_ASSERT_MSG_NE(text.find("eps,100,25,0.002,,,false"), std::string::npos, "incomplete row should keep completion fields empty");
+        NS_TEST_ASSERT_MSG_EQ(text.find("path_type"), std::string::npos, "V1 path type field should be absent");
+        NS_TEST_ASSERT_MSG_NE(text.find("1,100,0.001,0.003,0.002,true"),
+                              std::string::npos,
+                              "missing completed flow row");
+        NS_TEST_ASSERT_MSG_NE(text.find("2,25,0.002,,,false"),
+                              std::string::npos,
+                              "incomplete row should keep completion fields empty");
     }
 };
 

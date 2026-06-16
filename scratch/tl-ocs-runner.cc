@@ -314,7 +314,7 @@ WriteSchedulingDiagnostics(const std::string& outputDir,
               "future_demand_top_edges\n";
     for (const auto& record : records)
     {
-        const bool diagnosticOnly = schemeName == "ocs-oracle";
+        const bool diagnosticOnly = false;
         stream << EscapeCsvField(experiment.GetExperimentName()) << ','
                << EscapeCsvField(experiment.GetTrafficPattern()) << ','
                << EscapeCsvField(schemeName) << ','
@@ -466,10 +466,10 @@ main(int argc, char* argv[])
                  "Datapath diagnostic mode: none, force-eps, or force-ocs",
                  diagnosticMode);
     cmd.AddValue("oracleMode",
-                 "Diagnostic oracle mode for ocs-oracle: period-future or whole-run",
+                 "Diagnostic oracle mode; retained only for transitional diagnostics",
                  oracleMode);
     cmd.AddValue("fixedOcsEdges",
-                 "Static diagnostic OCS edge set for fixed-ocs, formatted as 0-1;2-3",
+                 "Static OCS edge set for static-ocs, formatted as 0-1;2-3",
                  fixedOcsEdges);
     cmd.AddValue("overwrite", "Overwrite summary CSV before writing", overwrite);
     cmd.AddValue("enableEpsTopology", "Build the minimum EPS topology", enableEpsTopology);

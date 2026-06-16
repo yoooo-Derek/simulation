@@ -3,6 +3,7 @@
 #include "ns3/flow-launcher.h"
 #include "ns3/ocs-admission.h"
 #include "ns3/simulator.h"
+#include "ns3/wait-queue.h"
 
 #include <algorithm>
 #include <cmath>
@@ -39,6 +40,20 @@ OffsetStartTimes(const std::vector<FlowSpec>& flows, Time startOffset)
                              flow.GetEstimatedRateBps());
     }
     return shifted;
+}
+
+FlowSpec
+WithStartTime(const FlowSpec& flow, Time startTime)
+{
+    return FlowSpec(flow.GetFlowId(),
+                    flow.GetSourceTorId(),
+                    flow.GetSourceServerId(),
+                    flow.GetDestinationTorId(),
+                    flow.GetDestinationServerId(),
+                    flow.GetSizeBytes(),
+                    startTime,
+                    flow.GetPatternName(),
+                    flow.GetEstimatedRateBps());
 }
 
 std::pair<uint32_t, uint32_t>
@@ -443,6 +458,14 @@ BuildSchedulingDiagnostic(uint32_t cycle,
 
 struct FiniteCycleContext
 {
+    struct ActiveOpticalFlow
+    {
+        FlowSpec flow;
+        FlowPathDecision decision;
+        std::shared_ptr<FlowMetricTrackingState> tracking;
+        ApplicationContainer sourceApplications;
+    };
+
     const NodeIndex& nodeIndex;
     const SimulationConfig& simulation;
     const std::vector<FlowSpec>& flows;
@@ -455,12 +478,15 @@ struct FiniteCycleContext
     FlowLauncher launcher;
     ControllerTimelineResult result;
     TrafficMatrix latestObserved;
+    WaitQueue waitQueue;
+    std::map<uint32_t, ActiveOpticalFlow> activeOpticalFlows;
     bool hasCompletedWindow = false;
     Time lastActiveSetUpdate = Seconds(0);
     std::map<std::pair<uint32_t, uint32_t>, double> activeDurations;
     uint64_t selectedEdgeCountSum = 0;
     uint64_t activeEdgeCountSum = 0;
     uint16_t nextPort = 10000;
+    uint32_t nextResidualFlowId = 1000000;
 
     FiniteCycleContext(const NodeIndex& nodeIndex,
                        const SimulationConfig& simulation,
@@ -483,6 +509,10 @@ struct FiniteCycleContext
                     simulation.GetStopTime()),
           latestObserved(simulation.GetNumTors())
     {
+        for (const auto& flow : flows)
+        {
+            nextResidualFlowId = std::max(nextResidualFlowId, flow.GetFlowId() + 1000000);
+        }
     }
 };
 
@@ -506,6 +536,19 @@ SnapshotWindow(const std::shared_ptr<FiniteCycleContext>& context)
     context->latestObserved = context->observer.SnapshotAndReset();
     context->hasCompletedWindow = true;
     context->result.observedMatrixBytes += context->latestObserved.GetTotalBytes();
+}
+
+TrafficMatrix
+BuildSchedulingMatrix(const FiniteCycleContext& context)
+{
+    TrafficMatrix schedulingMatrix = context.latestObserved;
+    for (const auto& waiting : context.waitQueue.GetAll())
+    {
+        schedulingMatrix.AddBytes(waiting.flow.GetSourceTorId(),
+                                  waiting.flow.GetDestinationTorId(),
+                                  waiting.flow.GetSizeBytes());
+    }
+    return schedulingMatrix;
 }
 
 void
@@ -537,6 +580,165 @@ UpdateFlowSchedulingDiagnostics(FiniteCycleContext& context,
 }
 
 void
+UpsertDecision(std::vector<FlowPathDecision>& decisions, const FlowPathDecision& decision)
+{
+    for (auto& existing : decisions)
+    {
+        if (existing.flowId == decision.flowId)
+        {
+            existing = decision;
+            return;
+        }
+    }
+    decisions.push_back(decision);
+}
+
+void
+InstallRoutedFlow(const std::shared_ptr<FiniteCycleContext>& context,
+                  const FlowSpec& flow,
+                  const FlowPathDecision& decision)
+{
+    if (decision.waiting || !decision.installable)
+    {
+        context->waitQueue.Enqueue(flow, decision.reason, Simulator::Now());
+        context->result.waitingFlows++;
+        UpsertDecision(context->result.stage2Decisions, decision);
+        UpdateFlowSchedulingDiagnostics(*context, flow, decision);
+        return;
+    }
+
+    const FlowLaunchResult launch =
+        context->launcher.Install({flow},
+                                  {decision},
+                                  context->nodeIndex,
+                                  context->simulation.GetStopTime(),
+                                  context->nextPort++,
+                                  [context](uint32_t flowId) {
+                                      context->admission.Release(flowId);
+                                      context->activeOpticalFlows.erase(flowId);
+                                  });
+    context->result.stage2InstalledFlows += launch.installedFlows;
+    context->result.ocsAssignedFlows += launch.assignedOcsFlows;
+    if (decision.admittedToOcs)
+    {
+        context->result.ocsAssignedBytes += flow.GetSizeBytes();
+    }
+    context->result.epsFallbackFlows += launch.epsFlows;
+    UpsertDecision(context->result.stage2Decisions, decision);
+    UpdateFlowSchedulingDiagnostics(*context, flow, decision);
+    context->result.metricSources.insert(context->result.metricSources.end(),
+                                         launch.metricSources.begin(),
+                                         launch.metricSources.end());
+    if (decision.admittedToOcs && !launch.metricSources.empty())
+    {
+        context->activeOpticalFlows[flow.GetFlowId()] =
+            {flow, decision, launch.metricSources.front().tracking, launch.sourceApplications};
+    }
+}
+
+void
+RetryWaitingFlows(const std::shared_ptr<FiniteCycleContext>& context)
+{
+    if (context->waitQueue.Empty())
+    {
+        return;
+    }
+    const std::vector<WaitingFlow> waitingFlows = context->waitQueue.PopAll();
+    for (const auto& waiting : waitingFlows)
+    {
+        const FlowSpec retryFlow = WithStartTime(waiting.flow, Simulator::Now());
+        FlowPathDecision decision =
+            FlowPathSelector().Select(retryFlow, context->admission, context->nodeIndex);
+        if (decision.waiting || !decision.installable)
+        {
+            context->waitQueue.Requeue(waiting);
+            UpsertDecision(context->result.stage2Decisions, decision);
+            continue;
+        }
+        InstallOcsHostRoutes(retryFlow, decision, context->nodeIndex);
+        InstallRoutedFlow(context, retryFlow, decision);
+        context->result.retriedFlows++;
+    }
+}
+
+bool
+PathUsesRemovedEdge(const FlowPathDecision& decision,
+                    const std::set<std::pair<uint32_t, uint32_t>>& removedEdges)
+{
+    if (!decision.admittedToOcs)
+    {
+        return false;
+    }
+    if (decision.torPath.size() >= 2)
+    {
+        for (uint32_t index = 1; index < decision.torPath.size(); ++index)
+        {
+            if (removedEdges.find(CanonicalPair(decision.torPath[index - 1],
+                                                decision.torPath[index])) != removedEdges.end())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+    return removedEdges.find(CanonicalPair(decision.sourceTor, decision.destinationTor)) !=
+           removedEdges.end();
+}
+
+void
+InterruptInvalidatedFlows(const std::shared_ptr<FiniteCycleContext>& context,
+                          const std::vector<std::pair<uint32_t, uint32_t>>& before,
+                          const std::vector<std::pair<uint32_t, uint32_t>>& after)
+{
+    std::set<std::pair<uint32_t, uint32_t>> afterEdges(after.begin(), after.end());
+    std::set<std::pair<uint32_t, uint32_t>> removedEdges;
+    for (const auto& edge : before)
+    {
+        if (afterEdges.find(edge) == afterEdges.end())
+        {
+            removedEdges.insert(edge);
+        }
+    }
+    if (removedEdges.empty())
+    {
+        return;
+    }
+
+    for (auto active = context->activeOpticalFlows.begin();
+         active != context->activeOpticalFlows.end();)
+    {
+        if (!PathUsesRemovedEdge(active->second.decision, removedEdges))
+        {
+            ++active;
+            continue;
+        }
+
+        active->second.sourceApplications.Stop(Simulator::Now());
+        context->admission.Release(active->first);
+        context->result.interruptedFlows++;
+        const uint64_t receivedBytes = active->second.tracking->receivedBytes;
+        if (!active->second.tracking->completed &&
+            receivedBytes < active->second.flow.GetSizeBytes())
+        {
+            const uint64_t residualBytes = active->second.flow.GetSizeBytes() - receivedBytes;
+            FlowSpec residual(context->nextResidualFlowId++,
+                              active->second.flow.GetSourceTorId(),
+                              active->second.flow.GetSourceServerId(),
+                              active->second.flow.GetDestinationTorId(),
+                              active->second.flow.GetDestinationServerId(),
+                              residualBytes,
+                              Simulator::Now(),
+                              active->second.flow.GetPatternName(),
+                              active->second.flow.GetEstimatedRateBps());
+            context->waitQueue.Enqueue(residual, "optical-path-invalidated", Simulator::Now());
+            context->result.residualFlows++;
+            context->result.waitingFlows++;
+        }
+        active = context->activeOpticalFlows.erase(active);
+    }
+}
+
+void
 FinalizeSchedulingDiagnostics(FiniteCycleContext& context)
 {
     for (auto& record : context.result.schedulingDiagnostics)
@@ -556,12 +758,13 @@ RunSchedulingRound(const std::shared_ptr<FiniteCycleContext>& context)
         return;
     }
 
+    const TrafficMatrix schedulingMatrix = BuildSchedulingMatrix(*context);
     const TlOcsAlgorithmResult volumeResult =
-        RunScheduler(context->latestObserved,
+        RunScheduler(schedulingMatrix,
                      context->algorithmParameters,
                      OpticalSchedulingMode::VOLUME);
     const TlOcsAlgorithmResult tlOcsResult =
-        RunScheduler(context->latestObserved,
+        RunScheduler(schedulingMatrix,
                      context->algorithmParameters,
                      OpticalSchedulingMode::TL_OCS);
     const Time roundStart = Simulator::Now();
@@ -596,7 +799,7 @@ RunSchedulingRound(const std::shared_ptr<FiniteCycleContext>& context)
     }
 
     context->state.UpdateFromAlgorithmResult(*algorithmResult,
-                                             context->latestObserved.GetTotalBytes());
+                                             schedulingMatrix.GetTotalBytes());
     context->result.timelineCycles = context->state.GetCurrentCycleIndex();
     context->result.schedulingRoundCount++;
     context->result.algorithmCandidateEdges =
@@ -623,10 +826,12 @@ RunSchedulingRound(const std::shared_ptr<FiniteCycleContext>& context)
         AccumulateActiveDurations(*context, Simulator::Now());
         const auto before = context->linkManager.GetActiveEdges();
         context->linkManager.ApplySelectedEdges(algorithmResult->selectedEdges);
-        if (before != context->linkManager.GetActiveEdges())
+        const auto after = context->linkManager.GetActiveEdges();
+        if (before != after)
         {
             context->result.ocsReconfigurationCount++;
         }
+        InterruptInvalidatedFlows(context, before, after);
     }
     context->result.ocsActiveEdges = context->linkManager.GetActiveEdgeCount();
     context->activeEdgeCountSum += context->result.ocsActiveEdges;
@@ -640,7 +845,7 @@ RunSchedulingRound(const std::shared_ptr<FiniteCycleContext>& context)
                                   Simulator::Now(),
                                   roundEnd,
                                   context->options.oracleMode,
-                                  context->latestObserved,
+                                  schedulingMatrix,
                                   futureDemand,
                                   *algorithmResult,
                                   volumeResult,
@@ -649,6 +854,7 @@ RunSchedulingRound(const std::shared_ptr<FiniteCycleContext>& context)
                                   context->result.ocsActiveEdges,
                                   context->result.ocsAssignedFlows,
                                   context->result.ocsAssignedBytes));
+    RetryWaitingFlows(context);
 }
 
 void
@@ -671,27 +877,7 @@ LaunchFlow(const std::shared_ptr<FiniteCycleContext>& context, FlowSpec flow)
         decision.destinationTor = flow.GetDestinationTorId();
     }
 
-    const FlowLaunchResult launch =
-        context->launcher.Install({flow},
-                                  {decision},
-                                  context->nodeIndex,
-                                  context->simulation.GetStopTime(),
-                                  context->nextPort++,
-                                  [context](uint32_t flowId) {
-                                      context->admission.Release(flowId);
-                                  });
-    context->result.stage2InstalledFlows += launch.installedFlows;
-    context->result.ocsAssignedFlows += launch.assignedOcsFlows;
-    if (decision.admittedToOcs)
-    {
-        context->result.ocsAssignedBytes += flow.GetSizeBytes();
-    }
-    context->result.epsFallbackFlows += launch.epsFlows;
-    context->result.stage2Decisions.push_back(decision);
-    UpdateFlowSchedulingDiagnostics(*context, flow, decision);
-    context->result.metricSources.insert(context->result.metricSources.end(),
-                                         launch.metricSources.begin(),
-                                         launch.metricSources.end());
+    InstallRoutedFlow(context, flow, decision);
 
     if (context->options.printOcsDecisions)
     {
@@ -805,6 +991,13 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
                            simulation.GetStopTime());
     FlowPathSelector selector;
     result.stage2Decisions = selector.Select(shiftedStage2Flows, admission, nodeIndex);
+    for (const auto& decision : result.stage2Decisions)
+    {
+        if (decision.waiting || !decision.installable)
+        {
+            result.waitingFlows++;
+        }
+    }
 
     InstallOcsHostRoutes(shiftedStage2Flows, result.stage2Decisions, nodeIndex);
 
@@ -890,7 +1083,7 @@ ControllerTimeline::RunFiniteMultiCycle(
     {
         Simulator::Schedule(at, &SnapshotWindow, context);
     }
-    for (Time at = simulation.GetOcsReconfigurationPeriod(); at < simulation.GetTrafficStopTime();
+    for (Time at = simulation.GetOcsReconfigurationPeriod(); at <= simulation.GetTrafficStopTime();
          at += simulation.GetOcsReconfigurationPeriod())
     {
         Simulator::Schedule(at, &RunSchedulingRound, context);

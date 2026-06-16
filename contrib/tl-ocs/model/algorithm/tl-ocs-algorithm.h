@@ -28,12 +28,15 @@ struct TlOcsAlgorithmResult
     // V4 core pipeline artifacts: W -> A -> B -> communities -> OCS edges.
     DenseMatrix A;
     DenseMatrix B;
+    DenseMatrix S;
+    DenseMatrix G;
     TrafficGraph trafficGraph;
     std::vector<uint32_t> communityLabels;
     double communityScore = 0.0;
     uint32_t communityPassCount = 0;
     uint32_t communityMovedCount = 0;
     uint32_t communityLevelCount = 0;
+    std::vector<uint32_t> selectedDegree;
     std::vector<OpticalEdge> candidateEdges;
     std::vector<OpticalEdge> selectedEdges;
     double communityInternalSelectedEdgeRatio = 0.0;

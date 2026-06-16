@@ -35,7 +35,7 @@ class TlOcsFlowPathSelectorTestCase : public TestCase
 };
 
 TlOcsFlowPathSelectorTestCase::TlOcsFlowPathSelectorTestCase()
-    : TestCase("TL-OCS FlowPathSelector marks OCS and EPS path decisions")
+    : TestCase("TL-HOC FlowPathSelector marks OCS and waiting path decisions")
 {
 }
 
@@ -63,10 +63,15 @@ TlOcsFlowPathSelectorTestCase::DoRun()
     const FlowPathDecision inactiveDecision = selector.Select(inactive, admission, index);
     NS_TEST_ASSERT_MSG_EQ(activeDecision.pathType, "ocs", "active pair should select OCS");
     NS_TEST_ASSERT_MSG_EQ(activeDecision.admittedToOcs, true, "active pair was not admitted");
-    NS_TEST_ASSERT_MSG_EQ(inactiveDecision.pathType, "eps", "inactive pair should select EPS");
+    NS_TEST_ASSERT_MSG_EQ(inactiveDecision.pathType,
+                          "waiting",
+                          "inactive cross-group pair should wait");
     NS_TEST_ASSERT_MSG_EQ(inactiveDecision.admittedToOcs,
                           false,
                           "inactive pair should not be admitted");
+    NS_TEST_ASSERT_MSG_EQ(inactiveDecision.installable,
+                          false,
+                          "waiting flow must not be installable");
 
     OcsAdmission capacityLimited(manager, 1000);
     const FlowSpec fitting(2, 0, 0, 1, 0, 800, MilliSeconds(1), "test", 800);
@@ -75,8 +80,8 @@ TlOcsFlowPathSelectorTestCase::DoRun()
                           "ocs",
                           "flow within capacity should use OCS");
     NS_TEST_ASSERT_MSG_EQ(selector.Select(exceeding, capacityLimited, index).pathType,
-                          "eps",
-                          "flow exceeding capacity should fall back to EPS");
+                          "waiting",
+                          "flow exceeding optical capacity should wait");
     Simulator::Destroy();
 }
 
@@ -151,30 +156,30 @@ class TlOcsFlowPathDataPlaneConsistencyTestCase : public TestCase
 
         const FlowSpec epsFlow(1, 0, 0, 1, 0, 10000, MilliSeconds(31), "path-test", 1100);
         const FlowPathDecision epsDecision = selector.Select(epsFlow, admission, index);
-        const FlowLaunchResult epsLaunch =
+        const FlowLaunchResult waitingLaunch =
             launcher.Install({epsFlow}, {epsDecision}, index, MilliSeconds(70), 13000);
 
         Simulator::Stop(MilliSeconds(40));
         Simulator::Run();
         NS_TEST_ASSERT_MSG_EQ(epsDecision.pathType,
-                              "eps",
-                              "over-threshold flow should use residual EPS forwarding");
+                              "waiting",
+                              "over-threshold cross-group flow should wait");
+        NS_TEST_ASSERT_MSG_EQ(waitingLaunch.installedFlows,
+                              0,
+                              "waiting flow must not install applications");
         NS_TEST_ASSERT_MSG_EQ(*ocsMacTxBytes,
                               afterOcsFlow,
-                              "EPS fallback leaked onto the previously installed OCS alias route");
+                              "waiting flow should not transmit on the OCS alias route");
 
         const auto metrics = MetricsCollector().Collect({ocsLaunch.metricSources[0],
-                                                         epsLaunch.metricSources[0],
                                                          preexistingEpsLaunch.metricSources[0]},
                                                         "tl-ocs");
         NS_TEST_ASSERT_MSG_EQ(metrics[0].pathType, "ocs", "OCS metric path type mismatch");
-        NS_TEST_ASSERT_MSG_EQ(metrics[1].pathType, "eps", "EPS metric path type mismatch");
         NS_TEST_ASSERT_MSG_EQ(metrics[0].completed, true, "OCS flow did not complete");
-        NS_TEST_ASSERT_MSG_EQ(metrics[1].completed, true, "EPS fallback flow did not complete");
-        NS_TEST_ASSERT_MSG_EQ(metrics[2].pathType,
+        NS_TEST_ASSERT_MSG_EQ(metrics[1].pathType,
                               "eps",
                               "preexisting EPS application metric path type mismatch");
-        NS_TEST_ASSERT_MSG_EQ(metrics[2].completed,
+        NS_TEST_ASSERT_MSG_EQ(metrics[1].completed,
                               true,
                               "preexisting EPS application did not complete");
         Simulator::Destroy();
@@ -246,17 +251,18 @@ class TlOcsFlowPathActiveSetClosureTestCase : public TestCase
 
         Simulator::Stop(simulation.GetStopTime() - Simulator::Now());
         Simulator::Run();
-        const auto metrics =
-            MetricsCollector().Collect({startedLaunch.metricSources[0], laterLaunch.metricSources[0]},
-                                       "tl-ocs");
+        const auto metric =
+            MetricsCollector().Collect(startedLaunch.metricSources[0], "tl-ocs");
         NS_TEST_ASSERT_MSG_EQ(startedDecision.pathType, "ocs", "started flow should use OCS");
         NS_TEST_ASSERT_MSG_EQ(laterDecision.pathType,
-                              "eps",
-                              "new flow matched a closed logical lightpath");
-        NS_TEST_ASSERT_MSG_EQ(metrics[0].completed,
+                              "waiting",
+                              "new cross-group flow should wait after lightpath closure");
+        NS_TEST_ASSERT_MSG_EQ(laterLaunch.installedFlows,
+                              0,
+                              "waiting flow must not install after active-set closure");
+        NS_TEST_ASSERT_MSG_EQ(metric.completed,
                               true,
                               "started OCS flow did not complete after active-set closure");
-        NS_TEST_ASSERT_MSG_EQ(metrics[1].completed, true, "later EPS flow did not complete");
         NS_TEST_ASSERT_MSG_EQ(admission.GetAssignedRateBps(0, 1, Simulator::Now()),
                               0,
                               "completion did not release closed-lightpath reservation");

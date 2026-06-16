@@ -136,7 +136,7 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
                                result);
         }
         CollectPostRunMetrics(options, linkMetricsCollector.get(), result);
-        result.status = "scheme_eps_ecmp_smoke_ok";
+        result.status = "scheme_" + scheme.ToString() + "_smoke_ok";
         return result;
     }
 

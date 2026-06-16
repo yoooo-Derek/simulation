@@ -53,6 +53,7 @@ TlOcsAlgorithm::Run(const TrafficMatrix& observedW,
     result.B = !parameters.enableNullModel || parameters.useVolumeOnlyScore
                    ? result.A
                    : nullModel.ComputeModularityGain(result.A, parameters.eta);
+    result.S = nullModel.ComputePositiveGain(result.B);
     if (parameters.useVolumeOnlyScore)
     {
         result.communityLabels.resize(result.B.GetSize(), 0);
@@ -79,6 +80,8 @@ TlOcsAlgorithm::Run(const TrafficMatrix& observedW,
     schedulerParameters.opticalPortsPerTor = parameters.opticalPortsPerTor;
     const OpticalScheduleResult schedule =
         scheduler.SelectEdges(result.B, result.communityLabels, schedulerParameters);
+    result.G = schedule.scheduleGain;
+    result.selectedDegree = schedule.selectedDegree;
     result.candidateEdges = schedule.candidateEdges;
     result.selectedEdges = schedule.selectedEdges;
     result.communityInternalSelectedEdgeRatio =

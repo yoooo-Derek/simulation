@@ -1,0 +1,4 @@
+experiment,scheme,num_tors,servers_per_tor,traffic_pattern,total_flows,completed_flows,avg_receiver_throughput_bps,avg_fct_s,avg_network_link_utilization
+v2-main-electrical-only,electrical-only,8,16,community-local,256,256,512000000,0.00079608,0.000988945066667
+v2-main-static-ocs,static-ocs,8,16,community-local,192,192,384000000,0.000550194125,8.6207847619e-05
+v2-main-tl-hoc,tl-hoc,8,16,community-local,256,256,512000000,0.000550123488281,0.000227181511111

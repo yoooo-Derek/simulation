@@ -3,6 +3,7 @@
 #include "ns3/test.h"
 #include "ns3/traffic-matrix.h"
 
+#include <algorithm>
 #include <utility>
 #include <vector>
 
@@ -79,11 +80,24 @@ TlOcsAlgorithmSelectionTestCase::DoRun()
     NS_TEST_ASSERT_MSG_EQ_TOL(result.A.Get(2, 3), 160.0, 1e-12, "unexpected A(2,3)");
     NS_TEST_ASSERT_MSG_GT(result.B.Get(0, 1), 0.0, "community-local B(0,1) should be positive");
     NS_TEST_ASSERT_MSG_GT(result.B.Get(2, 3), 0.0, "community-local B(2,3) should be positive");
+    NS_TEST_ASSERT_MSG_EQ_TOL(result.S.Get(0, 1),
+                              result.B.Get(0, 1),
+                              1e-12,
+                              "positive B(0,1) should be preserved in S");
+    NS_TEST_ASSERT_MSG_EQ_TOL(result.S.Get(2, 3),
+                              result.B.Get(2, 3),
+                              1e-12,
+                              "positive B(2,3) should be preserved in S");
     NS_TEST_ASSERT_MSG_LT(result.B.Get(0, 2),
                           result.B.Get(0, 1),
                           "weak cross-community edge should have lower structural gain");
+    NS_TEST_ASSERT_MSG_EQ_TOL(result.S.Get(0, 2),
+                              std::max(result.B.Get(0, 2), 0.0),
+                              1e-12,
+                              "S must be max(B, 0)");
     NS_TEST_ASSERT_MSG_GT(result.candidateEdges.size(), 0, "expected candidate edges");
     NS_TEST_ASSERT_MSG_EQ(result.selectedEdges.size(), 2, "expected both strong community edges");
+    NS_TEST_ASSERT_MSG_EQ(result.selectedDegree.size(), 4, "selected degree vector size mismatch");
     NS_TEST_ASSERT_MSG_EQ_TOL(result.communityInternalSelectedEdgeRatio,
                               1.0,
                               1e-12,
@@ -108,6 +122,14 @@ TlOcsAlgorithmSelectionTestCase::DoRun()
     }
     NS_TEST_ASSERT_MSG_EQ(edge01->sameCommunity, true, "edge 0-1 should be intra-community");
     NS_TEST_ASSERT_MSG_EQ(edge23->sameCommunity, true, "edge 2-3 should be intra-community");
+    NS_TEST_ASSERT_MSG_EQ_TOL(result.G.Get(0, 1),
+                              edge01->score,
+                              1e-12,
+                              "G(0,1) should match candidate score");
+    NS_TEST_ASSERT_MSG_EQ_TOL(result.G.Get(2, 3),
+                              edge23->score,
+                              1e-12,
+                              "G(2,3) should match candidate score");
 
     std::vector<uint32_t> selectedDegree(4, 0);
     bool selected01 = false;
@@ -125,6 +147,12 @@ TlOcsAlgorithmSelectionTestCase::DoRun()
     for (uint32_t degree : selectedDegree)
     {
         NS_TEST_ASSERT_MSG_EQ(degree <= 1, true, "optical port constraint violated");
+    }
+    for (uint32_t node = 0; node < selectedDegree.size(); ++node)
+    {
+        NS_TEST_ASSERT_MSG_EQ(result.selectedDegree[node],
+                              selectedDegree[node],
+                              "algorithm selectedDegree should match selected edges");
     }
 }
 
@@ -163,6 +191,14 @@ TlOcsAlgorithmNullModelAblationTestCase::DoRun()
                               withoutNullModel.A.Get(0, 1),
                               1e-12,
                               "disabled null model must expose A directly");
+    NS_TEST_ASSERT_MSG_EQ_TOL(withNullModel.S.Get(0, 1),
+                              std::max(withNullModel.B.Get(0, 1), 0.0),
+                              1e-12,
+                              "S must be the positive part of B with null model enabled");
+    NS_TEST_ASSERT_MSG_EQ_TOL(withoutNullModel.S.Get(0, 1),
+                              withoutNullModel.A.Get(0, 1),
+                              1e-12,
+                              "S must be the positive part of A when null model is disabled");
 }
 
 class TlOcsAlgorithmNullModelRankingTestCase : public TestCase

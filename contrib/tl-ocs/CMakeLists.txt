@@ -26,9 +26,13 @@ build_lib(
     model/results/csv-schema.cc
     model/results/flow-result-writer.cc
     model/results/result-writer.cc
+    model/routing/cooperative-router.cc
     model/routing/flow-path-selector.cc
     model/routing/ocs-admission.cc
+    model/routing/optical-core-topology.cc
+    model/routing/optical-link-state-manager.cc
     model/routing/ocs-link-manager.cc
+    model/routing/wait-queue.cc
     model/topology/eps-topology-builder.cc
     model/topology/node-index.cc
     model/traffic/aggregation-distractor-traffic-generator.cc
@@ -66,9 +70,13 @@ build_lib(
     model/results/csv-schema.h
     model/results/flow-result-writer.h
     model/results/result-writer.h
+    model/routing/cooperative-router.h
     model/routing/flow-path-selector.h
     model/routing/ocs-admission.h
+    model/routing/optical-core-topology.h
+    model/routing/optical-link-state-manager.h
     model/routing/ocs-link-manager.h
+    model/routing/wait-queue.h
     model/topology/eps-topology-builder.h
     model/topology/node-index.h
     model/traffic/aggregation-distractor-traffic-generator.h
@@ -92,6 +100,8 @@ build_lib(
     test/tl-ocs-config-test-suite.cc
     test/tl-ocs-controller-state-test-suite.cc
     test/tl-ocs-controller-timeline-test-suite.cc
+    test/tl-ocs-cooperative-router-test-suite.cc
+    test/tl-ocs-delayed-install-test-suite.cc
     test/tl-ocs-community-detector-test-suite.cc
     test/tl-ocs-eps-topology-test-suite.cc
     test/tl-ocs-flow-launcher-test-suite.cc
@@ -104,6 +114,7 @@ build_lib(
     test/tl-ocs-ocs-admission-test-suite.cc
     test/tl-ocs-ocs-link-manager-test-suite.cc
     test/tl-ocs-ocs-metrics-test-suite.cc
+    test/tl-ocs-optical-link-state-test-suite.cc
     test/tl-ocs-optical-scheduler-test-suite.cc
     test/tl-ocs-flow-path-selector-test-suite.cc
     test/tl-ocs-result-writer-test-suite.cc
@@ -111,4 +122,6 @@ build_lib(
     test/tl-ocs-smoke-scenario-runner-test-suite.cc
     test/tl-ocs-traffic-observer-test-suite.cc
     test/tl-ocs-traffic-generator-test-suite.cc
+    test/tl-ocs-topology-update-test-suite.cc
+    test/tl-ocs-wait-queue-test-suite.cc
 )

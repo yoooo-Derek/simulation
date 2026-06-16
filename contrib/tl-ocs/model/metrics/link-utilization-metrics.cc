@@ -22,6 +22,7 @@ LinkUtilizationSummary
 SummarizeLinkUtilization(const std::vector<LinkMetricRecord>& records)
 {
     LinkUtilizationSummary summary;
+    std::vector<double> networkValues;
     std::vector<double> epsValues;
     std::vector<double> ocsValues;
     for (const auto& record : records)
@@ -33,10 +34,12 @@ SummarizeLinkUtilization(const std::vector<LinkMetricRecord>& records)
         if (record.linkType == "tor-spine")
         {
             epsValues.push_back(record.utilization.value());
+            networkValues.push_back(record.utilization.value());
         }
         else if (record.linkType == "ocs" && record.activeOcsLightpath)
         {
             ocsValues.push_back(record.utilization.value());
+            networkValues.push_back(record.utilization.value());
         }
     }
 
@@ -55,6 +58,8 @@ SummarizeLinkUtilization(const std::vector<LinkMetricRecord>& records)
         average = total / values.size();
         maximum = *std::max_element(values.begin(), values.end());
     };
+    std::optional<double> unusedMax;
+    summarize(networkValues, summary.avgNetworkLinkUtilization, unusedMax);
     summarize(epsValues, summary.epsAvgLinkUtilization, summary.epsMaxLinkUtilization);
     summarize(ocsValues, summary.ocsAvgLinkUtilization, summary.ocsMaxLinkUtilization);
     if (!summary.ocsAvgLinkUtilization.has_value())

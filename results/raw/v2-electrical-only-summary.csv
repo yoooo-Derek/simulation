@@ -1,0 +1,2 @@
+experiment,scheme,traffic_pattern,run_id,random_seed,num_tors,servers_per_tor,status,total_flows,completed_flows,avg_receiver_throughput_bps,avg_fct_s,avg_network_link_utilization
+v2-smoke-electrical-only,electrical-only,community-local,1,1,8,16,scheme_electrical-only_smoke_ok,32,32,160000000,0.00079608,0.000463568

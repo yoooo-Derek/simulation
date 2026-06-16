@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate TL-OCS summary and per-flow CSV artifacts."""
+"""Validate TL-HOC V2 summary and per-flow CSV artifacts."""
 
 import argparse
 import csv
@@ -8,19 +8,31 @@ from pathlib import Path
 
 
 SUMMARY_BASE_FIELDS = {
-    "experiment", "scheme", "status", "installed_flows", "received_bytes"
+    "experiment",
+    "scheme",
+    "status",
+    "total_flows",
+    "completed_flows",
+    "avg_receiver_throughput_bps",
+    "avg_fct_s",
+    "avg_network_link_utilization",
 }
 FLOW_FIELDS = {
-    "flow_id", "path_type", "received_bytes", "completed"
+    "flow_id",
+    "received_bytes",
+    "start_time_s",
+    "completion_time_s",
+    "fct_s",
+    "completed",
 }
-FLOW_PATH_TYPES = {"eps", "ocs"}
+VALID_SCHEMES = {"electrical-only", "static-ocs", "tl-hoc"}
 NONNEGATIVE_SUMMARY_FIELDS = {
-    "installed_flows", "received_bytes", "total_flows", "completed_flows",
-    "incomplete_flows", "eps_avg_link_utilization", "eps_max_link_utilization",
-    "ocs_avg_link_utilization", "ocs_max_link_utilization",
-    "ocs_reconfiguration_count",
+    "total_flows",
+    "completed_flows",
+    "avg_receiver_throughput_bps",
+    "avg_fct_s",
+    "avg_network_link_utilization",
 }
-HIT_RATE_FIELDS = {"ocs_flow_hit_rate", "ocs_byte_hit_rate"}
 
 
 def require_fields(path, fieldnames, required):
@@ -39,22 +51,10 @@ def parse_number(path, row_number, field, value):
 def validate_summary(path, fieldnames, rows):
     require_fields(path, fieldnames, SUMMARY_BASE_FIELDS)
     for row_number, row in enumerate(rows, start=2):
-        experiment = row.get("experiment", "")
-        metrics_summary = experiment.startswith(("phase11a-", "phase11b-", "sanity-"))
-        util_summary = experiment.startswith(("phase11b-", "sanity-"))
-        if metrics_summary:
-            require_fields(path, fieldnames, {"total_flows", "completed_flows", "avg_fct_s"})
-        if util_summary:
-            require_fields(path,
-                           fieldnames,
-                           {"eps_avg_link_utilization", "eps_max_link_utilization"})
-            if row.get("scheme", "") in {"ocs-volume", "tl-ocs"}:
-                require_fields(path, fieldnames, {"ocs_flow_hit_rate"})
+        if row.get("scheme", "") not in VALID_SCHEMES:
+            raise ValueError(f"{path}:{row_number}: unsupported V2 scheme: {row.get('scheme', '')}")
 
-        required_numbers = {"installed_flows", "received_bytes"}
-        if metrics_summary:
-            required_numbers.update({"total_flows", "completed_flows"})
-        for field in required_numbers:
+        for field in SUMMARY_BASE_FIELDS - {"experiment", "scheme", "status"}:
             if row.get(field, "") == "":
                 raise ValueError(f"{path}:{row_number}: {field} must not be empty")
 
@@ -62,12 +62,6 @@ def validate_summary(path, fieldnames, rows):
             value = row.get(field, "")
             if value != "" and parse_number(path, row_number, field, value) < 0:
                 raise ValueError(f"{path}:{row_number}: {field} must be non-negative")
-        for field in HIT_RATE_FIELDS:
-            value = row.get(field, "")
-            if value != "":
-                number = parse_number(path, row_number, field, value)
-                if number < 0 or number > 1:
-                    raise ValueError(f"{path}:{row_number}: {field} must be in [0,1]")
 
         total = row.get("total_flows", "")
         completed = row.get("completed_flows", "")
@@ -80,11 +74,12 @@ def validate_summary(path, fieldnames, rows):
 def validate_flows(path, fieldnames, rows):
     require_fields(path, fieldnames, FLOW_FIELDS)
     for row_number, row in enumerate(rows, start=2):
-        if row.get("path_type", "") not in FLOW_PATH_TYPES:
-            raise ValueError(f"{path}:{row_number}: unsupported path_type: {row.get('path_type', '')}")
         received = row.get("received_bytes", "")
         if received == "" or parse_number(path, row_number, "received_bytes", received) < 0:
             raise ValueError(f"{path}:{row_number}: received_bytes must be non-negative")
+        start_time = row.get("start_time_s", "")
+        if start_time == "" or parse_number(path, row_number, "start_time_s", start_time) < 0:
+            raise ValueError(f"{path}:{row_number}: start_time_s must be non-negative")
         completed = row.get("completed", "").lower()
         if completed not in {"true", "false"}:
             raise ValueError(f"{path}:{row_number}: completed must be true or false")
@@ -115,7 +110,7 @@ def validate_file(path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Validate TL-OCS result CSV files.")
+    parser = argparse.ArgumentParser(description="Validate TL-HOC V2 result CSV files.")
     parser.add_argument("inputs", nargs="+", help="summary or per-flow CSV files")
     args = parser.parse_args()
 

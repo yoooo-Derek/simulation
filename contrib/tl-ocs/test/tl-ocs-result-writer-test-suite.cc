@@ -51,18 +51,15 @@ TlOcsResultWriterSmokeSummaryTestCase::DoRun()
     const std::string text = content.str();
 
     NS_TEST_ASSERT_MSG_NE(text.find("experiment,scheme,traffic_pattern"), std::string::npos, "missing CSV header");
-    NS_TEST_ASSERT_MSG_NE(text.find("avg_received_throughput_bps"),
+    NS_TEST_ASSERT_MSG_NE(text.find("avg_receiver_throughput_bps"),
                           std::string::npos,
-                          "missing received throughput CSV field");
-    NS_TEST_ASSERT_MSG_NE(text.find("scheduling_round_count"),
+                          "missing V2 receiver throughput CSV field");
+    NS_TEST_ASSERT_MSG_NE(text.find("avg_network_link_utilization"),
                           std::string::npos,
-                          "missing periodic scheduling CSV field");
-    NS_TEST_ASSERT_MSG_NE(text.find("non_empty_scheduling_rounds"),
+                          "missing V2 link utilization CSV field");
+    NS_TEST_ASSERT_MSG_EQ(text.find("scheduling_round_count"),
                           std::string::npos,
-                          "missing non-empty scheduling CSV field");
-    NS_TEST_ASSERT_MSG_NE(text.find("total_active_lightpath_seconds"),
-                          std::string::npos,
-                          "missing active lightpath time CSV field");
+                          "V1 scheduling diagnostic field should be absent");
     NS_TEST_ASSERT_MSG_NE(text.find("smoke_ok"), std::string::npos, "missing smoke status");
 }
 

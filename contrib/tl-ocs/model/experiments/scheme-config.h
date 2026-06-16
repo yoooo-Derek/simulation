@@ -10,11 +10,9 @@ namespace tl_ocs
 
 enum class SchemeType
 {
-    EPS_ECMP,
-    OCS_VOLUME,
-    TL_OCS,
-    OCS_ORACLE,
-    FIXED_OCS
+    ELECTRICAL_ONLY,
+    STATIC_OCS,
+    TL_HOC
 };
 
 class SchemeConfig
@@ -33,6 +31,7 @@ class SchemeConfig
     bool UseVolumeScheduler() const;
     bool UseOracleScheduler() const;
     bool UseFixedScheduler() const;
+    bool UseTlhocScheduler() const;
 
   private:
     SchemeType m_type;

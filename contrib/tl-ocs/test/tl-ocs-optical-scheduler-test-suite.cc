@@ -69,6 +69,12 @@ class OpticalSchedulerPortConstraintTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(ContainsEdge(result.selectedEdges, 0, 2),
                               true,
                               "highest score edge should be selected");
+        NS_TEST_ASSERT_MSG_EQ(result.selectedDegree[0], 1, "unexpected selected degree for node 0");
+        NS_TEST_ASSERT_MSG_EQ(result.selectedDegree[2], 1, "unexpected selected degree for node 2");
+        NS_TEST_ASSERT_MSG_EQ_TOL(result.scheduleGain.Get(0, 2),
+                                  12.0,
+                                  1e-12,
+                                  "schedule gain matrix should preserve selected edge score");
     }
 };
 
@@ -120,6 +126,38 @@ class OpticalSchedulerCommunityFactorTestCase : public TestCase
     }
 };
 
+class OpticalSchedulerMaxLinkLimitTestCase : public TestCase
+{
+  public:
+    OpticalSchedulerMaxLinkLimitTestCase()
+        : TestCase("optical scheduler supports an optional global selected-link limit")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        DenseMatrix gain(4);
+        SetSymmetric(gain, 0, 1, 10.0);
+        SetSymmetric(gain, 2, 3, 9.0);
+
+        OpticalSchedulerParameters parameters;
+        parameters.alpha = 1.0;
+        parameters.opticalPortsPerTor = 2;
+        parameters.maxOpticalLinks = 1;
+        const auto result = OpticalScheduler().SelectEdges(gain, {0, 0, 0, 0}, parameters);
+
+        NS_TEST_ASSERT_MSG_EQ(result.candidateEdges.size(), 2, "unexpected candidate edge count");
+        NS_TEST_ASSERT_MSG_EQ(result.selectedEdges.size(), 1, "global selected-link limit failed");
+        NS_TEST_ASSERT_MSG_EQ(ContainsEdge(result.selectedEdges, 0, 1),
+                              true,
+                              "highest score edge should be selected before hitting global limit");
+        NS_TEST_ASSERT_MSG_EQ(ContainsEdge(result.selectedEdges, 2, 3),
+                              false,
+                              "second edge should be skipped by global limit");
+    }
+};
+
 class OpticalSchedulerTestSuite : public TestSuite
 {
   public:
@@ -128,6 +166,7 @@ class OpticalSchedulerTestSuite : public TestSuite
     {
         AddTestCase(new OpticalSchedulerPortConstraintTestCase);
         AddTestCase(new OpticalSchedulerCommunityFactorTestCase);
+        AddTestCase(new OpticalSchedulerMaxLinkLimitTestCase);
     }
 };
 

@@ -21,6 +21,10 @@ struct FlowPathDecision
     std::string pathType = "eps";
     Ipv4Address destinationAddress;
     bool admittedToOcs = false;
+    bool installable = true;
+    bool waiting = false;
+    std::string reason;
+    std::vector<uint32_t> torPath;
     uint32_t sourceTor = 0;
     uint32_t destinationTor = 0;
 };

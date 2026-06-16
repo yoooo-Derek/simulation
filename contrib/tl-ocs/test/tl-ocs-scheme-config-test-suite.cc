@@ -16,40 +16,50 @@ class TlOcsSchemeConfigTestCase : public TestCase
 };
 
 TlOcsSchemeConfigTestCase::TlOcsSchemeConfigTestCase()
-    : TestCase("TL-OCS scheme config parses smoke scheme semantics")
+    : TestCase("TL-HOC V2 scheme config parses V2-only scheme semantics")
 {
 }
 
 void
 TlOcsSchemeConfigTestCase::DoRun()
 {
-    const SchemeConfig epsEcmp = SchemeConfig::FromString("eps-ecmp");
-    NS_TEST_ASSERT_MSG_EQ(epsEcmp.EnableOcsLinks(), false, "EPS-ECMP should not build OCS links");
+    const SchemeConfig electrical = SchemeConfig::FromString("electrical-only");
+    NS_TEST_ASSERT_MSG_EQ(electrical.ToString(),
+                          "electrical-only",
+                          "electrical-only string round-trip failed");
+    NS_TEST_ASSERT_MSG_EQ(electrical.EnableOcsLinks(),
+                          false,
+                          "electrical-only should not build OCS links");
+    NS_TEST_ASSERT_MSG_EQ(electrical.EnableAlgorithm(),
+                          false,
+                          "electrical-only should not run optical scheduling");
 
-    const SchemeConfig volume = SchemeConfig::FromString("ocs-volume");
-    NS_TEST_ASSERT_MSG_EQ(volume.EnableTrafficObserver(), true, "OCS volume requires observer");
-    NS_TEST_ASSERT_MSG_EQ(volume.UseVolumeScheduler(), true, "OCS volume should select volume scheduler");
+    const SchemeConfig staticOcs = SchemeConfig::FromString("static-ocs");
+    NS_TEST_ASSERT_MSG_EQ(staticOcs.ToString(),
+                          "static-ocs",
+                          "static-ocs string round-trip failed");
+    NS_TEST_ASSERT_MSG_EQ(staticOcs.EnableOcsLinks(), true, "static-ocs should build OCS links");
+    NS_TEST_ASSERT_MSG_EQ(staticOcs.EnableTrafficObserver(),
+                          true,
+                          "static-ocs should attach observer in the current controller path");
+    NS_TEST_ASSERT_MSG_EQ(staticOcs.EnableOcsAdmission(),
+                          true,
+                          "static-ocs should use optical path admission");
+    NS_TEST_ASSERT_MSG_EQ(staticOcs.UseFixedScheduler(),
+                          true,
+                          "static-ocs should select fixed scheduler");
 
-    const SchemeConfig tlOcs = SchemeConfig::FromString("tl-ocs");
-    NS_TEST_ASSERT_MSG_EQ(tlOcs.ToString(), "tl-ocs", "TL-OCS string round-trip failed");
-    NS_TEST_ASSERT_MSG_EQ(tlOcs.EnableOcsAdmission(), true, "TL-OCS should enable OCS admission");
-
-    const SchemeConfig oracle = SchemeConfig::FromString("ocs-oracle");
-    NS_TEST_ASSERT_MSG_EQ(oracle.ToString(), "ocs-oracle", "OCS oracle string round-trip failed");
-    NS_TEST_ASSERT_MSG_EQ(oracle.EnableOcsLinks(), true, "OCS oracle should build OCS links");
-    NS_TEST_ASSERT_MSG_EQ(oracle.EnableTrafficObserver(), true, "OCS oracle should attach observer");
-    NS_TEST_ASSERT_MSG_EQ(oracle.EnableOcsAdmission(), true, "OCS oracle should use OCS admission");
-    NS_TEST_ASSERT_MSG_EQ(oracle.UseOracleScheduler(), true, "OCS oracle should select oracle scheduler");
-    NS_TEST_ASSERT_MSG_EQ(oracle.UseVolumeScheduler(), false, "OCS oracle should not be OCS volume");
-
-    const SchemeConfig fixed = SchemeConfig::FromString("fixed-ocs");
-    NS_TEST_ASSERT_MSG_EQ(fixed.ToString(), "fixed-ocs", "fixed OCS string round-trip failed");
-    NS_TEST_ASSERT_MSG_EQ(fixed.EnableOcsLinks(), true, "fixed OCS should build OCS links");
-    NS_TEST_ASSERT_MSG_EQ(fixed.EnableTrafficObserver(), true, "fixed OCS should attach observer");
-    NS_TEST_ASSERT_MSG_EQ(fixed.EnableOcsAdmission(), true, "fixed OCS should use OCS admission");
-    NS_TEST_ASSERT_MSG_EQ(fixed.UseFixedScheduler(), true, "fixed OCS should select fixed scheduler");
-    NS_TEST_ASSERT_MSG_EQ(fixed.UseOracleScheduler(), false, "fixed OCS should not use oracle scheduler");
-    NS_TEST_ASSERT_MSG_EQ(fixed.UseVolumeScheduler(), false, "fixed OCS should not be OCS volume");
+    const SchemeConfig tlhoc = SchemeConfig::FromString("tl-hoc");
+    NS_TEST_ASSERT_MSG_EQ(tlhoc.ToString(), "tl-hoc", "tl-hoc string round-trip failed");
+    NS_TEST_ASSERT_MSG_EQ(tlhoc.EnableOcsLinks(), true, "tl-hoc should build OCS links");
+    NS_TEST_ASSERT_MSG_EQ(tlhoc.EnableTrafficObserver(), true, "tl-hoc should attach observer");
+    NS_TEST_ASSERT_MSG_EQ(tlhoc.EnableOcsAdmission(),
+                          true,
+                          "tl-hoc should use optical path admission");
+    NS_TEST_ASSERT_MSG_EQ(tlhoc.UseTlhocScheduler(), true, "tl-hoc should select TL-HOC scheduler");
+    NS_TEST_ASSERT_MSG_EQ(tlhoc.UseFixedScheduler(), false, "tl-hoc should not be static-ocs");
+    NS_TEST_ASSERT_MSG_EQ(tlhoc.UseOracleScheduler(), false, "tl-hoc should not use oracle scheduler");
+    NS_TEST_ASSERT_MSG_EQ(tlhoc.UseVolumeScheduler(), false, "tl-hoc should not use volume scheduler");
 
     bool threw = false;
     try
@@ -62,16 +72,19 @@ TlOcsSchemeConfigTestCase::DoRun()
     }
     NS_TEST_ASSERT_MSG_EQ(threw, true, "unknown scheme should fail");
 
-    threw = false;
-    try
+    for (const auto& removed : {"eps-ecmp", "ocs-volume", "tl-ocs", "ocs-oracle", "fixed-ocs"})
     {
-        SchemeConfig::FromString("ocs-community");
+        threw = false;
+        try
+        {
+            SchemeConfig::FromString(removed);
+        }
+        catch (const std::runtime_error&)
+        {
+            threw = true;
+        }
+        NS_TEST_ASSERT_MSG_EQ(threw, true, "removed V1 scheme should fail");
     }
-    catch (const std::runtime_error&)
-    {
-        threw = true;
-    }
-    NS_TEST_ASSERT_MSG_EQ(threw, true, "removed OCS community scheme should fail");
 }
 
 class TlOcsSchemeConfigTestSuite : public TestSuite

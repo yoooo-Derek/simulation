@@ -27,6 +27,7 @@ struct LinkMetricRecord
 
 struct LinkUtilizationSummary
 {
+    std::optional<double> avgNetworkLinkUtilization;
     std::optional<double> epsAvgLinkUtilization;
     std::optional<double> epsMaxLinkUtilization;
     std::optional<double> ocsAvgLinkUtilization;

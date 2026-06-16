@@ -10,27 +10,19 @@ namespace tl_ocs
 SchemeConfig
 SchemeConfig::FromString(const std::string& name)
 {
-    if (name == "eps-ecmp")
+    if (name == "electrical-only")
     {
-        return SchemeConfig(SchemeType::EPS_ECMP);
+        return SchemeConfig(SchemeType::ELECTRICAL_ONLY);
     }
-    if (name == "ocs-volume")
+    if (name == "static-ocs")
     {
-        return SchemeConfig(SchemeType::OCS_VOLUME);
+        return SchemeConfig(SchemeType::STATIC_OCS);
     }
-    if (name == "tl-ocs")
+    if (name == "tl-hoc")
     {
-        return SchemeConfig(SchemeType::TL_OCS);
+        return SchemeConfig(SchemeType::TL_HOC);
     }
-    if (name == "ocs-oracle")
-    {
-        return SchemeConfig(SchemeType::OCS_ORACLE);
-    }
-    if (name == "fixed-ocs")
-    {
-        return SchemeConfig(SchemeType::FIXED_OCS);
-    }
-    throw std::runtime_error("unknown TL-OCS smoke scheme: " + name);
+    throw std::runtime_error("unknown TL-HOC V2 scheme: " + name);
 }
 
 SchemeConfig::SchemeConfig(SchemeType type)
@@ -49,61 +41,62 @@ SchemeConfig::ToString() const
 {
     switch (m_type)
     {
-    case SchemeType::EPS_ECMP:
-        return "eps-ecmp";
-    case SchemeType::OCS_VOLUME:
-        return "ocs-volume";
-    case SchemeType::TL_OCS:
-        return "tl-ocs";
-    case SchemeType::OCS_ORACLE:
-        return "ocs-oracle";
-    case SchemeType::FIXED_OCS:
-        return "fixed-ocs";
+    case SchemeType::ELECTRICAL_ONLY:
+        return "electrical-only";
+    case SchemeType::STATIC_OCS:
+        return "static-ocs";
+    case SchemeType::TL_HOC:
+        return "tl-hoc";
     }
-    throw std::runtime_error("invalid TL-OCS smoke scheme");
+    throw std::runtime_error("invalid TL-HOC V2 scheme");
 }
 
 bool
 SchemeConfig::EnableOcsLinks() const
 {
-    return m_type == SchemeType::OCS_VOLUME || m_type == SchemeType::TL_OCS ||
-           m_type == SchemeType::OCS_ORACLE || m_type == SchemeType::FIXED_OCS;
+    return m_type == SchemeType::STATIC_OCS || m_type == SchemeType::TL_HOC;
 }
 
 bool
 SchemeConfig::EnableTrafficObserver() const
 {
-    return EnableOcsLinks();
+    return m_type == SchemeType::STATIC_OCS || m_type == SchemeType::TL_HOC;
 }
 
 bool
 SchemeConfig::EnableAlgorithm() const
 {
-    return EnableOcsLinks();
+    return m_type == SchemeType::STATIC_OCS || m_type == SchemeType::TL_HOC;
 }
 
 bool
 SchemeConfig::EnableOcsAdmission() const
 {
-    return EnableOcsLinks();
+    return m_type == SchemeType::STATIC_OCS || m_type == SchemeType::TL_HOC;
 }
 
 bool
 SchemeConfig::UseVolumeScheduler() const
 {
-    return m_type == SchemeType::OCS_VOLUME;
+    return false;
 }
 
 bool
 SchemeConfig::UseOracleScheduler() const
 {
-    return m_type == SchemeType::OCS_ORACLE;
+    return false;
 }
 
 bool
 SchemeConfig::UseFixedScheduler() const
 {
-    return m_type == SchemeType::FIXED_OCS;
+    return m_type == SchemeType::STATIC_OCS;
+}
+
+bool
+SchemeConfig::UseTlhocScheduler() const
+{
+    return m_type == SchemeType::TL_HOC;
 }
 
 } // namespace tl_ocs

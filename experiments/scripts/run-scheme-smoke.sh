@@ -4,13 +4,13 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 if [ "$#" -ne 1 ]; then
-    echo "Usage: $0 <eps-ecmp|ocs-volume|tl-ocs>" >&2
+    echo "Usage: $0 <electrical-only|static-ocs|tl-hoc>" >&2
     exit 2
 fi
 
-config="experiments/configs/smoke-$1.properties"
+config="experiments/configs/v2-smoke-$1.properties"
 if [ ! -f "${config}" ]; then
-    echo "Unknown Phase 10 smoke scheme: $1" >&2
+    echo "Unknown V2 smoke scheme: $1" >&2
     exit 2
 fi
 

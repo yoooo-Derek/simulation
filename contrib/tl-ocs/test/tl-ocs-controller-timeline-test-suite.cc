@@ -173,7 +173,7 @@ RunGeneratedScenario(const SimulationConfig& simulation, const std::vector<FlowS
 }
 
 bool
-HasValidStage2Metrics(const GeneratedScenarioResult& result, uint32_t expectedStageFlows)
+HasValidStage2Metrics(const GeneratedScenarioResult& result)
 {
     uint32_t stage2Metrics = 0;
     for (const auto& metric : result.metrics)
@@ -184,12 +184,12 @@ HasValidStage2Metrics(const GeneratedScenarioResult& result, uint32_t expectedSt
         }
         stage2Metrics++;
         if (!metric.completed || metric.receivedBytes == 0 ||
-            (metric.pathType != "ocs" && metric.pathType != "eps"))
+            metric.pathType != "ocs")
         {
             return false;
         }
     }
-    return stage2Metrics == expectedStageFlows;
+    return stage2Metrics == result.timeline.stage2InstalledFlows;
 }
 
 } // namespace
@@ -260,11 +260,12 @@ TlOcsControllerTimelineTestCase::DoRun()
                           result.algorithmSelectedEdges,
                           "active OCS edge count should match selected edge count");
     NS_TEST_ASSERT_MSG_EQ(result.stage1InstalledFlows, 4, "unexpected stage-1 flow count");
-    NS_TEST_ASSERT_MSG_EQ(result.stage2InstalledFlows, 2, "unexpected stage-2 flow count");
+    NS_TEST_ASSERT_MSG_EQ(result.stage2InstalledFlows, 1, "unexpected stage-2 flow count");
+    NS_TEST_ASSERT_MSG_EQ(result.waitingFlows, 1, "inactive stage-2 flow should wait");
     NS_TEST_ASSERT_MSG_GT(result.stage1ReceivedBytes, 0, "stage-1 flow bytes were not received");
     NS_TEST_ASSERT_MSG_GT(result.stage2ReceivedBytes, 0, "stage-2 flow bytes were not received");
     NS_TEST_ASSERT_MSG_GT(result.ocsAssignedFlows, 0, "expected an OCS-admitted stage-2 flow");
-    NS_TEST_ASSERT_MSG_GT(result.epsFallbackFlows, 0, "expected an EPS fallback stage-2 flow");
+    NS_TEST_ASSERT_MSG_EQ(result.epsFallbackFlows, 0, "V2 forbids EPS fallback");
     NS_TEST_ASSERT_MSG_EQ(linkManager.IsActive(0, 1), true, "expected active community edge 0-1");
     NS_TEST_ASSERT_MSG_EQ(linkManager.IsActive(2, 3), true, "expected active community edge 2-3");
     const auto& admittedDecision = FindDecision(result.stage2Decisions, 4);
@@ -272,23 +273,20 @@ TlOcsControllerTimelineTestCase::DoRun()
     NS_TEST_ASSERT_MSG_EQ(admittedDecision.pathType, "ocs", "active pair should use OCS");
     NS_TEST_ASSERT_MSG_EQ(admittedDecision.admittedToOcs, true, "active pair was not admitted");
     NS_TEST_ASSERT_MSG_EQ(fallbackDecision.pathType,
-                          "eps",
-                          "inactive pair should retain residual EPS path");
+                          "waiting",
+                          "inactive pair should wait instead of using EPS");
     NS_TEST_ASSERT_MSG_EQ(fallbackDecision.admittedToOcs,
                           false,
                           "inactive pair was unexpectedly admitted");
+    NS_TEST_ASSERT_MSG_EQ(fallbackDecision.installable,
+                          false,
+                          "inactive waiting flow should not be installable");
 
     const auto metrics = MetricsCollector().Collect(result.metricSources, "tl-ocs");
     const auto& admittedMetric = FindMetric(metrics, 4);
-    const auto& fallbackMetric = FindMetric(metrics, 5);
     NS_TEST_ASSERT_MSG_EQ(admittedMetric.pathType, "ocs", "metric lost OCS path type");
-    NS_TEST_ASSERT_MSG_EQ(fallbackMetric.pathType,
-                          "eps",
-                          "metric lost residual EPS path type");
     NS_TEST_ASSERT_MSG_EQ(admittedMetric.completed, true, "OCS stage-2 flow did not complete");
-    NS_TEST_ASSERT_MSG_EQ(fallbackMetric.completed, true, "EPS stage-2 flow did not complete");
     NS_TEST_ASSERT_MSG_GT(admittedMetric.receivedBytes, 0, "OCS metric has no received bytes");
-    NS_TEST_ASSERT_MSG_GT(fallbackMetric.receivedBytes, 0, "EPS metric has no received bytes");
     NS_TEST_ASSERT_MSG_EQ(state.GetCurrentCycleIndex(), 1, "timeline should run one cycle");
 
     Simulator::Destroy();
@@ -328,21 +326,19 @@ class TlOcsControllerTimelineSchemeDifferentiationTestCase : public TestCase
         const auto& tlOcs01 = FindDecision(tlOcs.timeline.stage2Decisions, 10);
         const auto& tlOcs02 = FindDecision(tlOcs.timeline.stage2Decisions, 11);
         NS_TEST_ASSERT_MSG_EQ(volume01.pathType, "ocs", "volume edge 0-1 should admit flow");
-        NS_TEST_ASSERT_MSG_EQ(volume02.pathType, "eps", "volume inactive edge 0-2 should use EPS");
-        NS_TEST_ASSERT_MSG_EQ(tlOcs01.pathType, "eps", "TL-OCS inactive edge 0-1 should use EPS");
+        NS_TEST_ASSERT_MSG_EQ(volume02.pathType,
+                              "waiting",
+                              "volume inactive edge 0-2 should wait");
+        NS_TEST_ASSERT_MSG_EQ(tlOcs01.pathType,
+                              "waiting",
+                              "TL-OCS inactive edge 0-1 should wait");
         NS_TEST_ASSERT_MSG_EQ(tlOcs02.pathType, "ocs", "TL-OCS edge 0-2 should admit flow");
 
         const auto& volumeOcsMetric = FindMetric(volume.metrics, 10);
-        const auto& volumeEpsMetric = FindMetric(volume.metrics, 11);
-        const auto& tlOcsEpsMetric = FindMetric(tlOcs.metrics, 10);
         const auto& tlOcsOcsMetric = FindMetric(tlOcs.metrics, 11);
         NS_TEST_ASSERT_MSG_EQ(volumeOcsMetric.pathType, "ocs", "volume OCS metric mismatch");
-        NS_TEST_ASSERT_MSG_EQ(volumeEpsMetric.pathType, "eps", "volume EPS metric mismatch");
-        NS_TEST_ASSERT_MSG_EQ(tlOcsEpsMetric.pathType, "eps", "TL-OCS EPS metric mismatch");
         NS_TEST_ASSERT_MSG_EQ(tlOcsOcsMetric.pathType, "ocs", "TL-OCS OCS metric mismatch");
         NS_TEST_ASSERT_MSG_EQ(volumeOcsMetric.completed, true, "volume OCS flow did not complete");
-        NS_TEST_ASSERT_MSG_EQ(volumeEpsMetric.completed, true, "volume EPS flow did not complete");
-        NS_TEST_ASSERT_MSG_EQ(tlOcsEpsMetric.completed, true, "TL-OCS EPS flow did not complete");
         NS_TEST_ASSERT_MSG_EQ(tlOcsOcsMetric.completed, true, "TL-OCS OCS flow did not complete");
     }
 };
@@ -375,12 +371,13 @@ class TlOcsControllerTimelineUniformReadinessTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(result.timeline.stage1InstalledFlows,
                               traffic.numFlows,
                               "uniform stage-1 flow count mismatch");
-        NS_TEST_ASSERT_MSG_EQ(result.timeline.stage2InstalledFlows,
+        NS_TEST_ASSERT_MSG_EQ(result.timeline.stage2InstalledFlows + result.timeline.waitingFlows,
                               traffic.numFlows,
-                              "uniform stage-2 flow count mismatch");
+                              "uniform stage-2 accounting mismatch");
         NS_TEST_ASSERT_MSG_GT(result.timeline.stage2ReceivedBytes, 0, "uniform stage-2 received no bytes");
         NS_TEST_ASSERT_MSG_GT(result.timeline.ocsAssignedFlows, 0, "uniform admitted no OCS flows");
-        NS_TEST_ASSERT_MSG_EQ(HasValidStage2Metrics(result, traffic.numFlows),
+        NS_TEST_ASSERT_MSG_EQ(result.timeline.epsFallbackFlows, 0, "uniform V2 fallback mismatch");
+        NS_TEST_ASSERT_MSG_EQ(HasValidStage2Metrics(result),
                               true,
                               "uniform stage-2 metrics are invalid");
     }
@@ -420,21 +417,21 @@ class TlOcsControllerTimelineAggregationReadinessTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(result.timeline.stage1InstalledFlows,
                               traffic.numFlows,
                               "aggregation stage-1 flow count mismatch");
-        NS_TEST_ASSERT_MSG_EQ(result.timeline.stage2InstalledFlows,
+        NS_TEST_ASSERT_MSG_EQ(result.timeline.stage2InstalledFlows + result.timeline.waitingFlows,
                               traffic.numFlows,
-                              "aggregation stage-2 flow count mismatch");
+                              "aggregation stage-2 accounting mismatch");
         NS_TEST_ASSERT_MSG_GT(result.timeline.stage2ReceivedBytes,
                               0,
                               "aggregation stage-2 received no bytes");
         NS_TEST_ASSERT_MSG_GT(result.timeline.ocsAssignedFlows,
                               0,
                               "aggregation admitted no OCS flows");
-        NS_TEST_ASSERT_MSG_EQ(HasValidStage2Metrics(result, traffic.numFlows),
+        NS_TEST_ASSERT_MSG_EQ(HasValidStage2Metrics(result),
                               true,
                               "aggregation stage-2 metrics are invalid");
-        NS_TEST_ASSERT_MSG_GT(result.timeline.epsFallbackFlows,
+        NS_TEST_ASSERT_MSG_EQ(result.timeline.epsFallbackFlows,
                               0,
-                              "aggregation residual traffic should retain EPS fallback");
+                              "aggregation V2 run must not use EPS fallback");
     }
 };
 
@@ -490,7 +487,7 @@ class TlOcsControllerTimelineFiniteMultiCycleTestCase : public TestCase
         linkMetrics.SetActiveOcsLightpathDurations(result.activeLightpathDurations);
         const auto records = MetricsCollector().Collect(result.metricSources, "tl-ocs");
 
-        NS_TEST_ASSERT_MSG_EQ(result.schedulingRoundCount, 4, "unexpected scheduling round count");
+        NS_TEST_ASSERT_MSG_EQ(result.schedulingRoundCount, 5, "unexpected scheduling round count");
         NS_TEST_ASSERT_MSG_GT(result.nonEmptySchedulingRounds,
                               0,
                               "expected at least one non-empty scheduling round");
@@ -513,17 +510,20 @@ class TlOcsControllerTimelineFiniteMultiCycleTestCase : public TestCase
                               true,
                               "expected periodic active-set updates");
         NS_TEST_ASSERT_MSG_EQ(FindDecision(result.stage2Decisions, 0).pathType,
-                              "eps",
-                              "flow before first schedule should use EPS");
+                              "ocs",
+                              "flow before first schedule should retry onto OCS");
         NS_TEST_ASSERT_MSG_EQ(FindDecision(result.stage2Decisions, 1).pathType,
-                              "eps",
-                              "future 2-3 traffic affected an earlier schedule");
+                              "ocs",
+                              "pending 2-3 demand should retry onto OCS");
         NS_TEST_ASSERT_MSG_EQ(FindDecision(result.stage2Decisions, 2).pathType,
                               "ocs",
                               "completed 2-3 window did not affect a later flow");
         NS_TEST_ASSERT_MSG_EQ(FindDecision(result.stage2Decisions, 3).pathType,
                               "ocs",
                               "completion release did not make capacity reusable");
+        NS_TEST_ASSERT_MSG_EQ(result.epsFallbackFlows, 0, "finite-cycle V2 run must not use EPS");
+        NS_TEST_ASSERT_MSG_GT(result.waitingFlows, 0, "finite-cycle should exercise waiting");
+        NS_TEST_ASSERT_MSG_GT(result.retriedFlows, 0, "finite-cycle should exercise retry");
         NS_TEST_ASSERT_MSG_EQ(FindMetric(records, 2).completed,
                               true,
                               "OCS flow did not complete");
@@ -590,8 +590,9 @@ class TlOcsControllerTimelineTrafficStopDrainTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(records.front().completed,
                               true,
                               "pre-trafficStop flow should complete during drain");
-        NS_TEST_ASSERT_MSG_LT(records.front().startTimeS,
-                              simulation.GetTrafficStopTime().GetSeconds(),
+        NS_TEST_ASSERT_MSG_EQ(records.front().startTimeS <=
+                                  simulation.GetTrafficStopTime().GetSeconds(),
+                              true,
                               "launched flow starts outside traffic window");
         Simulator::Destroy();
     }
@@ -641,14 +642,15 @@ class TlOcsControllerTimelineFixedOcsTestCase : public TestCase
                                                           linkManager,
                                                           options);
 
-        NS_TEST_ASSERT_MSG_EQ(result.schedulingRoundCount, 5, "unexpected scheduling rounds");
+        NS_TEST_ASSERT_MSG_EQ(result.schedulingRoundCount, 6, "unexpected scheduling rounds");
         NS_TEST_ASSERT_MSG_EQ(result.maxSelectedEdgeCount, 1, "fixed matching should select one edge");
         NS_TEST_ASSERT_MSG_EQ(FindDecision(result.stage2Decisions, 0).pathType,
                               "ocs",
                               "fixed matching flow did not use OCS");
         NS_TEST_ASSERT_MSG_EQ(FindDecision(result.stage2Decisions, 1).pathType,
-                              "eps",
-                              "non-fixed matching flow should use EPS fallback");
+                              "waiting",
+                              "non-fixed matching flow should wait without EPS fallback");
+        NS_TEST_ASSERT_MSG_EQ(result.epsFallbackFlows, 0, "fixed V2 run must not use EPS fallback");
         Simulator::Destroy();
     }
 };

@@ -38,6 +38,15 @@ FlowPathSelector::Select(const FlowSpec& flow,
     decision.destinationAddress =
         nodeIndex.GetServerIpv4Address(flow.GetDestinationTorId(),
                                        flow.GetDestinationServerId());
+    decision.reason = admissionDecision.reason;
+    decision.torPath = {flow.GetSourceTorId(), flow.GetDestinationTorId()};
+    if (flow.GetSourceTorId() == flow.GetDestinationTorId())
+    {
+        decision.pathType = "eps";
+        decision.installable = true;
+        decision.waiting = false;
+        return decision;
+    }
     if (admissionDecision.admitted)
     {
         if (!nodeIndex.HasOcsLink(flow.GetSourceTorId(), flow.GetDestinationTorId()))
@@ -46,9 +55,18 @@ FlowPathSelector::Select(const FlowSpec& flow,
         }
         decision.pathType = "ocs";
         decision.admittedToOcs = true;
+        decision.installable = true;
+        decision.waiting = false;
         decision.destinationAddress =
             nodeIndex.GetOcsServerIpv4Address(flow.GetDestinationTorId(),
                                               flow.GetDestinationServerId());
+    }
+    else
+    {
+        decision.pathType = "waiting";
+        decision.installable = false;
+        decision.waiting = true;
+        decision.torPath.clear();
     }
     return decision;
 }
