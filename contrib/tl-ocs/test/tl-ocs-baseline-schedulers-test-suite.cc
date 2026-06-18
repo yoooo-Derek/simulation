@@ -51,7 +51,7 @@ TlOcsBaselineSchedulersTestCase::DoRun()
 
     TlOcsAlgorithmParameters volumeOnly;
     volumeOnly.useVolumeOnlyScore = true;
-    volumeOnly.opticalPortsPerTor = 1;
+    volumeOnly.opticalAccessSpinesPerGroup = 1;
     const TlOcsAlgorithmResult tlVolumeResult =
         TlOcsAlgorithm().Run(observed, volumeOnly);
     NS_TEST_ASSERT_MSG_EQ(tlVolumeResult.selectedEdges.size(),

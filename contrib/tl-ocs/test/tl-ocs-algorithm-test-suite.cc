@@ -70,7 +70,7 @@ TlOcsAlgorithmSelectionTestCase::DoRun()
     parameters.thetaF = 0.0;
     parameters.eta = 1.0;
     parameters.alpha = 0.5;
-    parameters.opticalPortsPerTor = 1;
+    parameters.opticalAccessSpinesPerGroup = 1;
     parameters.maxPasses = 4;
 
     TlOcsAlgorithm algorithm;
@@ -227,7 +227,7 @@ TlOcsAlgorithmNullModelRankingTestCase::DoRun()
     TlOcsAlgorithmParameters volumeScore;
     volumeScore.enableNullModel = false;
     volumeScore.enableCommunityFactor = false;
-    volumeScore.opticalPortsPerTor = 1;
+    volumeScore.opticalAccessSpinesPerGroup = 1;
 
     TlOcsAlgorithmParameters excessScore = volumeScore;
     excessScore.enableNullModel = true;
@@ -282,7 +282,7 @@ class TlOcsAlgorithmThetaFTestCase : public TestCase
         TlOcsAlgorithmParameters unfiltered;
         unfiltered.enableNullModel = false;
         unfiltered.enableCommunityFactor = false;
-        unfiltered.opticalPortsPerTor = 2;
+        unfiltered.opticalAccessSpinesPerGroup = 2;
         TlOcsAlgorithmParameters filtered = unfiltered;
         filtered.thetaF = 20.0;
 

@@ -25,7 +25,7 @@ struct OpticalSchedulerParameters
 {
     double alpha = 0.5;
     bool enableCommunityFactor = true;
-    uint32_t opticalPortsPerTor = 1;
+    uint32_t opticalAccessSpinesPerGroup = 4;
     uint32_t maxOpticalLinks = 0; // 0 means no global selected-edge limit.
 };
 

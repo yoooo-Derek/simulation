@@ -76,18 +76,6 @@ SchemeConfig::EnableOcsAdmission() const
 }
 
 bool
-SchemeConfig::UseVolumeScheduler() const
-{
-    return false;
-}
-
-bool
-SchemeConfig::UseOracleScheduler() const
-{
-    return false;
-}
-
-bool
 SchemeConfig::UseFixedScheduler() const
 {
     return m_type == SchemeType::STATIC_OCS;

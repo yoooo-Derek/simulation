@@ -43,10 +43,15 @@ FlowResultWriter::Write(const ExperimentConfig& experiment,
     stream << GetFlowResultCsvHeader() << '\n';
     for (const auto& record : records)
     {
-        stream << EscapeCsvField(experiment.GetExperimentName()) << ','
+        stream << GetTlHocCsvSchemaVersion() << ','
+               << EscapeCsvField(experiment.GetExperimentName()) << ','
                << EscapeCsvField(record.schemeName) << ','
                << EscapeCsvField(record.patternName) << ',' << experiment.GetRunId() << ','
-               << record.flowId << ',' << record.receivedBytes << ','
+               << record.flowId << ','
+               << record.sourceTor << ',' << record.sourceServer << ','
+               << record.destinationTor << ',' << record.destinationServer << ','
+               << EscapeCsvField(record.pathType) << ','
+               << record.sizeBytes << ',' << record.receivedBytes << ','
                << std::setprecision(12) << record.startTimeS << ',';
         WriteOptionalDouble(stream, record.stopTimeS);
         stream << ',';

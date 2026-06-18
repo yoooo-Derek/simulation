@@ -62,7 +62,7 @@ class OpticalSchedulerPortConstraintTestCase : public TestCase
 
         OpticalSchedulerParameters parameters;
         parameters.alpha = 1.0;
-        parameters.opticalPortsPerTor = 1;
+        parameters.opticalAccessSpinesPerGroup = 1;
         const auto result = OpticalScheduler().SelectEdges(gain, {0, 0, 0, 0}, parameters);
 
         NS_TEST_ASSERT_MSG_EQ(result.selectedEdges.size(), 1, "unexpected selected edge count");
@@ -96,7 +96,7 @@ class OpticalSchedulerCommunityFactorTestCase : public TestCase
         OpticalSchedulerParameters volumeOnly;
         volumeOnly.alpha = 0.5;
         volumeOnly.enableCommunityFactor = false;
-        volumeOnly.opticalPortsPerTor = 1;
+        volumeOnly.opticalAccessSpinesPerGroup = 1;
         OpticalSchedulerParameters communityAware = volumeOnly;
         communityAware.enableCommunityFactor = true;
 
@@ -143,7 +143,7 @@ class OpticalSchedulerMaxLinkLimitTestCase : public TestCase
 
         OpticalSchedulerParameters parameters;
         parameters.alpha = 1.0;
-        parameters.opticalPortsPerTor = 2;
+        parameters.opticalAccessSpinesPerGroup = 2;
         parameters.maxOpticalLinks = 1;
         const auto result = OpticalScheduler().SelectEdges(gain, {0, 0, 0, 0}, parameters);
 

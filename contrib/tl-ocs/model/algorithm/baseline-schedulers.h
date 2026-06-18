@@ -14,7 +14,6 @@ enum class OpticalSchedulingMode
 {
     TL_OCS,
     VOLUME,
-    ORACLE,
     FIXED
 };
 
@@ -22,7 +21,7 @@ class VolumeScheduler
 {
   public:
     TlOcsAlgorithmResult Run(const TrafficMatrix& observedW,
-                             uint32_t opticalPortsPerTor) const;
+                             uint32_t opticalAccessSpinesPerGroup) const;
 };
 
 } // namespace tl_ocs

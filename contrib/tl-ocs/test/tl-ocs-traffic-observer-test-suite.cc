@@ -37,7 +37,12 @@ TrafficMatrix
 ObserveDataPlaneFlows(const SimulationConfig& simulation, const std::vector<FlowSpec>& flows)
 {
     EpsTopologyBuilder builder;
-    NodeIndex index = builder.Build(simulation, 1);
+    EpsTopologyBuilder::BuildOptions options;
+    options.enableInterGroupElectricalFabric = true;
+    options.leafsPerGroup = 4;
+    options.spinesPerGroup = 4;
+    options.serversPerLeaf = 1;
+    NodeIndex index = builder.Build(simulation, 4, options);
 
     TrafficObserver observer(simulation.GetNumTors(), simulation.GetObserverWindow());
     observer.AttachToTopology(index);
@@ -49,6 +54,26 @@ ObserveDataPlaneFlows(const SimulationConfig& simulation, const std::vector<Flow
     TrafficMatrix observed = observer.SnapshotAndReset();
     Simulator::Destroy();
     return observed;
+}
+
+SimulationConfig
+BuildFourGroupConfig()
+{
+    SimulationConfig simulation;
+    simulation.SetNumTors(4);
+    simulation.SetServersPerTor(4);
+    return simulation;
+}
+
+EpsTopologyBuilder::BuildOptions
+BuildElectricalObservationOptions()
+{
+    EpsTopologyBuilder::BuildOptions options;
+    options.enableInterGroupElectricalFabric = true;
+    options.leafsPerGroup = 4;
+    options.spinesPerGroup = 4;
+    options.serversPerLeaf = 1;
+    return options;
 }
 
 } // namespace
@@ -98,13 +123,11 @@ TlOcsTrafficObserverDataPlaneTestCase::TlOcsTrafficObserverDataPlaneTestCase()
 void
 TlOcsTrafficObserverDataPlaneTestCase::DoRun()
 {
-    SimulationConfig simulation;
-    simulation.SetNumTors(2);
-    simulation.SetServersPerTor(1);
+    SimulationConfig simulation = BuildFourGroupConfig();
     simulation.SetStopTime(MilliSeconds(30));
 
     EpsTopologyBuilder builder;
-    NodeIndex index = builder.Build(simulation, 1);
+    NodeIndex index = builder.Build(simulation, 4, BuildElectricalObservationOptions());
 
     TrafficObserver observer(simulation.GetNumTors(), simulation.GetObserverWindow());
     observer.AttachToTopology(index);
@@ -142,9 +165,7 @@ TlOcsObservedCommunityLocalAlgorithmTestCase::TlOcsObservedCommunityLocalAlgorit
 void
 TlOcsObservedCommunityLocalAlgorithmTestCase::DoRun()
 {
-    SimulationConfig simulation;
-    simulation.SetNumTors(4);
-    simulation.SetServersPerTor(1);
+    SimulationConfig simulation = BuildFourGroupConfig();
     simulation.SetStopTime(MilliSeconds(60));
 
     TrafficGenerationConfig traffic;
@@ -161,7 +182,7 @@ TlOcsObservedCommunityLocalAlgorithmTestCase::DoRun()
     NS_TEST_ASSERT_MSG_GT(observed.GetBytes(3, 2), 0, "expected observed community edge 3->2");
 
     TlOcsAlgorithmParameters parameters;
-    parameters.opticalPortsPerTor = 1;
+    parameters.opticalAccessSpinesPerGroup = 4;
     const TlOcsAlgorithmResult result =
         TlOcsAlgorithm().Run(observed, parameters);
 
@@ -193,9 +214,7 @@ class TlOcsObservedUniformReadinessTestCase : public TestCase
   private:
     void DoRun() override
     {
-        SimulationConfig simulation;
-        simulation.SetNumTors(4);
-        simulation.SetServersPerTor(1);
+        SimulationConfig simulation = BuildFourGroupConfig();
         simulation.SetStopTime(MilliSeconds(60));
 
         TrafficGenerationConfig traffic;
@@ -203,7 +222,9 @@ class TlOcsObservedUniformReadinessTestCase : public TestCase
         traffic.flowSizeBytes = 10000;
         const std::vector<FlowSpec> flows = UniformTrafficGenerator().Generate(simulation, traffic);
 
-        NodeIndex index = EpsTopologyBuilder().Build(simulation, 1);
+        NodeIndex index = EpsTopologyBuilder().Build(simulation,
+                                                     4,
+                                                     BuildElectricalObservationOptions());
         TrafficObserver observer(simulation.GetNumTors(), simulation.GetObserverWindow());
         observer.AttachToTopology(index);
         const FlowLaunchResult launch =
@@ -249,9 +270,7 @@ TlOcsObservedAggregationAlgorithmTestCase::TlOcsObservedAggregationAlgorithmTest
 void
 TlOcsObservedAggregationAlgorithmTestCase::DoRun()
 {
-    SimulationConfig simulation;
-    simulation.SetNumTors(5);
-    simulation.SetServersPerTor(1);
+    SimulationConfig simulation = BuildFourGroupConfig();
     simulation.SetStopTime(MilliSeconds(70));
 
     TrafficGenerationConfig traffic;
@@ -272,7 +291,7 @@ TlOcsObservedAggregationAlgorithmTestCase::DoRun()
     TlOcsAlgorithmParameters volumeParameters;
     volumeParameters.enableNullModel = false;
     volumeParameters.enableCommunityFactor = false;
-    volumeParameters.opticalPortsPerTor = 1;
+    volumeParameters.opticalAccessSpinesPerGroup = 4;
     TlOcsAlgorithmParameters tlParameters = volumeParameters;
     tlParameters.enableNullModel = true;
 

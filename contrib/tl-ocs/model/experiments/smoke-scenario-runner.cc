@@ -49,12 +49,17 @@ CopyTimelineResult(const ControllerTimelineResult& timeline, SmokeScenarioResult
     result.algorithmSelectedEdges = timeline.algorithmSelectedEdges;
     result.ocsActiveEdges = timeline.ocsActiveEdges;
     result.ocsAssignedFlows = timeline.ocsAssignedFlows;
-    result.epsFallbackFlows = timeline.epsFallbackFlows;
+    result.epsPathFlows = timeline.epsPathFlows;
+    result.waitingFlows = timeline.waitingFlows;
+    result.retriedFlows = timeline.retriedFlows;
+    result.interruptedFlows = timeline.interruptedFlows;
+    result.residualFlows = timeline.residualFlows;
     result.communityInternalSelectedEdgeRatio =
         timeline.communityInternalSelectedEdgeRatio;
     result.timelineCycles = timeline.timelineCycles;
     result.schedulingRoundCount = timeline.schedulingRoundCount;
     result.nonEmptySchedulingRounds = timeline.nonEmptySchedulingRounds;
+    result.cumulativeSelectedEdgeCount = timeline.cumulativeSelectedEdgeCount;
     result.avgSelectedEdgeCount = timeline.avgSelectedEdgeCount;
     result.maxSelectedEdgeCount = timeline.maxSelectedEdgeCount;
     result.avgActiveEdgeCount = timeline.avgActiveEdgeCount;
@@ -66,7 +71,6 @@ CopyTimelineResult(const ControllerTimelineResult& timeline, SmokeScenarioResult
     result.stage1ReceivedBytes = timeline.stage1ReceivedBytes;
     result.stage2ReceivedBytes = timeline.stage2ReceivedBytes;
     result.selectedEdgeList = timeline.selectedEdgeList;
-    result.schedulingDiagnostics = timeline.schedulingDiagnostics;
 }
 
 void
@@ -127,7 +131,7 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
         result.installedFlows = launch.installedFlows;
         result.receivedBytes = launch.GetTotalReceivedBytes();
         result.ocsAssignedFlows = 0;
-        result.epsFallbackFlows = launch.installedFlows;
+        result.epsPathFlows = launch.installedFlows;
         if (options.enableFlowMetrics)
         {
             CollectFlowMetrics(launch.metricSources,
@@ -150,20 +154,11 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
     timelineOptions.printOcsDecisions = options.printOcsDecisions;
     timelineOptions.stage1Stop = Seconds(simulation.GetStopTime().GetSeconds() * 0.5);
     timelineOptions.stageGap = options.timelineStageGap;
-    if (scheme.UseVolumeScheduler())
-    {
-        timelineOptions.schedulingMode = OpticalSchedulingMode::VOLUME;
-    }
-    else if (scheme.UseOracleScheduler())
-    {
-        timelineOptions.schedulingMode = OpticalSchedulingMode::ORACLE;
-    }
-    else if (scheme.UseFixedScheduler())
+    if (scheme.UseFixedScheduler())
     {
         timelineOptions.schedulingMode = OpticalSchedulingMode::FIXED;
         timelineOptions.fixedOcsEdges = options.fixedOcsEdges;
     }
-    timelineOptions.oracleMode = options.oracleMode;
     ControllerState state;
     ControllerTimeline timeline(state);
     OcsLinkManager linkManager;

@@ -50,17 +50,35 @@ TlOcsResultWriterSmokeSummaryTestCase::DoRun()
     content << stream.rdbuf();
     const std::string text = content.str();
 
-    NS_TEST_ASSERT_MSG_NE(text.find("experiment,scheme,traffic_pattern"), std::string::npos, "missing CSV header");
+    NS_TEST_ASSERT_MSG_NE(text.find("schema_version,experiment,scheme,traffic_pattern"),
+                          std::string::npos,
+                          "missing versioned CSV header");
+    NS_TEST_ASSERT_MSG_NE(text.find("final_algorithm_selected_edges"),
+                          std::string::npos,
+                          "missing final selected-edge CSV field");
+    NS_TEST_ASSERT_MSG_NE(text.find("cumulative_selected_edge_count"),
+                          std::string::npos,
+                          "missing cumulative selected-edge CSV field");
     NS_TEST_ASSERT_MSG_NE(text.find("avg_receiver_throughput_bps"),
                           std::string::npos,
                           "missing V2 receiver throughput CSV field");
     NS_TEST_ASSERT_MSG_NE(text.find("avg_network_link_utilization"),
                           std::string::npos,
                           "missing V2 link utilization CSV field");
-    NS_TEST_ASSERT_MSG_EQ(text.find("scheduling_round_count"),
+    NS_TEST_ASSERT_MSG_NE(text.find("scheduling_round_count"),
                           std::string::npos,
-                          "V1 scheduling diagnostic field should be absent");
+                          "missing scheduling round summary field");
+    NS_TEST_ASSERT_MSG_NE(text.find("measurement_duration_s"),
+                          std::string::npos,
+                          "missing V7 measurement duration field");
+    NS_TEST_ASSERT_MSG_NE(text.find("cross_tor_offered_bytes_measurement"),
+                          std::string::npos,
+                          "missing V7 cross-ToR offered byte field");
+    NS_TEST_ASSERT_MSG_NE(text.find("waiting_flows"),
+                          std::string::npos,
+                          "missing waiting flow summary field");
     NS_TEST_ASSERT_MSG_NE(text.find("smoke_ok"), std::string::npos, "missing smoke status");
+    NS_TEST_ASSERT_MSG_NE(text.find("tl-hoc-v7"), std::string::npos, "missing schema version");
 }
 
 class TlOcsResultWriterTestSuite : public TestSuite

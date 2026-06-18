@@ -32,17 +32,6 @@ OpticalLinkStateManager::ApplyTopology(const OpticalCoreTopology& topology)
     {
         m_activeEdges.insert(NormalizeEdge(edge.first, edge.second));
     }
-    for (auto load = m_assignedRateBps.begin(); load != m_assignedRateBps.end();)
-    {
-        if (m_activeEdges.find(load->first) == m_activeEdges.end())
-        {
-            load = m_assignedRateBps.erase(load);
-        }
-        else
-        {
-            ++load;
-        }
-    }
 }
 
 bool

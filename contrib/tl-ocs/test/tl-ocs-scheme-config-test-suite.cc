@@ -58,8 +58,6 @@ TlOcsSchemeConfigTestCase::DoRun()
                           "tl-hoc should use optical path admission");
     NS_TEST_ASSERT_MSG_EQ(tlhoc.UseTlhocScheduler(), true, "tl-hoc should select TL-HOC scheduler");
     NS_TEST_ASSERT_MSG_EQ(tlhoc.UseFixedScheduler(), false, "tl-hoc should not be static-ocs");
-    NS_TEST_ASSERT_MSG_EQ(tlhoc.UseOracleScheduler(), false, "tl-hoc should not use oracle scheduler");
-    NS_TEST_ASSERT_MSG_EQ(tlhoc.UseVolumeScheduler(), false, "tl-hoc should not use volume scheduler");
 
     bool threw = false;
     try
@@ -72,7 +70,13 @@ TlOcsSchemeConfigTestCase::DoRun()
     }
     NS_TEST_ASSERT_MSG_EQ(threw, true, "unknown scheme should fail");
 
-    for (const auto& removed : {"eps-ecmp", "ocs-volume", "tl-ocs", "ocs-oracle", "fixed-ocs"})
+    for (const auto& removed : {"eps-ecmp",
+                                "ocs-volume",
+                                "volume-ocs",
+                                "tl-ocs",
+                                "tl-ocs-shortest-path",
+                                "ocs-oracle",
+                                "fixed-ocs"})
     {
         threw = false;
         try

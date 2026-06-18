@@ -14,7 +14,7 @@ namespace
 {
 
 void
-SelectUnderPortConstraint(TlOcsAlgorithmResult& result, uint32_t opticalPortsPerTor)
+SelectUnderPortConstraint(TlOcsAlgorithmResult& result, uint32_t opticalAccessSpinesPerGroup)
 {
     std::sort(result.candidateEdges.begin(),
               result.candidateEdges.end(),
@@ -33,8 +33,8 @@ SelectUnderPortConstraint(TlOcsAlgorithmResult& result, uint32_t opticalPortsPer
     std::vector<uint32_t> selectedDegree(result.A.GetSize(), 0);
     for (auto& edge : result.candidateEdges)
     {
-        if (selectedDegree[edge.sourceTor] >= opticalPortsPerTor ||
-            selectedDegree[edge.destinationTor] >= opticalPortsPerTor)
+        if (selectedDegree[edge.sourceTor] >= opticalAccessSpinesPerGroup ||
+            selectedDegree[edge.destinationTor] >= opticalAccessSpinesPerGroup)
         {
             continue;
         }
@@ -48,7 +48,7 @@ SelectUnderPortConstraint(TlOcsAlgorithmResult& result, uint32_t opticalPortsPer
 } // namespace
 
 TlOcsAlgorithmResult
-VolumeScheduler::Run(const TrafficMatrix& observedW, uint32_t opticalPortsPerTor) const
+VolumeScheduler::Run(const TrafficMatrix& observedW, uint32_t opticalAccessSpinesPerGroup) const
 {
     MatrixProcessor processor;
     TlOcsAlgorithmResult result;
@@ -80,7 +80,7 @@ VolumeScheduler::Run(const TrafficMatrix& observedW, uint32_t opticalPortsPerTor
             }
         }
     }
-    SelectUnderPortConstraint(result, opticalPortsPerTor);
+    SelectUnderPortConstraint(result, opticalAccessSpinesPerGroup);
     result.communityInternalSelectedEdgeRatio =
         CalculateCommunityInternalSelectedEdgeRatio(result.selectedEdges);
     return result;

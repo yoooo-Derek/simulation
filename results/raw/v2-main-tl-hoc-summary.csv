@@ -1,2 +1,0 @@
-experiment,scheme,traffic_pattern,run_id,random_seed,num_tors,servers_per_tor,status,total_flows,completed_flows,avg_receiver_throughput_bps,avg_fct_s,avg_network_link_utilization
-v2-main-tl-hoc,tl-hoc,community-local,1,1,8,16,scheme_tl-hoc_finite_multi_cycle_ok,256,256,512000000,0.000550123488281,0.000227181511111

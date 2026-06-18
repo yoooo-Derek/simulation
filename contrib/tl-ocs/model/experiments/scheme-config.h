@@ -28,8 +28,6 @@ class SchemeConfig
     bool EnableTrafficObserver() const;
     bool EnableAlgorithm() const;
     bool EnableOcsAdmission() const;
-    bool UseVolumeScheduler() const;
-    bool UseOracleScheduler() const;
     bool UseFixedScheduler() const;
     bool UseTlhocScheduler() const;
 

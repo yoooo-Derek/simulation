@@ -77,7 +77,7 @@ TlOcsAlgorithm::Run(const TrafficMatrix& observedW,
     schedulerParameters.alpha = parameters.alpha;
     schedulerParameters.enableCommunityFactor =
         parameters.enableCommunityFactor && !parameters.useVolumeOnlyScore;
-    schedulerParameters.opticalPortsPerTor = parameters.opticalPortsPerTor;
+    schedulerParameters.opticalAccessSpinesPerGroup = parameters.opticalAccessSpinesPerGroup;
     const OpticalScheduleResult schedule =
         scheduler.SelectEdges(result.B, result.communityLabels, schedulerParameters);
     result.G = schedule.scheduleGain;

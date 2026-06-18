@@ -8,7 +8,7 @@ class TlOcsFlowMetricsTestCase : public TestCase
 {
   public:
     TlOcsFlowMetricsTestCase()
-        : TestCase("TL-OCS flow metrics summarize completed flow FCT with nearest-rank percentiles")
+        : TestCase("TL-OCS flow metrics summarize FCT and receiver-averaged throughput")
     {
     }
 
@@ -24,12 +24,16 @@ class TlOcsFlowMetricsTestCase : public TestCase
             record.receivedBytes = 100;
             record.completed = true;
             record.completionTimeS = static_cast<double>(index + 1);
+            record.destinationTor = index % 2;
+            record.destinationServer = 0;
             records.push_back(record);
         }
         FlowMetricRecord incomplete;
         incomplete.flowId = 10;
         incomplete.pathType = "ocs";
         incomplete.receivedBytes = 25;
+        incomplete.destinationTor = 1;
+        incomplete.destinationServer = 1;
         records.push_back(incomplete);
 
         MetricsCollector collector;
@@ -39,9 +43,9 @@ class TlOcsFlowMetricsTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(summary.incompleteFlows, 1, "unexpected incomplete flow count");
         NS_TEST_ASSERT_MSG_EQ(summary.totalReceivedBytes, 1025, "unexpected received byte count");
         NS_TEST_ASSERT_MSG_EQ_TOL(summary.avgReceivedThroughputBps.value(),
-                                  4100.0,
+                                  1366.6666666666667,
                                   1e-12,
-                                  "received throughput mismatch");
+                                  "receiver-averaged throughput mismatch");
         NS_TEST_ASSERT_MSG_EQ_TOL(summary.avgFctS.value(), 5.5, 1e-12, "average FCT mismatch");
         NS_TEST_ASSERT_MSG_EQ_TOL(summary.p90FctS.value(), 9.0, 1e-12, "p90 FCT mismatch");
         NS_TEST_ASSERT_MSG_EQ_TOL(summary.p95FctS.value(), 10.0, 1e-12, "p95 FCT mismatch");

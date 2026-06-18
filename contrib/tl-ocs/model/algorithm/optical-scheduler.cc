@@ -54,8 +54,8 @@ OpticalScheduler::SelectEdges(const DenseMatrix& modularityGain,
         {
             break;
         }
-        if (result.selectedDegree[edge.sourceTor] >= parameters.opticalPortsPerTor ||
-            result.selectedDegree[edge.destinationTor] >= parameters.opticalPortsPerTor)
+        if (result.selectedDegree[edge.sourceTor] >= parameters.opticalAccessSpinesPerGroup ||
+            result.selectedDegree[edge.destinationTor] >= parameters.opticalAccessSpinesPerGroup)
         {
             continue;
         }

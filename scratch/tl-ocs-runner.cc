@@ -7,9 +7,7 @@
 
 #include <algorithm>
 #include <cctype>
-#include <filesystem>
-#include <fstream>
-#include <iomanip>
+#include <cmath>
 #include <iostream>
 #include <limits>
 #include <memory>
@@ -75,7 +73,7 @@ BuildOfferedLoadSummary(const std::vector<FlowSpec>& flows,
                         uint64_t serverAccessRateBps,
                         uint64_t epsLinkRateBps,
                         uint64_t ocsLinkRateBps,
-                        uint32_t opticalPortsPerTor,
+                        uint32_t opticalAccessSpinesPerGroup,
                         double offeredLoadFactor)
 {
     OfferedLoadSummary summary;
@@ -129,7 +127,7 @@ BuildOfferedLoadSummary(const std::vector<FlowSpec>& flows,
         static_cast<double>(simulation.GetNumTors()) * spines * epsLinkRateBps;
     const double torEpsCapacity = static_cast<double>(spines) * epsLinkRateBps;
     const double torHybridCapacity =
-        torEpsCapacity + static_cast<double>(opticalPortsPerTor) * ocsLinkRateBps;
+        torEpsCapacity + static_cast<double>(opticalAccessSpinesPerGroup) * ocsLinkRateBps;
     summary.normalizedAccessLoad =
         accessCapacity > 0.0 ? summary.actualOfferedBps / accessCapacity : 0.0;
     summary.normalizedEpsLoad =
@@ -161,8 +159,74 @@ OffsetFlows(const std::vector<FlowSpec>& flows, uint32_t flowIdOffset, Time star
     return shifted;
 }
 
+std::vector<FlowSpec>
+NormalizeCrossTorOfferedLoad(const std::vector<FlowSpec>& flows,
+                             const SimulationConfig& simulation,
+                             uint32_t spines,
+                             uint64_t epsLinkRateBps,
+                             double targetNormalizedEpsLoad)
+{
+    if (targetNormalizedEpsLoad <= 0.0 || epsLinkRateBps == 0)
+    {
+        return flows;
+    }
+    const double measurementDurationS =
+        (simulation.GetMeasurementEndTime() - simulation.GetMeasurementStartTime()).GetSeconds();
+    if (measurementDurationS <= 0.0)
+    {
+        return flows;
+    }
+    uint64_t currentCrossTorBytes = 0;
+    for (const auto& flow : flows)
+    {
+        const double startS = flow.GetStartTime().GetSeconds();
+        if (startS >= simulation.GetMeasurementStartTime().GetSeconds() &&
+            startS < simulation.GetMeasurementEndTime().GetSeconds() &&
+            flow.GetSourceTorId() != flow.GetDestinationTorId())
+        {
+            currentCrossTorBytes += flow.GetSizeBytes();
+        }
+    }
+    if (currentCrossTorBytes == 0)
+    {
+        return flows;
+    }
+
+    const double epsCapacityBps =
+        static_cast<double>(simulation.GetNumTors()) * spines * epsLinkRateBps;
+    const double targetCrossTorBytes =
+        targetNormalizedEpsLoad * epsCapacityBps * measurementDurationS / 8.0;
+    const double scale = targetCrossTorBytes / static_cast<double>(currentCrossTorBytes);
+
+    std::vector<FlowSpec> normalized;
+    normalized.reserve(flows.size());
+    for (const auto& flow : flows)
+    {
+        uint64_t sizeBytes = flow.GetSizeBytes();
+        const double startS = flow.GetStartTime().GetSeconds();
+        if (startS >= simulation.GetMeasurementStartTime().GetSeconds() &&
+            startS < simulation.GetMeasurementEndTime().GetSeconds() &&
+            flow.GetSourceTorId() != flow.GetDestinationTorId())
+        {
+            sizeBytes = std::max<uint64_t>(
+                1,
+                static_cast<uint64_t>(std::llround(static_cast<double>(sizeBytes) * scale)));
+        }
+        normalized.emplace_back(flow.GetFlowId(),
+                                flow.GetSourceTorId(),
+                                flow.GetSourceServerId(),
+                                flow.GetDestinationTorId(),
+                                flow.GetDestinationServerId(),
+                                sizeBytes,
+                                flow.GetStartTime(),
+                                flow.GetPatternName(),
+                                flow.GetEstimatedRateBps());
+    }
+    return normalized;
+}
+
 std::vector<OpticalEdge>
-BuildDiagnosticOcsEdges(const std::vector<FlowSpec>& flows, uint32_t opticalPortsPerTor)
+BuildDiagnosticOcsEdges(const std::vector<FlowSpec>& flows, uint32_t opticalAccessSpinesPerGroup)
 {
     std::vector<OpticalEdge> selectedEdges;
     std::vector<uint32_t> portUse;
@@ -187,7 +251,7 @@ BuildDiagnosticOcsEdges(const std::vector<FlowSpec>& flows, uint32_t opticalPort
         {
             continue;
         }
-        if (portUse[pair.first] >= opticalPortsPerTor || portUse[pair.second] >= opticalPortsPerTor)
+        if (portUse[pair.first] >= opticalAccessSpinesPerGroup || portUse[pair.second] >= opticalAccessSpinesPerGroup)
         {
             continue;
         }
@@ -274,95 +338,18 @@ ParseFixedOcsEdges(const std::string& value, uint32_t numTors)
     return edges;
 }
 
-void
-WriteSchedulingDiagnostics(const std::string& outputDir,
-                           const std::string& fileName,
-                           const ExperimentConfig& experiment,
-                           const std::string& schemeName,
-                           double offeredLoadFactor,
-                           const std::string& oracleMode,
-                           const std::vector<SchedulingDiagnosticRecord>& records)
-{
-    if (fileName.empty())
-    {
-        return;
-    }
-    const std::filesystem::path outputPath = std::filesystem::path(outputDir) / fileName;
-    std::filesystem::create_directories(outputPath.parent_path());
-    std::ofstream stream(outputPath, std::ios::out);
-    if (!stream.is_open())
-    {
-        throw std::runtime_error("failed to open TL-OCS scheduling diagnostics CSV: " +
-                                 outputPath.string());
-    }
-
-    stream << "experiment,scenario,scheme,diagnostic_only,oracle_mode,offered_load_factor,"
-              "seed,run_id,cycle,time_s,round_start_s,round_end_s,observed_matrix_bytes,"
-              "future_demand_bytes,selected_edge_count,active_edge_count,"
-              "ocs_assigned_flows,ocs_assigned_bytes,volume_selected_edge_count,"
-              "tl_ocs_selected_edge_count,oracle_selected_edge_count,selected_edge_jaccard,"
-              "selected_oracle_jaccard,volume_oracle_jaccard,tl_oracle_jaccard,"
-              "selected_future_top_jaccard,historical_future_pearson,"
-              "historical_future_topk_jaccard,demand_drift_ratio,"
-              "selected_future_demand_coverage,"
-              "volume_future_demand_coverage,tl_future_demand_coverage,"
-              "oracle_future_demand_coverage,selected_hit_flows,selected_hit_bytes,"
-              "selected_but_unused_lightpaths,oracle_possible_ocs_flows_missed,"
-              "oracle_possible_ocs_bytes_missed,volume_oracle_possible_bytes_missed,"
-              "tl_oracle_possible_bytes_missed,selected_edges,volume_selected_edges,"
-              "tl_ocs_selected_edges,oracle_selected_edges,raw_a_top_edges,tl_g_top_edges,"
-              "future_demand_top_edges\n";
-    for (const auto& record : records)
-    {
-        const bool diagnosticOnly = false;
-        stream << EscapeCsvField(experiment.GetExperimentName()) << ','
-               << EscapeCsvField(experiment.GetTrafficPattern()) << ','
-               << EscapeCsvField(schemeName) << ','
-               << (diagnosticOnly ? "true" : "false") << ','
-               << EscapeCsvField(oracleMode.empty() ? record.oracleMode : oracleMode) << ','
-               << std::setprecision(12) << offeredLoadFactor << ','
-               << experiment.GetRandomSeed() << ',' << experiment.GetRunId() << ','
-               << record.cycle << ',' << std::setprecision(12) << record.timeS << ','
-               << record.roundStartS << ',' << record.roundEndS << ','
-               << record.observedMatrixBytes << ',' << record.futureDemandBytes << ','
-               << record.selectedEdgeCount << ',' << record.activeEdgeCount << ','
-               << record.ocsAssignedFlows << ',' << record.ocsAssignedBytes << ','
-               << record.volumeSelectedEdgeCount << ',' << record.tlOcsSelectedEdgeCount << ','
-               << record.oracleSelectedEdgeCount << ',' << std::setprecision(12)
-               << record.selectedEdgeJaccard << ',' << record.selectedOracleJaccard << ','
-               << record.volumeOracleJaccard << ',' << record.tlOracleJaccard << ','
-               << record.selectedFutureTopJaccard << ','
-               << record.historicalFuturePearson << ','
-               << record.historicalFutureTopKJaccard << ','
-               << record.demandDriftRatio << ','
-               << record.selectedFutureDemandCoverage << ','
-               << record.volumeFutureDemandCoverage << ','
-               << record.tlFutureDemandCoverage << ','
-               << record.oracleFutureDemandCoverage << ','
-               << record.selectedHitFlows << ',' << record.selectedHitBytes << ','
-               << record.selectedButUnusedLightpaths << ','
-               << record.oraclePossibleOcsFlowsMissed << ','
-               << record.oraclePossibleOcsBytesMissed << ','
-               << record.volumeOraclePossibleBytesMissed << ','
-               << record.tlOraclePossibleBytesMissed << ','
-               << EscapeCsvField(record.selectedEdges) << ','
-               << EscapeCsvField(record.volumeSelectedEdges) << ','
-               << EscapeCsvField(record.tlOcsSelectedEdges) << ','
-               << EscapeCsvField(record.oracleSelectedEdges) << ','
-               << EscapeCsvField(record.rawATopEdges) << ','
-               << EscapeCsvField(record.tlGTopEdges) << ','
-               << EscapeCsvField(record.futureDemandTopEdges) << '\n';
-    }
-    std::cout << "TL-OCS scheduling diagnostics CSV: " << outputPath << std::endl;
-}
-
 } // namespace
 
 int
 main(int argc, char* argv[])
 {
     uint32_t numTors = 4;
-    uint32_t serversPerTor = 2;
+    uint32_t serversPerTor = 4;
+    uint32_t groupCount = 4;
+    uint32_t leafsPerGroup = 4;
+    uint32_t spinesPerGroup = 4;
+    uint32_t serversPerLeaf = 1;
+    uint32_t memsCount = 4;
     double observerWindowSeconds = 0.001;
     double ocsPeriodSeconds = 0.005;
     double stopTimeSeconds = 0.01;
@@ -377,9 +364,7 @@ main(int argc, char* argv[])
     std::string outputDir = "results/raw";
     std::string summaryFile = "summary.csv";
     std::string flowResultFile;
-    std::string schedulingDiagnosticsFile;
     std::string diagnosticMode = "none";
-    std::string oracleMode = "period-future";
     std::string fixedOcsEdges;
     bool overwrite = true;
     bool enableEpsTopology = false;
@@ -397,7 +382,7 @@ main(int argc, char* argv[])
     bool enableOcsMetrics = false;
     bool observerDumpMatrix = false;
     bool printOcsDecisions = false;
-    uint32_t spines = 1;
+    uint32_t spines = 4;
     std::string serverAccessDataRate = "10Gbps";
     std::string epsDataRate = "25Gbps";
     std::string ocsDataRate = "100Gbps";
@@ -432,12 +417,16 @@ main(int argc, char* argv[])
     double thetaF = 0.0;
     double eta = 1.0;
     double alpha = 0.5;
-    uint32_t opticalPortsPerTor = 1;
+    uint32_t opticalAccessSpinesPerGroup = 4;
     double offeredLoadFactor = 0.0;
+    bool normalizeOfferedLoad = false;
 
     CommandLine cmd(__FILE__);
-    cmd.AddValue("numTors", "Number of ToR/access nodes", numTors);
-    cmd.AddValue("serversPerTor", "Number of servers attached to each ToR", serversPerTor);
+    cmd.AddValue("groupCount", "Number of physical optical-electrical groups", groupCount);
+    cmd.AddValue("leafsPerGroup", "Number of electrical leaf switches per group", leafsPerGroup);
+    cmd.AddValue("spinesPerGroup", "Number of electrical/optical-access spine switches per group", spinesPerGroup);
+    cmd.AddValue("serversPerLeaf", "Number of servers attached to each leaf switch", serversPerLeaf);
+    cmd.AddValue("memsCount", "Number of explicit MEMS optical switches", memsCount);
     cmd.AddValue("observerWindow", "Traffic observer window in seconds", observerWindowSeconds);
     cmd.AddValue("ocsPeriod", "OCS reconfiguration period in seconds", ocsPeriodSeconds);
     cmd.AddValue("stopTime", "Simulation stop time in seconds", stopTimeSeconds);
@@ -459,25 +448,19 @@ main(int argc, char* argv[])
     cmd.AddValue("outputDir", "Directory for TL-OCS smoke artifacts", outputDir);
     cmd.AddValue("summaryFile", "Summary CSV file name", summaryFile);
     cmd.AddValue("flowResultFile", "Per-flow CSV file name; defaults to <experimentName>-flows.csv", flowResultFile);
-    cmd.AddValue("schedulingDiagnosticsFile",
-                 "Scheduling diagnostic CSV file name; empty disables diagnostic export",
-                 schedulingDiagnosticsFile);
     cmd.AddValue("diagnosticMode",
                  "Datapath diagnostic mode: none, force-eps, or force-ocs",
                  diagnosticMode);
-    cmd.AddValue("oracleMode",
-                 "Diagnostic oracle mode; retained only for transitional diagnostics",
-                 oracleMode);
     cmd.AddValue("fixedOcsEdges",
                  "Static OCS edge set for static-ocs, formatted as 0-1;2-3",
                  fixedOcsEdges);
     cmd.AddValue("overwrite", "Overwrite summary CSV before writing", overwrite);
     cmd.AddValue("enableEpsTopology", "Build the minimum EPS topology", enableEpsTopology);
-    cmd.AddValue("enableTcpSmoke", "Run one cross-ToR TCP smoke flow", enableTcpSmoke);
+    cmd.AddValue("enableTcpSmoke", "Run one cross-group TCP smoke flow", enableTcpSmoke);
     cmd.AddValue("enableTrainingTraffic", "Run generated training traffic flows", enableTrainingTraffic);
-    cmd.AddValue("enableTrafficObserver", "Observe source ToR ingress bytes into W(t)", enableTrafficObserver);
+    cmd.AddValue("enableTrafficObserver", "Observe source group ingress bytes into W(t)", enableTrafficObserver);
     cmd.AddValue("enableAlgorithmSmoke", "Run pure TL-OCS algorithm on observed W(t)", enableAlgorithmSmoke);
-    cmd.AddValue("enableOcsLinks", "Precreate candidate ToR-ToR OCS links", enableOcsLinks);
+    cmd.AddValue("enableOcsLinks", "Create candidate MEMS-backed optical circuits", enableOcsLinks);
     cmd.AddValue("enableOcsAssignmentSmoke", "Run new-flow OCS path assignment smoke after algorithm selection", enableOcsAssignmentSmoke);
     cmd.AddValue("enableControllerTimeline", "Run the reusable single-cycle controller timeline smoke", enableControllerTimeline);
     cmd.AddValue("enableFiniteMultiCycle", "Run finite periodic observer, scheduling, and new-flow assignment", enableFiniteMultiCycle);
@@ -487,15 +470,14 @@ main(int argc, char* argv[])
     cmd.AddValue("enableOcsMetrics", "Write completed-flow OCS metrics for the scheme runner", enableOcsMetrics);
     cmd.AddValue("observerDumpMatrix", "Print the observed W(t) matrix after the run", observerDumpMatrix);
     cmd.AddValue("printOcsDecisions", "Print per-flow OCS/EPS path decisions", printOcsDecisions);
-    cmd.AddValue("spines", "Number of EPS spine nodes", spines);
-    cmd.AddValue("serverAccessDataRate", "Server-ToR access link data rate", serverAccessDataRate);
-    cmd.AddValue("epsDataRate", "EPS ToR-spine link data rate", epsDataRate);
+    cmd.AddValue("serverAccessDataRate", "Server-leaf access link data rate", serverAccessDataRate);
+    cmd.AddValue("epsDataRate", "Leaf-spine or electrical inter-group link data rate", epsDataRate);
     cmd.AddValue("ocsDataRate", "OCS candidate link data rate", ocsDataRate);
     cmd.AddValue("serverAccessRateBps",
-                 "Server-ToR access link data rate in bps; overrides serverAccessDataRate when nonzero",
+                 "Server-leaf access link data rate in bps; overrides serverAccessDataRate when nonzero",
                  serverAccessRateBps);
     cmd.AddValue("epsLinkRateBps",
-                 "EPS ToR-spine link data rate in bps; overrides epsDataRate when nonzero",
+                 "Leaf-spine or electrical inter-group link data rate in bps; overrides epsDataRate when nonzero",
                  epsLinkRateBps);
     cmd.AddValue("ocsLinkRateBps",
                  "OCS candidate link data rate in bps; overrides ocsDataRate when nonzero",
@@ -524,8 +506,8 @@ main(int argc, char* argv[])
     cmd.AddValue("poissonMeanInterArrival", "Mean Poisson inter-arrival time in seconds", poissonMeanInterArrivalSeconds);
     cmd.AddValue("communityCount", "Number of deterministic traffic communities", communityCount);
     cmd.AddValue("communityLocalProbability", "Probability that a Poisson community-local flow stays within its community", communityLocalProbability);
-    cmd.AddValue("aggregatorTor", "Aggregator ToR for parameter-aggregation traffic", aggregatorTor);
-    cmd.AddValue("aggregatorCount", "Number of consecutive ToRs used as parameter-aggregation aggregators", aggregatorCount);
+    cmd.AddValue("aggregatorTor", "Aggregator group for parameter-aggregation traffic", aggregatorTor);
+    cmd.AddValue("aggregatorCount", "Number of consecutive groups used as parameter-aggregation aggregators", aggregatorCount);
     cmd.AddValue("iterationPeriod", "Period between parameter-aggregation iterations in seconds", iterationPeriodSeconds);
     cmd.AddValue("burstSize", "Flows generated per parameter-aggregation iteration burst", burstSize);
     cmd.AddValue("numIterations", "Number of parameter-aggregation iteration bursts", numIterations);
@@ -534,11 +516,42 @@ main(int argc, char* argv[])
     cmd.AddValue("thetaF", "Traffic graph sparsification threshold", thetaF);
     cmd.AddValue("eta", "Null-model resolution parameter", eta);
     cmd.AddValue("alpha", "Cross-community optical gain factor", alpha);
-    cmd.AddValue("opticalPortsPerTor", "Optical port limit per ToR for pure scheduling", opticalPortsPerTor);
+    cmd.AddValue("opticalAccessSpinesPerGroup",
+                 "Number of fixed optical-access spine/MEMS ports per physical group",
+                 opticalAccessSpinesPerGroup);
     cmd.AddValue("offeredLoadFactor",
-                 "Traffic intensity multiplier recorded in diagnostics",
+                 "Target normalized cross-group electrical baseline load when normalizeOfferedLoad is true; "
+                 "otherwise recorded as a diagnostic label",
                  offeredLoadFactor);
+    cmd.AddValue("normalizeOfferedLoad",
+                 "Scale generated cross-group flow sizes so normalized_eps_load matches offeredLoadFactor",
+                 normalizeOfferedLoad);
     cmd.Parse(argc, argv);
+
+    if (spinesPerGroup == 0 && opticalAccessSpinesPerGroup > 0)
+    {
+        spinesPerGroup = opticalAccessSpinesPerGroup;
+    }
+    if (opticalAccessSpinesPerGroup == 0 && spinesPerGroup > 0)
+    {
+        opticalAccessSpinesPerGroup = spinesPerGroup;
+    }
+    if (groupCount > 0)
+    {
+        numTors = groupCount;
+    }
+    if (spinesPerGroup > 0)
+    {
+        spines = spinesPerGroup;
+    }
+    if (serversPerLeaf > 0 && leafsPerGroup > 0)
+    {
+        serversPerTor = leafsPerGroup * serversPerLeaf;
+    }
+    else if (serversPerLeaf == 0 && leafsPerGroup > 0)
+    {
+        serversPerLeaf = std::max<uint32_t>(1, serversPerTor / leafsPerGroup);
+    }
 
     if (serverAccessRateBps > 0)
     {
@@ -581,12 +594,6 @@ main(int argc, char* argv[])
             enableOcsLinks = true;
         }
     }
-    if (oracleMode != "period-future" && oracleMode != "whole-run")
-    {
-        std::cerr << "Unsupported oracleMode: " << oracleMode << std::endl;
-        return 1;
-    }
-
     std::optional<SchemeConfig> scheme;
     if (enableSchemeRunner)
     {
@@ -658,7 +665,7 @@ main(int argc, char* argv[])
     }
     if (spines < 1)
     {
-        std::cerr << "Invalid TL-OCS EPS topology configuration: spines must be at least 1"
+        std::cerr << "Invalid TL-OCS topology configuration: spinesPerGroup must be at least 1"
                   << std::endl;
         return 1;
     }
@@ -754,7 +761,7 @@ main(int argc, char* argv[])
     if (enableTrainingTraffic && trafficPattern == "parameter-aggregation" &&
         (aggregatorCount == 0 || aggregatorCount > config.GetNumTors()))
     {
-        std::cerr << "Invalid training traffic configuration: aggregatorCount must be in [1, numTors]"
+        std::cerr << "Invalid training traffic configuration: aggregatorCount must be in [1, groupCount]"
                   << std::endl;
         return 1;
     }
@@ -765,9 +772,9 @@ main(int argc, char* argv[])
                   << std::endl;
         return 1;
     }
-    if (enableAlgorithmSmoke && opticalPortsPerTor == 0)
+    if (enableAlgorithmSmoke && opticalAccessSpinesPerGroup == 0)
     {
-        std::cerr << "Invalid TL-OCS algorithm configuration: opticalPortsPerTor must be positive"
+        std::cerr << "Invalid TL-OCS algorithm configuration: opticalAccessSpinesPerGroup must be positive"
                   << std::endl;
         return 1;
     }
@@ -778,10 +785,10 @@ main(int argc, char* argv[])
         {
             fixedPortUse[edge.first]++;
             fixedPortUse[edge.second]++;
-            if (fixedPortUse[edge.first] > opticalPortsPerTor ||
-                fixedPortUse[edge.second] > opticalPortsPerTor)
+            if (fixedPortUse[edge.first] > opticalAccessSpinesPerGroup ||
+                fixedPortUse[edge.second] > opticalAccessSpinesPerGroup)
             {
-                std::cerr << "Invalid fixed OCS edge set: endpoint exceeds opticalPortsPerTor"
+                std::cerr << "Invalid fixed OCS edge set: endpoint exceeds opticalAccessSpinesPerGroup"
                           << std::endl;
                 return 1;
             }
@@ -812,11 +819,16 @@ main(int argc, char* argv[])
     std::optional<uint32_t> algorithmSelectedEdges;
     std::optional<uint32_t> ocsActiveEdges;
     std::optional<uint32_t> ocsAssignedFlows;
-    std::optional<uint32_t> epsFallbackFlows;
+    std::optional<uint32_t> epsPathFlows;
+    std::optional<uint32_t> waitingFlows;
+    std::optional<uint32_t> retriedFlows;
+    std::optional<uint32_t> interruptedFlows;
+    std::optional<uint32_t> residualFlows;
     std::optional<double> communityInternalSelectedEdgeRatio;
     std::optional<uint32_t> timelineCycles;
     std::optional<uint32_t> schedulingRoundCount;
     std::optional<uint32_t> nonEmptySchedulingRounds;
+    std::optional<uint64_t> cumulativeSelectedEdgeCount;
     std::optional<double> avgSelectedEdgeCount;
     std::optional<uint32_t> maxSelectedEdgeCount;
     std::optional<double> avgActiveEdgeCount;
@@ -830,6 +842,7 @@ main(int argc, char* argv[])
     std::optional<LinkUtilizationSummary> linkUtilizationSummary;
     std::optional<OcsMetricsSummary> ocsMetricsSummary;
     std::optional<OfferedLoadSummary> offeredLoadSummary;
+    std::optional<uint32_t> generatedFlows;
     std::vector<FlowMetricRecord> flowMetrics;
 
     if (enableEpsTopology)
@@ -837,9 +850,15 @@ main(int argc, char* argv[])
         EpsTopologyBuilder builder;
         EpsTopologyBuilder::BuildOptions buildOptions;
         buildOptions.enableOcsLinks = enableOcsLinks;
+        buildOptions.enableInterGroupElectricalFabric =
+            scheme.has_value() && scheme->GetType() == SchemeType::ELECTRICAL_ONLY;
+        buildOptions.leafsPerGroup = leafsPerGroup;
+        buildOptions.spinesPerGroup = spinesPerGroup;
+        buildOptions.serversPerLeaf = serversPerLeaf;
+        buildOptions.memsCount = memsCount;
         buildOptions.ocsDelay = Seconds(ocsDelaySeconds);
         NodeIndex index = builder.Build(config, spines, buildOptions);
-        std::cout << "TL-OCS EPS topology: tors=" << index.GetTorCount()
+        std::cout << "TL-OCS grouped topology: groups=" << index.GetGroupCount()
                   << ", servers=" << index.GetServerCount() << ", spines=" << index.GetSpineCount()
                   << ", ocsCandidateLinks=" << index.GetOcsLinkCount()
                   << std::endl;
@@ -949,7 +968,16 @@ main(int argc, char* argv[])
                 return 1;
             }
 
-            const std::vector<FlowSpec> flows = generator->Generate(config, trafficConfig);
+            std::vector<FlowSpec> flows = generator->Generate(config, trafficConfig);
+            generatedFlows = static_cast<uint32_t>(flows.size());
+            if (normalizeOfferedLoad)
+            {
+                flows = NormalizeCrossTorOfferedLoad(flows,
+                                                     config,
+                                                     spines,
+                                                     effectiveEpsLinkRateBps,
+                                                     offeredLoadFactor);
+            }
             offeredLoadSummary =
                 BuildOfferedLoadSummary(flows,
                                         config,
@@ -957,7 +985,7 @@ main(int argc, char* argv[])
                                         effectiveServerAccessRateBps,
                                         effectiveEpsLinkRateBps,
                                         effectiveOcsLinkRateBps,
-                                        opticalPortsPerTor,
+                                        opticalAccessSpinesPerGroup,
                                         offeredLoadFactor);
             if (enableDiagnosticMode)
             {
@@ -968,7 +996,7 @@ main(int argc, char* argv[])
                 if (diagnosticMode == "force-ocs")
                 {
                     const std::vector<OpticalEdge> selectedEdges =
-                        BuildDiagnosticOcsEdges(flows, opticalPortsPerTor);
+                        BuildDiagnosticOcsEdges(flows, opticalAccessSpinesPerGroup);
                     linkManager.ApplySelectedEdges(selectedEdges);
                     ocsActiveEdges = linkManager.GetActiveEdgeCount();
                     decisions = BuildForceOcsDecisions(flows, linkManager, index);
@@ -980,7 +1008,7 @@ main(int argc, char* argv[])
                                                     10000);
                     installedFlows = launchResult.installedFlows;
                     ocsAssignedFlows = launchResult.assignedOcsFlows;
-                    epsFallbackFlows = launchResult.epsFlows;
+                    epsPathFlows = launchResult.epsFlows;
                     status = "diagnostic_force_ocs_ok";
                 }
                 else
@@ -989,7 +1017,7 @@ main(int argc, char* argv[])
                     installedFlows = launchResult.installedFlows;
                     ocsActiveEdges = 0;
                     ocsAssignedFlows = launchResult.assignedOcsFlows;
-                    epsFallbackFlows = launchResult.epsFlows;
+                    epsPathFlows = launchResult.epsFlows;
                     status = "diagnostic_force_eps_ok";
                 }
 
@@ -1007,7 +1035,7 @@ main(int argc, char* argv[])
                           << ", flows=" << installedFlows.value()
                           << ", ocsActiveEdges=" << ocsActiveEdges.value()
                           << ", ocsAssigned=" << ocsAssignedFlows.value()
-                          << ", epsFallback=" << epsFallbackFlows.value()
+                          << ", epsPathFlows=" << epsPathFlows.value()
                           << ", receivedBytes=" << receivedBytes.value() << std::endl;
                 Simulator::Destroy();
             }
@@ -1017,7 +1045,7 @@ main(int argc, char* argv[])
                 algorithmParameters.thetaF = thetaF;
                 algorithmParameters.eta = eta;
                 algorithmParameters.alpha = alpha;
-                algorithmParameters.opticalPortsPerTor = opticalPortsPerTor;
+                algorithmParameters.opticalAccessSpinesPerGroup = opticalAccessSpinesPerGroup;
 
                 SmokeScenarioOptions scenarioOptions;
                 scenarioOptions.timelineStageGap = Seconds(timelineStageGapSeconds);
@@ -1026,7 +1054,6 @@ main(int argc, char* argv[])
                 scenarioOptions.enableLinkMetrics = enableLinkMetrics;
                 scenarioOptions.enableOcsMetrics = enableOcsMetrics;
                 scenarioOptions.enableFiniteMultiCycle = enableFiniteMultiCycle;
-                scenarioOptions.oracleMode = oracleMode;
                 scenarioOptions.fixedOcsEdges = fixedOcsEdgePairs;
 
                 SmokeScenarioRunner scenarioRunner;
@@ -1053,6 +1080,7 @@ main(int argc, char* argv[])
                 timelineCycles = scenarioResult.timelineCycles;
                 schedulingRoundCount = scenarioResult.schedulingRoundCount;
                 nonEmptySchedulingRounds = scenarioResult.nonEmptySchedulingRounds;
+                cumulativeSelectedEdgeCount = scenarioResult.cumulativeSelectedEdgeCount;
                 avgSelectedEdgeCount = scenarioResult.avgSelectedEdgeCount;
                 maxSelectedEdgeCount = scenarioResult.maxSelectedEdgeCount;
                 avgActiveEdgeCount = scenarioResult.avgActiveEdgeCount;
@@ -1060,7 +1088,11 @@ main(int argc, char* argv[])
                 totalActiveLightpathSeconds = scenarioResult.totalActiveLightpathSeconds;
                 ocsActiveEdges = scenarioResult.ocsActiveEdges;
                 ocsAssignedFlows = scenarioResult.ocsAssignedFlows;
-                epsFallbackFlows = scenarioResult.epsFallbackFlows;
+                epsPathFlows = scenarioResult.epsPathFlows;
+                waitingFlows = scenarioResult.waitingFlows;
+                retriedFlows = scenarioResult.retriedFlows;
+                interruptedFlows = scenarioResult.interruptedFlows;
+                residualFlows = scenarioResult.residualFlows;
                 communityInternalSelectedEdgeRatio =
                     scenarioResult.communityInternalSelectedEdgeRatio;
                 status = scenarioResult.status;
@@ -1068,19 +1100,14 @@ main(int argc, char* argv[])
                 flowMetricsSummary = scenarioResult.flowMetricsSummary;
                 linkUtilizationSummary = scenarioResult.linkUtilizationSummary;
                 ocsMetricsSummary = scenarioResult.ocsMetricsSummary;
-                WriteSchedulingDiagnostics(output.GetOutputDir(),
-                                           schedulingDiagnosticsFile,
-                                           experiment,
-                                           scenarioResult.schemeName,
-                                           offeredLoadFactor,
-                                           oracleMode,
-                                           scenarioResult.schedulingDiagnostics);
 
                 std::cout << "TL-OCS scheme runner: scheme=" << scenarioResult.schemeName
                           << ", status=" << scenarioResult.status
                           << ", selectedEdges=" << scenarioResult.selectedEdgeList
                           << ", ocsAssigned=" << scenarioResult.ocsAssignedFlows
-                          << ", epsFallback=" << scenarioResult.epsFallbackFlows;
+                          << ", epsPathFlows=" << scenarioResult.epsPathFlows
+                          << ", waiting=" << scenarioResult.waitingFlows
+                          << ", retried=" << scenarioResult.retriedFlows;
                 std::cout << ", schedulingRounds=" << scenarioResult.schedulingRoundCount
                           << ", nonEmptySchedulingRounds="
                           << scenarioResult.nonEmptySchedulingRounds
@@ -1194,7 +1221,7 @@ main(int argc, char* argv[])
                 algorithmParameters.thetaF = thetaF;
                 algorithmParameters.eta = eta;
                 algorithmParameters.alpha = alpha;
-                algorithmParameters.opticalPortsPerTor = opticalPortsPerTor;
+                algorithmParameters.opticalAccessSpinesPerGroup = opticalAccessSpinesPerGroup;
 
                 ControllerTimelineOptions timelineOptions;
                 timelineOptions.enableOcsAdmission = enableOcsAssignmentSmoke;
@@ -1224,12 +1251,13 @@ main(int argc, char* argv[])
                 algorithmSelectedEdges = timelineResult.algorithmSelectedEdges;
                 ocsActiveEdges = timelineResult.ocsActiveEdges;
                 ocsAssignedFlows = timelineResult.ocsAssignedFlows;
-                epsFallbackFlows = timelineResult.epsFallbackFlows;
+                epsPathFlows = timelineResult.epsPathFlows;
                 communityInternalSelectedEdgeRatio =
                     timelineResult.communityInternalSelectedEdgeRatio;
                 timelineCycles = timelineResult.timelineCycles;
                 schedulingRoundCount = timelineResult.schedulingRoundCount;
                 nonEmptySchedulingRounds = timelineResult.nonEmptySchedulingRounds;
+                cumulativeSelectedEdgeCount = timelineResult.cumulativeSelectedEdgeCount;
                 avgSelectedEdgeCount = timelineResult.avgSelectedEdgeCount;
                 maxSelectedEdgeCount = timelineResult.maxSelectedEdgeCount;
                 avgActiveEdgeCount = timelineResult.avgActiveEdgeCount;
@@ -1249,8 +1277,8 @@ main(int argc, char* argv[])
                           << timelineResult.ocsActiveEdges << std::endl;
                 std::cout << "TL-OCS controller timeline OCS assigned flows: "
                           << timelineResult.ocsAssignedFlows << std::endl;
-                std::cout << "TL-OCS controller timeline EPS fallback flows: "
-                          << timelineResult.epsFallbackFlows << std::endl;
+                std::cout << "TL-OCS controller timeline EPS path flows: "
+                          << timelineResult.epsPathFlows << std::endl;
                 std::cout << "TL-OCS controller timeline stage1 received bytes: "
                           << timelineResult.stage1ReceivedBytes << std::endl;
                 std::cout << "TL-OCS controller timeline stage2 received bytes: "
@@ -1290,7 +1318,7 @@ main(int argc, char* argv[])
                     algorithmParameters.thetaF = thetaF;
                     algorithmParameters.eta = eta;
                     algorithmParameters.alpha = alpha;
-                    algorithmParameters.opticalPortsPerTor = opticalPortsPerTor;
+                    algorithmParameters.opticalAccessSpinesPerGroup = opticalAccessSpinesPerGroup;
 
                     TlOcsAlgorithm algorithm;
                     const TlOcsAlgorithmResult algorithmResult =
@@ -1352,7 +1380,7 @@ main(int argc, char* argv[])
                                                  admission.Release(flowId);
                                              });
                         ocsAssignedFlows = ocsLaunchResult.assignedOcsFlows;
-                        epsFallbackFlows = ocsLaunchResult.epsFlows;
+                        epsPathFlows = ocsLaunchResult.epsFlows;
 
                         if (printOcsDecisions)
                         {
@@ -1379,8 +1407,8 @@ main(int argc, char* argv[])
                                   << std::endl;
                         std::cout << "TL-OCS OCS assigned flows: "
                                   << ocsAssignedFlows.value() << std::endl;
-                        std::cout << "TL-OCS EPS fallback flows: "
-                                  << epsFallbackFlows.value() << std::endl;
+                        std::cout << "TL-OCS EPS path flows: "
+                                  << epsPathFlows.value() << std::endl;
                         std::cout << "TL-OCS total received bytes after OCS path assignment smoke: "
                                   << receivedBytes.value() << std::endl;
                     }
@@ -1441,11 +1469,16 @@ main(int argc, char* argv[])
                                  algorithmSelectedEdges,
                                  ocsActiveEdges,
                                  ocsAssignedFlows,
-                                 epsFallbackFlows,
+                                 epsPathFlows,
+                                 waitingFlows,
+                                 retriedFlows,
+                                 interruptedFlows,
+                                 residualFlows,
                                  communityInternalSelectedEdgeRatio,
                                  timelineCycles,
                                  schedulingRoundCount,
                                  nonEmptySchedulingRounds,
+                                 cumulativeSelectedEdgeCount,
                                  avgSelectedEdgeCount,
                                  maxSelectedEdgeCount,
                                  avgActiveEdgeCount,
@@ -1459,7 +1492,8 @@ main(int argc, char* argv[])
                                  linkUtilizationSummary,
                                  ocsMetricsSummary,
                                  spines,
-                                 offeredLoadSummary);
+                                 offeredLoadSummary,
+                                 generatedFlows);
     std::cout << "TL-OCS smoke summary: " << summaryPath << std::endl;
     if (enableFlowMetrics)
     {

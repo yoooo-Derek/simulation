@@ -18,7 +18,7 @@ MakeSimulation()
 {
     SimulationConfig simulation;
     simulation.SetNumTors(4);
-    simulation.SetServersPerTor(1);
+    simulation.SetServersPerTor(4);
     simulation.SetObserverWindow(MilliSeconds(5));
     simulation.SetOcsReconfigurationPeriod(MilliSeconds(10));
     simulation.SetStopTime(MilliSeconds(80));
@@ -54,7 +54,12 @@ RunScheme(const std::string& schemeName)
     const SimulationConfig simulation = MakeSimulation();
     EpsTopologyBuilder::BuildOptions buildOptions;
     buildOptions.enableOcsLinks = schemeName != "electrical-only";
-    NodeIndex index = EpsTopologyBuilder().Build(simulation, 2, buildOptions);
+    buildOptions.enableInterGroupElectricalFabric = schemeName == "electrical-only";
+    buildOptions.leafsPerGroup = 4;
+    buildOptions.spinesPerGroup = 4;
+    buildOptions.serversPerLeaf = 1;
+    buildOptions.memsCount = 4;
+    NodeIndex index = EpsTopologyBuilder().Build(simulation, 4, buildOptions);
 
     TrafficObserver observer(simulation.GetNumTors(), simulation.GetObserverWindow());
     if (schemeName != "electrical-only")
@@ -63,7 +68,7 @@ RunScheme(const std::string& schemeName)
     }
 
     TlOcsAlgorithmParameters parameters;
-    parameters.opticalPortsPerTor = 1;
+    parameters.opticalAccessSpinesPerGroup = 4;
 
     SmokeScenarioRunner runner;
     return runner.Run(simulation,
@@ -126,9 +131,9 @@ class V2OpticalScenarioTestCase : public TestCase
         NS_TEST_ASSERT_MSG_GT(result.ocsAssignedFlows,
                               0,
                               "optical scheme assigned no OCS flows");
-        NS_TEST_ASSERT_MSG_EQ(result.epsFallbackFlows,
+        NS_TEST_ASSERT_MSG_EQ(result.epsPathFlows,
                               0,
-                              "V2 optical scheme must not use EPS fallback");
+                              "V2 optical scheme must not use EPS path");
         NS_TEST_ASSERT_MSG_GT(result.flowMetricsSummary->completedFlows,
                               0,
                               "optical scheme completed no flows");

@@ -29,11 +29,11 @@ FindMetricByFlowId(const std::vector<FlowMetricRecord>& records, uint32_t flowId
 
 } // namespace
 
-class TopologyUpdateInvalidatesActiveFlowTestCase : public TestCase
+class TopologyUpdatePreservesActiveFlowTestCase : public TestCase
 {
   public:
-    TopologyUpdateInvalidatesActiveFlowTestCase()
-        : TestCase("TL-HOC topology update invalidates removed optical paths and creates residual flow")
+    TopologyUpdatePreservesActiveFlowTestCase()
+        : TestCase("TL-HOC topology update waits for active flows instead of interrupting them")
     {
     }
 
@@ -58,11 +58,11 @@ class TopologyUpdateInvalidatesActiveFlowTestCase : public TestCase
         observer.AttachToTopology(index);
 
         const std::vector<FlowSpec> flows = {
-            {0, 0, 0, 1, 0, 5000000, MilliSeconds(2), "topology-update", 1000000000},
+            {0, 0, 0, 1, 0, 200000, MilliSeconds(2), "topology-update", 1000000000},
             {1, 0, 0, 2, 0, 50000000, MilliSeconds(12), "topology-update", 1000000000}};
 
         TlOcsAlgorithmParameters parameters;
-        parameters.opticalPortsPerTor = 1;
+        parameters.opticalAccessSpinesPerGroup = 1;
 
         ControllerTimelineOptions options;
         options.enableOcsAdmission = true;
@@ -78,29 +78,26 @@ class TopologyUpdateInvalidatesActiveFlowTestCase : public TestCase
                                                           linkManager,
                                                           options);
         const auto records = MetricsCollector().Collect(result.metricSources, "tl-hoc");
-        const auto& interrupted = FindMetricByFlowId(records, 0);
+        const auto& preserved = FindMetricByFlowId(records, 0);
 
-        NS_TEST_ASSERT_MSG_GT(result.ocsReconfigurationCount,
-                              1,
-                              "test should exercise multiple topology updates");
-        NS_TEST_ASSERT_MSG_GT(result.interruptedFlows,
+        NS_TEST_ASSERT_MSG_EQ(result.interruptedFlows,
                               0,
-                              "removed optical edge did not interrupt active flow");
-        NS_TEST_ASSERT_MSG_GT(result.residualFlows,
+                              "topology update must not interrupt active flow");
+        NS_TEST_ASSERT_MSG_EQ(result.residualFlows,
                               0,
-                              "interrupted flow did not create residual flow");
-        NS_TEST_ASSERT_MSG_EQ(result.epsFallbackFlows,
+                              "topology update must not create residual flow");
+        NS_TEST_ASSERT_MSG_EQ(result.epsPathFlows,
                               0,
-                              "topology update path must not use EPS fallback");
-        NS_TEST_ASSERT_MSG_EQ(interrupted.pathType,
-                              "ocs",
-                              "interrupted flow should have started on OCS");
-        NS_TEST_ASSERT_MSG_EQ(interrupted.completed,
-                              false,
-                              "interrupted long flow should be incomplete");
-        NS_TEST_ASSERT_MSG_GT(interrupted.receivedBytes,
+                              "topology update path must not use EPS path");
+        NS_TEST_ASSERT_MSG_EQ(preserved.pathType,
+                              "optical-direct",
+                              "preserved flow should have started on direct optical path");
+        NS_TEST_ASSERT_MSG_EQ(preserved.completed,
+                              true,
+                              "active flow should complete across the stage boundary");
+        NS_TEST_ASSERT_MSG_GT(preserved.receivedBytes,
                               0,
-                              "interrupted flow should have sent some bytes before teardown");
+                              "preserved flow should have sent bytes");
         Simulator::Destroy();
     }
 };
@@ -111,7 +108,7 @@ class TopologyUpdateTestSuite : public TestSuite
     TopologyUpdateTestSuite()
         : TestSuite("tl-ocs-topology-update")
     {
-        AddTestCase(new TopologyUpdateInvalidatesActiveFlowTestCase);
+        AddTestCase(new TopologyUpdatePreservesActiveFlowTestCase);
     }
 };
 

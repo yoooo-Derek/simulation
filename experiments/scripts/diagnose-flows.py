@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report incomplete TL-OCS flows without modifying result artifacts."""
+"""Report incomplete TL-HOC per-flow records without modifying result artifacts."""
 
 import argparse
 import csv
@@ -10,10 +10,11 @@ from pathlib import Path
 
 
 FLOW_FIELDS = {
+    "schema_version",
     "experiment", "scheme", "flow_id", "source_tor", "destination_tor",
     "path_type", "start_time_s", "received_bytes", "fct_s", "completed",
 }
-SUMMARY_FIELDS = {"experiment", "completed_flows", "stop_time_s"}
+SUMMARY_FIELDS = {"schema_version", "experiment", "total_flows", "completed_flows"}
 OUTPUT_FIELDS = [
     "input_file",
     "scheme",
@@ -44,6 +45,11 @@ def read_csv(path, required):
         rows = list(reader)
     if not rows:
         raise ValueError(f"{path}: no data rows")
+    for row_number, row in enumerate(rows, start=2):
+        if row.get("schema_version", "") != "tl-hoc-v3":
+            raise ValueError(
+                f"{path}:{row_number}: unsupported schema_version: {row.get('schema_version', '')}"
+            )
     return rows
 
 
@@ -129,18 +135,18 @@ def print_report(path, rows, summary):
                   for row in incomplete]
         print(f"  incomplete start range: {min(starts):.12g}..{max(starts):.12g}")
     if summary is not None:
-        expected = int(summary["completed_flows"])
-        if expected != result["completed"]:
+        expected_total = int(summary["total_flows"])
+        expected_completed = int(summary["completed_flows"])
+        if expected_total != result["total"]:
             raise ValueError(
-                f"{path}: completed flow count {result['completed']} does not match summary {expected}"
+                f"{path}: total flow count {result['total']} does not match summary {expected_total}"
             )
-        stop_time = parse_float(summary["stop_time_s"], "stop_time_s", summary["experiment"])
-        starts_after_stop = sum(
-            parse_float(row["start_time_s"], "start_time_s", f"flow {row['flow_id']}") >= stop_time
-            for row in incomplete
-        )
-        print(f"  summary completed count matches: {expected}")
-        print(f"  incomplete starts at/after stop_time_s={stop_time:.12g}: {starts_after_stop}")
+        if expected_completed != result["completed"]:
+            raise ValueError(
+                f"{path}: completed flow count {result['completed']} does not match summary {expected_completed}"
+            )
+        print(f"  summary total count matches: {expected_total}")
+        print(f"  summary completed count matches: {expected_completed}")
 
 
 def diagnostic_rows(path, rows):
@@ -167,7 +173,7 @@ def diagnostic_rows(path, rows):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Diagnose incomplete TL-OCS per-flow CSV rows.")
+    parser = argparse.ArgumentParser(description="Diagnose incomplete TL-HOC per-flow CSV rows.")
     parser.add_argument("inputs", nargs="+", help="per-flow CSV files")
     parser.add_argument("--summary", nargs="*", default=[], help="optional matching summary CSV files")
     parser.add_argument("--output", help="optional diagnostic CSV output")

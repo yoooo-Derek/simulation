@@ -17,7 +17,7 @@ struct TlOcsAlgorithmParameters
     bool enableNullModel = true;
     bool enableCommunityFactor = true;
     bool useVolumeOnlyScore = false;
-    uint32_t opticalPortsPerTor = 1;
+    uint32_t opticalAccessSpinesPerGroup = 4;
     uint32_t maxPasses = 4;
     uint32_t maxLevels = 4;
     bool enableCommunityAggregation = true;

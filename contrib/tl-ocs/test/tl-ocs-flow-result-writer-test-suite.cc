@@ -34,6 +34,10 @@ class TlOcsFlowResultWriterTestCase : public TestCase
         completed.schemeName = "electrical-only";
         completed.patternName = "uniform";
         completed.pathType = "eps";
+        completed.sourceTor = 0;
+        completed.sourceServer = 1;
+        completed.destinationTor = 2;
+        completed.destinationServer = 3;
         completed.sizeBytes = 100;
         completed.receivedBytes = 100;
         completed.startTimeS = 0.001;
@@ -46,6 +50,10 @@ class TlOcsFlowResultWriterTestCase : public TestCase
         incomplete.schemeName = "electrical-only";
         incomplete.patternName = "uniform";
         incomplete.pathType = "eps";
+        incomplete.sourceTor = 1;
+        incomplete.sourceServer = 0;
+        incomplete.destinationTor = 3;
+        incomplete.destinationServer = 0;
         incomplete.sizeBytes = 100;
         incomplete.receivedBytes = 25;
         incomplete.startTimeS = 0.002;
@@ -58,12 +66,14 @@ class TlOcsFlowResultWriterTestCase : public TestCase
         std::ostringstream content;
         content << stream.rdbuf();
         const std::string text = content.str();
-        NS_TEST_ASSERT_MSG_NE(text.find("experiment,scheme,traffic_pattern"), std::string::npos, "missing flow CSV header");
-        NS_TEST_ASSERT_MSG_EQ(text.find("path_type"), std::string::npos, "V1 path type field should be absent");
-        NS_TEST_ASSERT_MSG_NE(text.find("1,100,0.001,0.003,0.002,true"),
+        NS_TEST_ASSERT_MSG_NE(text.find("schema_version,experiment,scheme,traffic_pattern"),
+                              std::string::npos,
+                              "missing versioned flow CSV header");
+        NS_TEST_ASSERT_MSG_NE(text.find("path_type"), std::string::npos, "missing path type field");
+        NS_TEST_ASSERT_MSG_NE(text.find("tl-hoc-v7,flow-writer-test,electrical-only,uniform,1,1,0,1,2,3,eps,100,100,0.001,0.003,0.002,true"),
                               std::string::npos,
                               "missing completed flow row");
-        NS_TEST_ASSERT_MSG_NE(text.find("2,25,0.002,,,false"),
+        NS_TEST_ASSERT_MSG_NE(text.find("tl-hoc-v7,flow-writer-test,electrical-only,uniform,1,2,1,0,3,0,eps,100,25,0.002,,,false"),
                               std::string::npos,
                               "incomplete row should keep completion fields empty");
     }

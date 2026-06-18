@@ -8,6 +8,7 @@ namespace ns3
 namespace tl_ocs
 {
 
+const char* GetTlHocCsvSchemaVersion();
 std::string GetSmokeSummaryCsvHeader();
 std::string GetFlowResultCsvHeader();
 std::string EscapeCsvField(const std::string& value);

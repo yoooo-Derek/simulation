@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <stdexcept>
+#include <tuple>
 
 namespace ns3
 {
@@ -18,6 +19,50 @@ void
 NodeIndex::SetSpineNodes(const NodeContainer& spines)
 {
     m_spines = spines;
+}
+
+void
+NodeIndex::SetGroupedTopology(uint32_t groupCount,
+                              uint32_t leafsPerGroup,
+                              uint32_t spinesPerGroup,
+                              uint32_t serversPerLeaf,
+                              uint32_t memsCount,
+                              bool interGroupElectricalFabric)
+{
+    m_groupCount = groupCount;
+    m_leafsPerGroup = leafsPerGroup;
+    m_spinesPerGroup = spinesPerGroup;
+    m_serversPerLeaf = serversPerLeaf;
+    m_memsCount = memsCount;
+    m_interGroupElectricalFabric = interGroupElectricalFabric;
+    m_leafNodesByGroup.assign(groupCount, NodeContainer());
+    m_spineNodesByGroup.assign(groupCount, NodeContainer());
+}
+
+void
+NodeIndex::SetLeafNodes(uint32_t groupId, const NodeContainer& leaves)
+{
+    if (groupId >= m_leafNodesByGroup.size())
+    {
+        throw std::out_of_range("TL-OCS group leaf index is out of range");
+    }
+    m_leafNodesByGroup[groupId] = leaves;
+}
+
+void
+NodeIndex::SetGroupSpineNodes(uint32_t groupId, const NodeContainer& spines)
+{
+    if (groupId >= m_spineNodesByGroup.size())
+    {
+        throw std::out_of_range("TL-OCS group spine index is out of range");
+    }
+    m_spineNodesByGroup[groupId] = spines;
+}
+
+void
+NodeIndex::SetMemsNodes(const NodeContainer& mems)
+{
+    m_mems = mems;
 }
 
 void
@@ -87,12 +132,44 @@ NodeIndex::AddTorSpineLink(const TorSpineLinkInfo& linkInfo)
 }
 
 void
+NodeIndex::AddLeafSpineLink(const LeafSpineLinkInfo& linkInfo)
+{
+    if (linkInfo.groupId >= m_groupCount || linkInfo.leafId >= m_leafsPerGroup ||
+        linkInfo.spineId >= m_spinesPerGroup)
+    {
+        throw std::out_of_range("TL-OCS leaf-spine link index is out of range");
+    }
+    m_leafSpineLinks[LeafSpineKey(linkInfo.groupId, linkInfo.leafId, linkInfo.spineId)] =
+        linkInfo;
+}
+
+void
+NodeIndex::AddOpticalAccessLink(const OpticalAccessLinkInfo& linkInfo)
+{
+    if (linkInfo.groupId >= m_groupCount || linkInfo.spineId >= m_spinesPerGroup ||
+        linkInfo.memsId >= m_memsCount)
+    {
+        throw std::out_of_range("TL-OCS optical access link index is out of range");
+    }
+    m_opticalAccessLinks[{linkInfo.groupId, linkInfo.spineId, linkInfo.memsId}] = linkInfo;
+}
+
+void
 NodeIndex::AddOcsLink(const OcsLinkInfo& linkInfo)
 {
     if (linkInfo.torA >= m_tors.GetN() || linkInfo.torB >= m_tors.GetN() ||
         linkInfo.torA == linkInfo.torB)
     {
         throw std::out_of_range("TL-OCS OCS link ToR index is out of range");
+    }
+    if (m_memsCount > 0)
+    {
+        if (linkInfo.memsId >= m_memsCount ||
+            !HasOpticalAccessLink(linkInfo.torA, linkInfo.torASpineId, linkInfo.memsId) ||
+            !HasOpticalAccessLink(linkInfo.torB, linkInfo.torBSpineId, linkInfo.memsId))
+        {
+            throw std::out_of_range("TL-OCS active optical circuit is not backed by MEMS access");
+        }
     }
     m_ocsLinks[NormalizePair(linkInfo.torA, linkInfo.torB)] = linkInfo;
 }
@@ -125,6 +202,37 @@ NodeIndex::GetSpine(uint32_t spineId) const
         throw std::out_of_range("TL-OCS spine index is out of range");
     }
     return m_spines.Get(spineId);
+}
+
+Ptr<Node>
+NodeIndex::GetLeaf(uint32_t groupId, uint32_t leafId) const
+{
+    if (groupId >= m_leafNodesByGroup.size() || leafId >= m_leafNodesByGroup.at(groupId).GetN())
+    {
+        throw std::out_of_range("TL-OCS leaf index is out of range");
+    }
+    return m_leafNodesByGroup[groupId].Get(leafId);
+}
+
+Ptr<Node>
+NodeIndex::GetGroupSpine(uint32_t groupId, uint32_t spineId) const
+{
+    if (groupId >= m_spineNodesByGroup.size() ||
+        spineId >= m_spineNodesByGroup.at(groupId).GetN())
+    {
+        throw std::out_of_range("TL-OCS group spine index is out of range");
+    }
+    return m_spineNodesByGroup[groupId].Get(spineId);
+}
+
+Ptr<Node>
+NodeIndex::GetMems(uint32_t memsId) const
+{
+    if (memsId >= m_mems.GetN())
+    {
+        throw std::out_of_range("TL-OCS MEMS index is out of range");
+    }
+    return m_mems.Get(memsId);
 }
 
 Ipv4Address
@@ -194,6 +302,42 @@ NodeIndex::GetTorSpineLink(uint32_t torId, uint32_t spineId) const
     if (match == m_torSpineLinks.end())
     {
         throw std::out_of_range("TL-OCS EPS ToR-spine link does not exist");
+    }
+    return match->second;
+}
+
+bool
+NodeIndex::HasLeafSpineLink(uint32_t groupId, uint32_t leafId, uint32_t spineId) const
+{
+    return m_leafSpineLinks.find(LeafSpineKey(groupId, leafId, spineId)) !=
+           m_leafSpineLinks.end();
+}
+
+NodeIndex::LeafSpineLinkInfo
+NodeIndex::GetLeafSpineLink(uint32_t groupId, uint32_t leafId, uint32_t spineId) const
+{
+    const auto match = m_leafSpineLinks.find(LeafSpineKey(groupId, leafId, spineId));
+    if (match == m_leafSpineLinks.end())
+    {
+        throw std::out_of_range("TL-OCS leaf-spine link does not exist");
+    }
+    return match->second;
+}
+
+bool
+NodeIndex::HasOpticalAccessLink(uint32_t groupId, uint32_t spineId, uint32_t memsId) const
+{
+    return m_opticalAccessLinks.find({groupId, spineId, memsId}) !=
+           m_opticalAccessLinks.end();
+}
+
+NodeIndex::OpticalAccessLinkInfo
+NodeIndex::GetOpticalAccessLink(uint32_t groupId, uint32_t spineId, uint32_t memsId) const
+{
+    const auto match = m_opticalAccessLinks.find({groupId, spineId, memsId});
+    if (match == m_opticalAccessLinks.end())
+    {
+        throw std::out_of_range("TL-OCS optical access link does not exist");
     }
     return match->second;
 }
@@ -315,6 +459,30 @@ NodeIndex::GetSpineCount() const
 }
 
 uint32_t
+NodeIndex::GetGroupCount() const
+{
+    return m_groupCount == 0 ? m_tors.GetN() : m_groupCount;
+}
+
+uint32_t
+NodeIndex::GetLeafsPerGroup() const
+{
+    return m_leafsPerGroup;
+}
+
+uint32_t
+NodeIndex::GetSpinesPerGroup() const
+{
+    return m_spinesPerGroup;
+}
+
+uint32_t
+NodeIndex::GetMemsCount() const
+{
+    return m_memsCount == 0 ? m_mems.GetN() : m_memsCount;
+}
+
+uint32_t
 NodeIndex::GetServersPerTor() const
 {
     if (m_serversByTor.empty())
@@ -325,15 +493,53 @@ NodeIndex::GetServersPerTor() const
 }
 
 uint32_t
+NodeIndex::GetServersPerLeaf() const
+{
+    return m_serversPerLeaf;
+}
+
+uint32_t
 NodeIndex::GetOcsLinkCount() const
 {
     return static_cast<uint32_t>(m_ocsLinks.size());
+}
+
+bool
+NodeIndex::HasInterGroupElectricalFabric() const
+{
+    return m_interGroupElectricalFabric;
+}
+
+bool
+NodeIndex::HasPureElectricalPath(uint32_t sourceGroup, uint32_t destinationGroup) const
+{
+    if (sourceGroup >= GetGroupCount() || destinationGroup >= GetGroupCount())
+    {
+        throw std::out_of_range("TL-OCS group index is out of range");
+    }
+    return sourceGroup == destinationGroup || m_interGroupElectricalFabric;
+}
+
+uint32_t
+NodeIndex::GetServerLeafId(uint32_t serverId) const
+{
+    if (m_serversPerLeaf == 0)
+    {
+        return 0;
+    }
+    return serverId / m_serversPerLeaf;
 }
 
 std::pair<uint32_t, uint32_t>
 NodeIndex::NormalizePair(uint32_t torA, uint32_t torB)
 {
     return {std::min(torA, torB), std::max(torA, torB)};
+}
+
+std::tuple<uint32_t, uint32_t, uint32_t>
+NodeIndex::LeafSpineKey(uint32_t groupId, uint32_t leafId, uint32_t spineId)
+{
+    return {groupId, leafId, spineId};
 }
 
 uint32_t

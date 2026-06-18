@@ -53,11 +53,16 @@ class ResultWriter
                                             std::optional<uint32_t> algorithmSelectedEdges = std::nullopt,
                                             std::optional<uint32_t> ocsActiveEdges = std::nullopt,
                                             std::optional<uint32_t> ocsAssignedFlows = std::nullopt,
-                                            std::optional<uint32_t> epsFallbackFlows = std::nullopt,
+                                            std::optional<uint32_t> epsPathFlows = std::nullopt,
+                                            std::optional<uint32_t> waitingFlows = std::nullopt,
+                                            std::optional<uint32_t> retriedFlows = std::nullopt,
+                                            std::optional<uint32_t> interruptedFlows = std::nullopt,
+                                            std::optional<uint32_t> residualFlows = std::nullopt,
                                             std::optional<double> communityInternalSelectedEdgeRatio = std::nullopt,
                                             std::optional<uint32_t> timelineCycles = std::nullopt,
                                             std::optional<uint32_t> schedulingRoundCount = std::nullopt,
                                             std::optional<uint32_t> nonEmptySchedulingRounds = std::nullopt,
+                                            std::optional<uint64_t> cumulativeSelectedEdgeCount = std::nullopt,
                                             std::optional<double> avgSelectedEdgeCount = std::nullopt,
                                             std::optional<uint32_t> maxSelectedEdgeCount = std::nullopt,
                                             std::optional<double> avgActiveEdgeCount = std::nullopt,
@@ -71,7 +76,8 @@ class ResultWriter
                                             std::optional<LinkUtilizationSummary> linkMetrics = std::nullopt,
                                             std::optional<OcsMetricsSummary> ocsMetrics = std::nullopt,
                                             std::optional<uint32_t> spines = std::nullopt,
-                                            std::optional<OfferedLoadSummary> offeredLoad = std::nullopt) const;
+                                            std::optional<OfferedLoadSummary> offeredLoad = std::nullopt,
+                                            std::optional<uint32_t> generatedFlows = std::nullopt) const;
 };
 
 } // namespace tl_ocs

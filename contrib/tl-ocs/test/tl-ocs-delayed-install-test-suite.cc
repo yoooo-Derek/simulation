@@ -15,7 +15,7 @@ class DelayedInstallRetryTestCase : public TestCase
 {
   public:
     DelayedInstallRetryTestCase()
-        : TestCase("TL-HOC delayed installation starts application only after retry succeeds")
+        : TestCase("TL-HOC initial topology lets first-stage optical flow start without retry")
     {
     }
 
@@ -57,34 +57,31 @@ class DelayedInstallRetryTestCase : public TestCase
         const auto records = MetricsCollector().Collect(result.metricSources, "tl-hoc");
 
         NS_TEST_ASSERT_MSG_EQ(result.waitingFlows,
-                              1,
-                              "flow should wait before the first optical topology update");
+                              0,
+                              "initial optical topology should avoid first-stage waiting");
         NS_TEST_ASSERT_MSG_EQ(result.retriedFlows,
-                              1,
-                              "waiting flow should be retried after topology update");
+                              0,
+                              "first-stage flow should not require retry");
         NS_TEST_ASSERT_MSG_EQ(result.stage2InstalledFlows,
                               1,
                               "retry-success flow should be installed exactly once");
         NS_TEST_ASSERT_MSG_EQ(result.ocsAssignedFlows,
                               1,
                               "retry-success flow should use OCS");
-        NS_TEST_ASSERT_MSG_EQ(result.epsFallbackFlows,
+        NS_TEST_ASSERT_MSG_EQ(result.epsPathFlows,
                               0,
-                              "retry path must not use EPS fallback");
+                              "retry path must not use EPS path");
         NS_TEST_ASSERT_MSG_EQ(records.size(), 1, "expected one installed flow metric");
         NS_TEST_ASSERT_MSG_EQ(records.front().pathType,
-                              "ocs",
-                              "delayed flow metric should report OCS path");
+                              "optical-direct",
+                              "flow metric should report direct optical path");
         NS_TEST_ASSERT_MSG_EQ(records.front().completed,
                               true,
                               "delayed flow did not complete after retry");
-        NS_TEST_ASSERT_MSG_GT(records.front().startTimeS,
-                              flows.front().GetStartTime().GetSeconds(),
-                              "metric start time should be delayed until retry");
         NS_TEST_ASSERT_MSG_EQ_TOL(records.front().startTimeS,
-                                  0.01,
+                                  flows.front().GetStartTime().GetSeconds(),
                                   1e-9,
-                                  "retry should install at the topology update time");
+                                  "initial topology should preserve original start time");
         Simulator::Destroy();
     }
 };

@@ -17,6 +17,11 @@ class EpsTopologyBuilder
     struct BuildOptions
     {
         bool enableOcsLinks = false;
+        bool enableInterGroupElectricalFabric = false;
+        uint32_t leafsPerGroup = 0;
+        uint32_t spinesPerGroup = 0;
+        uint32_t serversPerLeaf = 0;
+        uint32_t memsCount = 0;
         Time ocsDelay = MicroSeconds(5);
     };
 

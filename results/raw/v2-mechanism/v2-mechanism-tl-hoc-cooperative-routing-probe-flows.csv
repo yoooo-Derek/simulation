@@ -1,0 +1,8 @@
+schema_version,experiment,scheme,traffic_pattern,run_id,flow_id,source_tor,source_server,destination_tor,destination_server,path_type,size_bytes,received_bytes,start_time_s,completion_time_s,fct_s,completed
+tl-hoc-v3,v2-mechanism-tl-hoc-cooperative-routing-probe,tl-hoc,cooperative-routing-probe,1,0,0,0,1,1,optical-direct,2000000,2000000,0.001,0.005698314,0.004698314,true
+tl-hoc-v3,v2-mechanism-tl-hoc-cooperative-routing-probe,tl-hoc,cooperative-routing-probe,1,1,1,1,2,0,optical-direct,2000000,2000000,0.002,0.006715916,0.004715916,true
+tl-hoc-v3,v2-mechanism-tl-hoc-cooperative-routing-probe,tl-hoc,cooperative-routing-probe,1,2,2,0,3,1,optical-direct,2000000,2000000,0.003,0.00769607,0.00469607,true
+tl-hoc-v3,v2-mechanism-tl-hoc-cooperative-routing-probe,tl-hoc,cooperative-routing-probe,1,3,0,1,1,0,optical-direct,20000,20000,0.005,0.005288381,0.000288381,true
+tl-hoc-v3,v2-mechanism-tl-hoc-cooperative-routing-probe,tl-hoc,cooperative-routing-probe,1,4,0,0,2,1,optical-two-hop,20000,20000,0.006,0.006308527,0.000308527,true
+tl-hoc-v3,v2-mechanism-tl-hoc-cooperative-routing-probe,tl-hoc,cooperative-routing-probe,1,5,0,1,3,0,optical-reachable,20000,20000,0.007,0.007328673,0.000328673,true
+tl-hoc-v3,v2-mechanism-tl-hoc-cooperative-routing-probe,tl-hoc,cooperative-routing-probe,1,6,1,0,4,1,optical-direct,20000,20000,0.008,0.020288381,0.012288381,true

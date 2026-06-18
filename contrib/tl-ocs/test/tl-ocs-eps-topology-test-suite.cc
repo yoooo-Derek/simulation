@@ -6,91 +6,126 @@
 using namespace ns3;
 using namespace ns3::tl_ocs;
 
-class TlOcsEpsTopologyBuildTestCase : public TestCase
+namespace
 {
-  public:
-    TlOcsEpsTopologyBuildTestCase();
 
-  private:
-    void DoRun() override;
-};
-
-TlOcsEpsTopologyBuildTestCase::TlOcsEpsTopologyBuildTestCase()
-    : TestCase("TL-OCS EPS topology builder creates the minimum indexed topology")
-{
-}
-
-void
-TlOcsEpsTopologyBuildTestCase::DoRun()
+SimulationConfig
+BuildGroupedConfig()
 {
     SimulationConfig config;
-    config.SetNumTors(2);
-    config.SetServersPerTor(1);
-
-    EpsTopologyBuilder builder;
-    NodeIndex index = builder.Build(config, 1);
-
-    NS_TEST_ASSERT_MSG_EQ(index.GetTorCount(), 2, "unexpected ToR count");
-    NS_TEST_ASSERT_MSG_EQ(index.GetServersPerTor(), 1, "unexpected servers per ToR");
-    NS_TEST_ASSERT_MSG_EQ(index.GetServerCount(), 2, "unexpected server count");
-    NS_TEST_ASSERT_MSG_EQ(index.GetSpineCount(), 1, "unexpected spine count");
-    NS_TEST_ASSERT_MSG_EQ(index.HasTorSpineLink(0, 0), true, "missing ToR-spine link");
-    NS_TEST_ASSERT_MSG_NE(index.GetTorSpineLink(0, 0).torAddress,
-                          Ipv4Address("0.0.0.0"),
-                          "ToR-spine ToR address was not assigned");
-    NS_TEST_ASSERT_MSG_NE(index.GetServerIpv4Address(0, 0),
-                          Ipv4Address("0.0.0.0"),
-                          "server address was not assigned");
-    NS_TEST_ASSERT_MSG_EQ(index.GetOcsLinkCount(), 0, "OCS links should be disabled by default");
-
-    Simulator::Destroy();
+    config.SetNumTors(4);
+    config.SetServersPerTor(16);
+    return config;
 }
 
-class TlOcsOcsCandidateTopologyBuildTestCase : public TestCase
+EpsTopologyBuilder::BuildOptions
+BuildGroupedOptions()
 {
-  public:
-    TlOcsOcsCandidateTopologyBuildTestCase();
-
-  private:
-    void DoRun() override;
-};
-
-TlOcsOcsCandidateTopologyBuildTestCase::TlOcsOcsCandidateTopologyBuildTestCase()
-    : TestCase("TL-OCS topology builder can precreate OCS candidate links")
-{
-}
-
-void
-TlOcsOcsCandidateTopologyBuildTestCase::DoRun()
-{
-    SimulationConfig config;
-    config.SetNumTors(3);
-    config.SetServersPerTor(1);
-
     EpsTopologyBuilder::BuildOptions options;
-    options.enableOcsLinks = true;
-
-    EpsTopologyBuilder builder;
-    NodeIndex index = builder.Build(config, 1, options);
-
-    NS_TEST_ASSERT_MSG_EQ(index.GetOcsLinkCount(), 3, "unexpected OCS candidate link count");
-    NS_TEST_ASSERT_MSG_EQ(index.HasOcsLink(0, 2), true, "missing OCS candidate link");
-    NS_TEST_ASSERT_MSG_EQ(index.HasOcsLink(2, 0), true, "OCS candidate link should be undirected");
-
-    Simulator::Destroy();
+    options.leafsPerGroup = 4;
+    options.spinesPerGroup = 4;
+    options.serversPerLeaf = 4;
+    options.memsCount = 4;
+    return options;
 }
+
+} // namespace
+
+class TlOcsGroupedHybridTopologyBuildTestCase : public TestCase
+{
+  public:
+    TlOcsGroupedHybridTopologyBuildTestCase()
+        : TestCase("TL-OCS grouped hybrid topology has isolated electrical groups")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        EpsTopologyBuilder::BuildOptions options = BuildGroupedOptions();
+        options.enableOcsLinks = true;
+        options.enableInterGroupElectricalFabric = false;
+
+        NodeIndex index = EpsTopologyBuilder().Build(BuildGroupedConfig(), 4, options);
+
+        NS_TEST_ASSERT_MSG_EQ(index.GetGroupCount(), 4, "unexpected group count");
+        NS_TEST_ASSERT_MSG_EQ(index.GetLeafsPerGroup(), 4, "unexpected leaf count per group");
+        NS_TEST_ASSERT_MSG_EQ(index.GetSpinesPerGroup(), 4, "unexpected spine count per group");
+        NS_TEST_ASSERT_MSG_EQ(index.GetMemsCount(), 4, "unexpected MEMS count");
+        NS_TEST_ASSERT_MSG_EQ(index.GetSpineCount(), 16, "global spine count should be grouped");
+        NS_TEST_ASSERT_MSG_EQ(index.HasInterGroupElectricalFabric(),
+                              false,
+                              "hybrid topology must not have inter-group electrical fabric");
+        NS_TEST_ASSERT_MSG_EQ(index.HasPureElectricalPath(0, 0),
+                              true,
+                              "same-group servers need an electrical path");
+        NS_TEST_ASSERT_MSG_EQ(index.HasPureElectricalPath(0, 1),
+                              false,
+                              "different groups must not have a pure electrical path");
+
+        for (uint32_t groupId = 0; groupId < 4; ++groupId)
+        {
+            for (uint32_t spineId = 0; spineId < 4; ++spineId)
+            {
+                NS_TEST_ASSERT_MSG_EQ(index.HasOpticalAccessLink(groupId, spineId, spineId),
+                                      true,
+                                      "spine k must connect to MEMS k");
+            }
+        }
+        NS_TEST_ASSERT_MSG_EQ(index.GetOcsLinkCount(), 6, "unexpected MEMS circuit count");
+        const auto circuit = index.GetOcsLink(0, 1);
+        NS_TEST_ASSERT_MSG_EQ(index.HasOpticalAccessLink(circuit.torA,
+                                                         circuit.torASpineId,
+                                                         circuit.memsId),
+                              true,
+                              "source side of circuit lacks MEMS access");
+        NS_TEST_ASSERT_MSG_EQ(index.HasOpticalAccessLink(circuit.torB,
+                                                         circuit.torBSpineId,
+                                                         circuit.memsId),
+                              true,
+                              "destination side of circuit lacks MEMS access");
+        Simulator::Destroy();
+    }
+};
+
+class TlOcsElectricalBaselineTopologyBuildTestCase : public TestCase
+{
+  public:
+    TlOcsElectricalBaselineTopologyBuildTestCase()
+        : TestCase("TL-OCS electrical-only baseline has inter-group electrical fabric")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        EpsTopologyBuilder::BuildOptions options = BuildGroupedOptions();
+        options.enableOcsLinks = false;
+        options.enableInterGroupElectricalFabric = true;
+
+        NodeIndex index = EpsTopologyBuilder().Build(BuildGroupedConfig(), 4, options);
+
+        NS_TEST_ASSERT_MSG_EQ(index.GetOcsLinkCount(), 0, "electrical baseline must not create OCS");
+        NS_TEST_ASSERT_MSG_EQ(index.GetMemsCount(), 0, "electrical baseline must not create MEMS");
+        NS_TEST_ASSERT_MSG_EQ(index.HasInterGroupElectricalFabric(),
+                              true,
+                              "electrical-only baseline should have inter-group electrical fabric");
+        NS_TEST_ASSERT_MSG_EQ(index.HasPureElectricalPath(0, 3),
+                              true,
+                              "electrical-only baseline should connect groups electrically");
+        Simulator::Destroy();
+    }
+};
 
 class TlOcsEpsTopologyTestSuite : public TestSuite
 {
   public:
-    TlOcsEpsTopologyTestSuite();
+    TlOcsEpsTopologyTestSuite()
+        : TestSuite("tl-ocs-eps-topology")
+    {
+        AddTestCase(new TlOcsGroupedHybridTopologyBuildTestCase);
+        AddTestCase(new TlOcsElectricalBaselineTopologyBuildTestCase);
+    }
 };
-
-TlOcsEpsTopologyTestSuite::TlOcsEpsTopologyTestSuite()
-    : TestSuite("tl-ocs-eps-topology")
-{
-    AddTestCase(new TlOcsEpsTopologyBuildTestCase);
-    AddTestCase(new TlOcsOcsCandidateTopologyBuildTestCase);
-}
 
 static TlOcsEpsTopologyTestSuite g_tlOcsEpsTopologyTestSuite;

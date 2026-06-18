@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
+#include <utility>
 
 namespace ns3
 {
@@ -76,10 +78,22 @@ MetricsCollector::Summarize(const std::vector<FlowMetricRecord>& records,
     summary.incompleteFlows = summary.totalFlows - summary.completedFlows;
     if (measurementDurationS > 0.0)
     {
-        // Whole-run received throughput: application bytes observed during
-        // the configured simulation duration.
+        std::map<std::pair<uint32_t, uint32_t>, uint64_t> receiverBytes;
+        for (const auto& record : records)
+        {
+            receiverBytes[{record.destinationTor, record.destinationServer}] +=
+                record.receivedBytes;
+        }
+        double totalReceiverThroughputBps = 0.0;
+        for (const auto& entry : receiverBytes)
+        {
+            totalReceiverThroughputBps +=
+                static_cast<double>(entry.second) * 8.0 / measurementDurationS;
+        }
         summary.avgReceivedThroughputBps =
-            static_cast<double>(summary.totalReceivedBytes) * 8.0 / measurementDurationS;
+            receiverBytes.empty()
+                ? 0.0
+                : totalReceiverThroughputBps / static_cast<double>(receiverBytes.size());
     }
 
     if (!completedFcts.empty())

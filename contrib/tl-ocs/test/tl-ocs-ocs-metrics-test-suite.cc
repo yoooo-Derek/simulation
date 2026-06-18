@@ -16,7 +16,7 @@ class TlOcsOcsMetricsTestCase : public TestCase
     void DoRun() override
     {
         FlowMetricRecord ocs;
-        ocs.pathType = "ocs";
+        ocs.pathType = "optical-direct";
         ocs.receivedBytes = 100;
         ocs.completed = true;
         FlowMetricRecord eps;
@@ -24,7 +24,7 @@ class TlOcsOcsMetricsTestCase : public TestCase
         eps.receivedBytes = 300;
         eps.completed = true;
         FlowMetricRecord incompleteOcs;
-        incompleteOcs.pathType = "ocs";
+        incompleteOcs.pathType = "optical-two-hop";
         incompleteOcs.receivedBytes = 50;
         incompleteOcs.completed = false;
 

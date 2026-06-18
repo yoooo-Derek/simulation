@@ -1,4 +1,7 @@
-experiment,scheme,num_tors,servers_per_tor,traffic_pattern,total_flows,completed_flows,avg_receiver_throughput_bps,avg_fct_s,avg_network_link_utilization
-v2-main-electrical-only,electrical-only,8,16,community-local,256,256,512000000,0.00079608,0.000988945066667
-v2-main-static-ocs,static-ocs,8,16,community-local,192,192,384000000,0.000550194125,8.6207847619e-05
-v2-main-tl-hoc,tl-hoc,8,16,community-local,256,256,512000000,0.000550123488281,0.000227181511111
+schema_version,experiment,scheme,traffic_pattern,run_id,random_seed,offered_load_factor,num_tors,servers_per_tor,total_flows,completed_flows,avg_receiver_throughput_bps,avg_fct_s,p95_fct_s,avg_network_link_utilization,ocs_flow_hit_rate,ocs_byte_hit_rate,waiting_flows,retried_flows,normalized_eps_load,final_algorithm_selected_edges,final_ocs_active_edges,cumulative_selected_edge_count,avg_selected_edge_count,max_selected_edge_count
+tl-hoc-v3,v2-main-electrical-only-rho001,electrical-only,community-local,1,1,0.01,8,16,128,128,4000000000,0.00456191253125,0.004562133,0.00767726933333,0,0,0,0,0.01,,0,0,0,0
+tl-hoc-v3,v2-main-static-ocs-rho001,static-ocs,community-local,1,1,0.01,8,16,128,128,4000000000,0.00352441775,0.004968013,0.00114238435556,1,1,0,0,0.01,8,8,88,8,8
+tl-hoc-v3,v2-main-tl-hoc-rho001,tl-hoc,community-local,1,1,0.01,8,16,128,128,4000000000,0.00342842452344,0.004975433,0.00251862115556,1,1,0,0,0.01,0,0,32,2.90909090909,8
+tl-hoc-v3,v2-main-electrical-only-rho002,electrical-only,community-local,1,1,0.02,8,16,256,256,8000000000,0.00456191401563,0.004562133,0.0153545386667,0,0,0,0,0.02,,0,0,0,0
+tl-hoc-v3,v2-main-static-ocs-rho002,static-ocs,community-local,1,1,0.02,8,16,256,256,8000000000,0.00352441842187,0.004968013,0.00228476871111,1,1,0,0,0.02,8,8,88,8,8
+tl-hoc-v3,v2-main-tl-hoc-rho002,tl-hoc,community-local,1,1,0.02,8,16,256,256,8000000000,0.00342842452344,0.004975433,0.00307118973968,1,1,0,0,0.02,0,0,56,5.09090909091,8

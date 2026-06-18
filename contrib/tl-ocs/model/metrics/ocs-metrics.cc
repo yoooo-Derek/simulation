@@ -17,7 +17,7 @@ SummarizeOcsMetrics(const std::vector<FlowMetricRecord>& records,
     {
         summary.totalFlows++;
         summary.totalReceivedBytes += record.receivedBytes;
-        if (record.pathType == "ocs")
+        if (record.pathType.rfind("optical-", 0) == 0)
         {
             summary.ocsFlows++;
             summary.ocsReceivedBytes += record.receivedBytes;

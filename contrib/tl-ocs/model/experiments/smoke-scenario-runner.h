@@ -26,7 +26,6 @@ struct SmokeScenarioOptions
     bool enableLinkMetrics = false;
     bool enableOcsMetrics = false;
     bool enableFiniteMultiCycle = false;
-    std::string oracleMode = "period-future";
     std::vector<std::pair<uint32_t, uint32_t>> fixedOcsEdges;
 };
 
@@ -41,11 +40,16 @@ struct SmokeScenarioResult
     uint32_t algorithmSelectedEdges = 0;
     uint32_t ocsActiveEdges = 0;
     uint32_t ocsAssignedFlows = 0;
-    uint32_t epsFallbackFlows = 0;
+    uint32_t epsPathFlows = 0;
+    uint32_t waitingFlows = 0;
+    uint32_t retriedFlows = 0;
+    uint32_t interruptedFlows = 0;
+    uint32_t residualFlows = 0;
     double communityInternalSelectedEdgeRatio = 0.0;
     uint32_t timelineCycles = 0;
     uint32_t schedulingRoundCount = 0;
     uint32_t nonEmptySchedulingRounds = 0;
+    uint64_t cumulativeSelectedEdgeCount = 0;
     double avgSelectedEdgeCount = 0.0;
     uint32_t maxSelectedEdgeCount = 0;
     double avgActiveEdgeCount = 0.0;
@@ -57,7 +61,6 @@ struct SmokeScenarioResult
     uint64_t stage1ReceivedBytes = 0;
     uint64_t stage2ReceivedBytes = 0;
     std::string selectedEdgeList;
-    std::vector<SchedulingDiagnosticRecord> schedulingDiagnostics;
     std::vector<FlowMetricRecord> flowMetrics;
     std::optional<FlowMetricsSummary> flowMetricsSummary;
     std::optional<LinkUtilizationSummary> linkUtilizationSummary;

@@ -7,6 +7,24 @@ namespace ns3
 namespace tl_ocs
 {
 
+namespace
+{
+
+std::string
+GetPatternName(DatapathDiagnosticPattern pattern)
+{
+    switch (pattern)
+    {
+    case DatapathDiagnosticPattern::SINGLE_PAIR_HEAVY:
+        return "single-pair-heavy";
+    case DatapathDiagnosticPattern::NEAR_NEIGHBOR_HEAVY:
+        return "near-neighbor-heavy";
+    }
+    return "datapath-diagnostic";
+}
+
+} // namespace
+
 DatapathDiagnosticTrafficGenerator::DatapathDiagnosticTrafficGenerator(
     DatapathDiagnosticPattern pattern)
     : m_pattern(pattern)
@@ -24,9 +42,7 @@ DatapathDiagnosticTrafficGenerator::Generate(const SimulationConfig& simulation,
 
     const uint32_t numTors = simulation.GetNumTors();
     const uint32_t serversPerTor = simulation.GetServersPerTor();
-    const std::string patternName =
-        m_pattern == DatapathDiagnosticPattern::SINGLE_PAIR_HEAVY ? "single-pair-heavy"
-                                                                  : "near-neighbor-heavy";
+    const std::string patternName = GetPatternName(m_pattern);
     const uint32_t pairCount =
         m_pattern == DatapathDiagnosticPattern::SINGLE_PAIR_HEAVY
             ? 1
