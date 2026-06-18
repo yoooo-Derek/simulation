@@ -85,6 +85,97 @@ FormatSelectedEdges(const std::vector<OpticalEdge>& edges)
     return selectedEdges.str();
 }
 
+void
+AugmentWithDemandCoverageEdges(const WaitQueue& waitQueue,
+                               const TrafficMatrix& schedulingMatrix,
+                               uint32_t nodeCount,
+                               uint32_t opticalAccessSpinesPerGroup,
+                               TlOcsAlgorithmResult& result)
+{
+    std::set<std::pair<uint32_t, uint32_t>> selectedPairs;
+    std::vector<uint32_t> selectedDegree(nodeCount, 0);
+    for (const auto& edge : result.selectedEdges)
+    {
+        const auto pair = CanonicalPair(edge.sourceTor, edge.destinationTor);
+        if (selectedPairs.insert(pair).second)
+        {
+            selectedDegree[pair.first]++;
+            selectedDegree[pair.second]++;
+        }
+    }
+
+    std::map<std::pair<uint32_t, uint32_t>, uint64_t> waitingBytes;
+    for (uint32_t source = 0; source < schedulingMatrix.GetNumTors(); ++source)
+    {
+        for (uint32_t destination = source + 1; destination < schedulingMatrix.GetNumTors();
+             ++destination)
+        {
+            const uint64_t bytes = schedulingMatrix.GetBytes(source, destination) +
+                                   schedulingMatrix.GetBytes(destination, source);
+            if (bytes > 0)
+            {
+                waitingBytes[CanonicalPair(source, destination)] += bytes;
+            }
+        }
+    }
+    for (const auto& waiting : waitQueue.GetAll())
+    {
+        if (waiting.flow.GetSourceTorId() == waiting.flow.GetDestinationTorId())
+        {
+            continue;
+        }
+        waitingBytes[CanonicalPair(waiting.flow.GetSourceTorId(),
+                                   waiting.flow.GetDestinationTorId())] +=
+            waiting.flow.GetSizeBytes();
+    }
+    if (nodeCount > 0 && opticalAccessSpinesPerGroup >= nodeCount - 1)
+    {
+        for (uint32_t source = 0; source < nodeCount; ++source)
+        {
+            for (uint32_t destination = source + 1; destination < nodeCount; ++destination)
+            {
+                waitingBytes[CanonicalPair(source, destination)] += 1;
+            }
+        }
+    }
+
+    std::vector<std::pair<std::pair<uint32_t, uint32_t>, uint64_t>> candidates{
+        waitingBytes.begin(),
+        waitingBytes.end()};
+    std::sort(candidates.begin(),
+              candidates.end(),
+              [](const auto& left, const auto& right) {
+                  if (left.second != right.second)
+                  {
+                      return left.second > right.second;
+                  }
+                  return left.first < right.first;
+              });
+    for (const auto& [pair, bytes] : candidates)
+    {
+        if (selectedPairs.find(pair) != selectedPairs.end() ||
+            selectedDegree[pair.first] >= opticalAccessSpinesPerGroup ||
+            selectedDegree[pair.second] >= opticalAccessSpinesPerGroup)
+        {
+            continue;
+        }
+        const double score = static_cast<double>(bytes);
+        OpticalEdge edge{pair.first, pair.second, score, score, false, true};
+        result.selectedEdges.push_back(edge);
+        result.candidateEdges.push_back(edge);
+        result.G.Set(pair.first,
+                     pair.second,
+                     std::max(result.G.Get(pair.first, pair.second), score));
+        result.G.Set(pair.second, pair.first, result.G.Get(pair.first, pair.second));
+        selectedPairs.insert(pair);
+        selectedDegree[pair.first]++;
+        selectedDegree[pair.second]++;
+    }
+    result.selectedDegree = selectedDegree;
+    result.communityInternalSelectedEdgeRatio =
+        CalculateCommunityInternalSelectedEdgeRatio(result.selectedEdges);
+}
+
 TlOcsAlgorithmResult
 RunScheduler(const TrafficMatrix& observed,
              const TlOcsAlgorithmParameters& parameters,
@@ -154,6 +245,7 @@ struct FiniteCycleContext
     std::vector<FlowSpec> deferredArrivals;
     bool hasCompletedWindow = false;
     bool arrivalsPaused = false;
+    bool forcedStageBoundaryScheduled = false;
     Time nextStageBoundary;
     Time lastActiveSetUpdate = Seconds(0);
     std::map<std::pair<uint32_t, uint32_t>, double> activeDurations;
@@ -191,7 +283,9 @@ struct FiniteCycleContext
 
 void RunSchedulingRound(const std::shared_ptr<FiniteCycleContext>& context);
 void MaybeCompleteStageBoundary(const std::shared_ptr<FiniteCycleContext>& context);
+void ForceCompleteStageBoundary(const std::shared_ptr<FiniteCycleContext>& context);
 void LaunchFlow(const std::shared_ptr<FiniteCycleContext>& context, FlowSpec flow);
+void RetryWaitingFlows(const std::shared_ptr<FiniteCycleContext>& context);
 
 void
 AccumulateActiveDurations(FiniteCycleContext& context, Time now)
@@ -285,6 +379,33 @@ ToFlowPathDecision(const FlowSpec& flow,
     return decision;
 }
 
+bool
+EnforceDataPlaneSupport(const FlowSpec& flow,
+                        const NodeIndex& nodeIndex,
+                        OpticalLinkStateManager& opticalLinkState,
+                        FlowPathDecision& decision)
+{
+    if (!decision.admittedToOcs)
+    {
+        return true;
+    }
+
+    std::string reason;
+    if (CanInstallOcsHostRoutes(flow, decision, nodeIndex, &reason))
+    {
+        return true;
+    }
+
+    opticalLinkState.Release(flow.GetFlowId());
+    decision.pathType = "waiting";
+    decision.installable = false;
+    decision.waiting = true;
+    decision.admittedToOcs = false;
+    decision.reason = reason.empty() ? "unsupported-optical-datapath" : reason;
+    decision.torPath.clear();
+    return false;
+}
+
 FlowPathDecision
 RouteFlow(FiniteCycleContext& context,
           const FlowSpec& flow)
@@ -299,7 +420,9 @@ RouteFlow(FiniteCycleContext& context,
                                   context.opticalLinkState,
                                   &context.latestScheduleGain,
                                   &context.latestCommunityLabels);
-    return ToFlowPathDecision(flow, route, context.nodeIndex);
+    FlowPathDecision decision = ToFlowPathDecision(flow, route, context.nodeIndex);
+    EnforceDataPlaneSupport(flow, context.nodeIndex, context.opticalLinkState, decision);
+    return decision;
 }
 
 void
@@ -326,6 +449,7 @@ InstallRoutedFlow(const std::shared_ptr<FiniteCycleContext>& context,
                                       context->opticalLinkState.Release(flowId);
                                       context->activeOpticalFlows.erase(flowId);
                                       context->activeFlowIds.erase(flowId);
+                                      RetryWaitingFlows(context);
                                       MaybeCompleteStageBoundary(context);
                                   });
     context->result.stage2InstalledFlows += launch.installedFlows;
@@ -414,6 +538,14 @@ RunSchedulingRound(const std::shared_ptr<FiniteCycleContext>& context)
     {
         algorithmResult = fixedResult;
     }
+    else
+    {
+        AugmentWithDemandCoverageEdges(context->waitQueue,
+                                       schedulingMatrix,
+                                       context->simulation.GetNumTors(),
+                                       context->algorithmParameters.opticalAccessSpinesPerGroup,
+                                       algorithmResult);
+    }
 
     context->state.UpdateFromAlgorithmResult(algorithmResult,
                                              schedulingMatrix.GetTotalBytes());
@@ -476,6 +608,25 @@ MaybeCompleteStageBoundary(const std::shared_ptr<FiniteCycleContext>& context)
     {
         return;
     }
+    context->forcedStageBoundaryScheduled = false;
+    RunSchedulingRound(context);
+    context->arrivalsPaused = false;
+    while (context->nextStageBoundary <= Simulator::Now())
+    {
+        context->nextStageBoundary += context->simulation.GetOcsReconfigurationPeriod();
+    }
+    ResumeDeferredArrivals(context);
+}
+
+void
+ForceCompleteStageBoundary(const std::shared_ptr<FiniteCycleContext>& context)
+{
+    if (!context->arrivalsPaused)
+    {
+        context->forcedStageBoundaryScheduled = false;
+        return;
+    }
+    context->forcedStageBoundaryScheduled = false;
     RunSchedulingRound(context);
     context->arrivalsPaused = false;
     while (context->nextStageBoundary <= Simulator::Now())
@@ -489,6 +640,19 @@ void
 StageBoundary(const std::shared_ptr<FiniteCycleContext>& context)
 {
     context->arrivalsPaused = true;
+    if (!context->activeFlowIds.empty())
+    {
+        context->result.stageBoundaryBlockedCount++;
+        context->result.activeFlowsAtStageBoundary =
+            std::max(context->result.activeFlowsAtStageBoundary,
+                     static_cast<uint32_t>(context->activeFlowIds.size()));
+        if (!context->forcedStageBoundaryScheduled)
+        {
+            context->forcedStageBoundaryScheduled = true;
+            Simulator::Schedule(context->options.stageGap, &ForceCompleteStageBoundary, context);
+        }
+        return;
+    }
     MaybeCompleteStageBoundary(context);
 }
 
@@ -511,6 +675,10 @@ LaunchFlow(const std::shared_ptr<FiniteCycleContext>& context, FlowSpec flow)
     if (context->arrivalsPaused && flow.GetStartTime() >= context->nextStageBoundary)
     {
         context->deferredArrivals.push_back(flow);
+        context->result.deferredArrivals++;
+        context->result.maxDeferredArrivals =
+            std::max(context->result.maxDeferredArrivals,
+                     static_cast<uint32_t>(context->deferredArrivals.size()));
         return;
     }
 
@@ -651,7 +819,9 @@ ControllerTimeline::RunTwoStageSmoke(const NodeIndex& nodeIndex,
                                           opticalLinkState,
                                           &algorithmResult.G,
                                           &algorithmResult.communityLabels);
-            result.stage2Decisions.push_back(ToFlowPathDecision(flow, route, nodeIndex));
+            FlowPathDecision decision = ToFlowPathDecision(flow, route, nodeIndex);
+            EnforceDataPlaneSupport(flow, nodeIndex, opticalLinkState, decision);
+            result.stage2Decisions.push_back(decision);
         }
     }
     for (const auto& decision : result.stage2Decisions)
@@ -734,7 +904,7 @@ ControllerTimeline::RunFiniteMultiCycle(
     {
         Simulator::Schedule(at, &SnapshotWindow, context);
     }
-    for (Time at = simulation.GetOcsReconfigurationPeriod(); at <= simulation.GetTrafficStopTime();
+    for (Time at = simulation.GetOcsReconfigurationPeriod(); at <= simulation.GetStopTime();
          at += simulation.GetOcsReconfigurationPeriod())
     {
         Simulator::Schedule(at, &StageBoundary, context);
@@ -759,6 +929,11 @@ ControllerTimeline::RunFiniteMultiCycle(
     {
         context->result.stage2ReceivedBytes += source.tracking->receivedBytes;
     }
+    context->result.finalActiveFlows = static_cast<uint32_t>(context->activeFlowIds.size());
+    context->result.finalWaitingFlows = context->waitQueue.Size();
+    context->result.maxDeferredArrivals =
+        std::max(context->result.maxDeferredArrivals,
+                 static_cast<uint32_t>(context->deferredArrivals.size()));
     return context->result;
 }
 

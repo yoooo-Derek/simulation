@@ -63,6 +63,12 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
                                 std::optional<uint32_t> retriedFlows,
                                 std::optional<uint32_t> interruptedFlows,
                                 std::optional<uint32_t> residualFlows,
+                                std::optional<uint32_t> deferredArrivals,
+                                std::optional<uint32_t> maxDeferredArrivals,
+                                std::optional<uint32_t> stageBoundaryBlockedCount,
+                                std::optional<uint32_t> activeFlowsAtStageBoundary,
+                                std::optional<uint32_t> finalActiveFlows,
+                                std::optional<uint32_t> finalWaitingFlows,
                                 std::optional<double> communityInternalSelectedEdgeRatio,
                                 std::optional<uint32_t> timelineCycles,
                                 std::optional<uint32_t> schedulingRoundCount,
@@ -110,6 +116,40 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
         stream << GetSmokeSummaryCsvHeader() << '\n';
     }
 
+    const std::optional<uint32_t> completedFlows =
+        flowMetrics.has_value() ? std::optional<uint32_t>(flowMetrics->completedFlows)
+                                : std::nullopt;
+    const std::optional<uint32_t> summaryTotalFlows =
+        generatedFlows.has_value()
+            ? generatedFlows
+            : (flowMetrics.has_value() ? std::optional<uint32_t>(flowMetrics->totalFlows)
+                                       : std::nullopt);
+    const std::optional<uint32_t> uninstalledFlows =
+        generatedFlows.has_value() && installedFlows.has_value() &&
+                generatedFlows.value() >= installedFlows.value()
+            ? std::optional<uint32_t>(generatedFlows.value() - installedFlows.value())
+            : std::nullopt;
+    const std::optional<uint32_t> installedIncompleteFlows =
+        installedFlows.has_value() && completedFlows.has_value() &&
+                installedFlows.value() >= completedFlows.value()
+            ? std::optional<uint32_t>(installedFlows.value() - completedFlows.value())
+            : std::nullopt;
+    const std::optional<double> installRate =
+        generatedFlows.has_value() && generatedFlows.value() > 0 && installedFlows.has_value()
+            ? std::optional<double>(static_cast<double>(installedFlows.value()) /
+                                    generatedFlows.value())
+            : std::nullopt;
+    const std::optional<double> completionRateGenerated =
+        generatedFlows.has_value() && generatedFlows.value() > 0 && completedFlows.has_value()
+            ? std::optional<double>(static_cast<double>(completedFlows.value()) /
+                                    generatedFlows.value())
+            : std::nullopt;
+    const std::optional<double> completionRateInstalled =
+        installedFlows.has_value() && installedFlows.value() > 0 && completedFlows.has_value()
+            ? std::optional<double>(static_cast<double>(completedFlows.value()) /
+                                    installedFlows.value())
+            : std::nullopt;
+
     stream << GetTlHocCsvSchemaVersion() << ','
            << EscapeCsvField(experiment.GetExperimentName()) << ','
            << EscapeCsvField(experiment.GetSchemeName()) << ','
@@ -120,19 +160,19 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     stream << ',';
     WriteOptionalValue(stream, installedFlows);
     stream << ',';
-    if (generatedFlows.has_value())
-    {
-        stream << generatedFlows.value();
-    }
-    else if (flowMetrics.has_value())
-    {
-        stream << flowMetrics->totalFlows;
-    }
+    WriteOptionalValue(stream, summaryTotalFlows);
     stream << ',';
-    if (flowMetrics.has_value())
-    {
-        stream << flowMetrics->completedFlows;
-    }
+    WriteOptionalValue(stream, completedFlows);
+    stream << ',';
+    WriteOptionalDouble(stream, installRate);
+    stream << ',';
+    WriteOptionalDouble(stream, completionRateGenerated);
+    stream << ',';
+    WriteOptionalDouble(stream, completionRateInstalled);
+    stream << ',';
+    WriteOptionalValue(stream, uninstalledFlows);
+    stream << ',';
+    WriteOptionalValue(stream, installedIncompleteFlows);
     stream << ',';
     if (flowMetrics.has_value())
     {
@@ -141,7 +181,32 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     stream << ',';
     if (flowMetrics.has_value())
     {
+        WriteOptionalDouble(stream, flowMetrics->avgReceiverThroughputInstalledDestBps);
+    }
+    stream << ',';
+    if (flowMetrics.has_value())
+    {
+        stream << flowMetrics->receiverCountInstalledDest;
+    }
+    stream << ',';
+    if (flowMetrics.has_value())
+    {
+        WriteOptionalDouble(stream, flowMetrics->totalReceivedBps);
+    }
+    stream << ',';
+    if (flowMetrics.has_value())
+    {
+        WriteOptionalDouble(stream, flowMetrics->avgReceiverThroughputFractionOfAccessCapacity);
+    }
+    stream << ',';
+    if (flowMetrics.has_value())
+    {
         WriteOptionalDouble(stream, flowMetrics->avgFctS);
+    }
+    stream << ',';
+    if (flowMetrics.has_value())
+    {
+        WriteOptionalDouble(stream, flowMetrics->avgFctCompletedOnlyS);
     }
     stream << ',';
     if (flowMetrics.has_value())
@@ -175,6 +240,18 @@ ResultWriter::WriteSmokeSummary(const SimulationConfig& simulation,
     WriteOptionalValue(stream, interruptedFlows);
     stream << ',';
     WriteOptionalValue(stream, residualFlows);
+    stream << ',';
+    WriteOptionalValue(stream, deferredArrivals);
+    stream << ',';
+    WriteOptionalValue(stream, maxDeferredArrivals);
+    stream << ',';
+    WriteOptionalValue(stream, stageBoundaryBlockedCount);
+    stream << ',';
+    WriteOptionalValue(stream, activeFlowsAtStageBoundary);
+    stream << ',';
+    WriteOptionalValue(stream, finalActiveFlows);
+    stream << ',';
+    WriteOptionalValue(stream, finalWaitingFlows);
     stream << ',';
     WriteOptionalValue(stream, timelineCycles);
     stream << ',';

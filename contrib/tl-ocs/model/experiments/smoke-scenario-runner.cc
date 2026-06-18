@@ -2,6 +2,7 @@
 
 #include "ns3/flow-launcher.h"
 #include "ns3/flow-path-selector.h"
+#include "ns3/data-rate.h"
 #include "ns3/link-metrics-collector.h"
 #include "ns3/ocs-admission.h"
 #include "ns3/ocs-link-manager.h"
@@ -54,6 +55,12 @@ CopyTimelineResult(const ControllerTimelineResult& timeline, SmokeScenarioResult
     result.retriedFlows = timeline.retriedFlows;
     result.interruptedFlows = timeline.interruptedFlows;
     result.residualFlows = timeline.residualFlows;
+    result.deferredArrivals = timeline.deferredArrivals;
+    result.maxDeferredArrivals = timeline.maxDeferredArrivals;
+    result.stageBoundaryBlockedCount = timeline.stageBoundaryBlockedCount;
+    result.activeFlowsAtStageBoundary = timeline.activeFlowsAtStageBoundary;
+    result.finalActiveFlows = timeline.finalActiveFlows;
+    result.finalWaitingFlows = timeline.finalWaitingFlows;
     result.communityInternalSelectedEdgeRatio =
         timeline.communityInternalSelectedEdgeRatio;
     result.timelineCycles = timeline.timelineCycles;
@@ -75,12 +82,16 @@ CopyTimelineResult(const ControllerTimelineResult& timeline, SmokeScenarioResult
 
 void
 CollectFlowMetrics(const std::vector<FlowMetricSource>& sources,
+                   const SimulationConfig& simulation,
                    double measurementDurationS,
                    SmokeScenarioResult& result)
 {
     MetricsCollector collector;
     result.flowMetrics = collector.Collect(sources, result.schemeName);
-    result.flowMetricsSummary = collector.Summarize(result.flowMetrics, measurementDurationS);
+    result.flowMetricsSummary =
+        collector.Summarize(result.flowMetrics,
+                            measurementDurationS,
+                            DataRate(simulation.GetServerAccessDataRate()).GetBitRate());
 }
 
 void
@@ -135,6 +146,7 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
         if (options.enableFlowMetrics)
         {
             CollectFlowMetrics(launch.metricSources,
+                               simulation,
                                (simulation.GetMeasurementEndTime() -
                                 simulation.GetMeasurementStartTime()).GetSeconds(),
                                result);
@@ -199,6 +211,7 @@ SmokeScenarioRunner::Run(const SimulationConfig& simulation,
     if (options.enableFlowMetrics)
     {
         CollectFlowMetrics(timelineResult.metricSources,
+                           simulation,
                            (simulation.GetMeasurementEndTime() -
                             simulation.GetMeasurementStartTime()).GetSeconds(),
                            result);

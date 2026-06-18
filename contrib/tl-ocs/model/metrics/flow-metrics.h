@@ -54,7 +54,12 @@ struct FlowMetricsSummary
     uint32_t incompleteFlows = 0;
     uint64_t totalReceivedBytes = 0;
     std::optional<double> avgReceivedThroughputBps;
+    std::optional<double> avgReceiverThroughputInstalledDestBps;
+    uint32_t receiverCountInstalledDest = 0;
+    std::optional<double> totalReceivedBps;
+    std::optional<double> avgReceiverThroughputFractionOfAccessCapacity;
     std::optional<double> avgFctS;
+    std::optional<double> avgFctCompletedOnlyS;
     std::optional<double> p90FctS;
     std::optional<double> p95FctS;
 };

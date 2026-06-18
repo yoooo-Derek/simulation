@@ -61,7 +61,8 @@ MetricsCollector::Collect(const std::vector<FlowMetricSource>& sources,
 
 FlowMetricsSummary
 MetricsCollector::Summarize(const std::vector<FlowMetricRecord>& records,
-                            double measurementDurationS) const
+                            double measurementDurationS,
+                            uint64_t receiverAccessCapacityBps) const
 {
     FlowMetricsSummary summary;
     summary.totalFlows = static_cast<uint32_t>(records.size());
@@ -90,10 +91,23 @@ MetricsCollector::Summarize(const std::vector<FlowMetricRecord>& records,
             totalReceiverThroughputBps +=
                 static_cast<double>(entry.second) * 8.0 / measurementDurationS;
         }
+        summary.receiverCountInstalledDest = static_cast<uint32_t>(receiverBytes.size());
+        summary.totalReceivedBps =
+            static_cast<double>(summary.totalReceivedBytes) * 8.0 / measurementDurationS;
+        summary.avgReceiverThroughputInstalledDestBps =
+            receiverBytes.empty()
+                ? 0.0
+                : totalReceiverThroughputBps / static_cast<double>(receiverBytes.size());
         summary.avgReceivedThroughputBps =
             receiverBytes.empty()
                 ? 0.0
                 : totalReceiverThroughputBps / static_cast<double>(receiverBytes.size());
+        if (receiverAccessCapacityBps > 0)
+        {
+            summary.avgReceiverThroughputFractionOfAccessCapacity =
+                summary.avgReceiverThroughputInstalledDestBps.value() /
+                static_cast<double>(receiverAccessCapacityBps);
+        }
     }
 
     if (!completedFcts.empty())
@@ -104,7 +118,8 @@ MetricsCollector::Summarize(const std::vector<FlowMetricRecord>& records,
         {
             total += fct;
         }
-        summary.avgFctS = total / completedFcts.size();
+        summary.avgFctCompletedOnlyS = total / completedFcts.size();
+        summary.avgFctS = summary.avgFctCompletedOnlyS;
         // Deterministic nearest-rank percentiles: ceil(p * n), clamped to [1, n].
         summary.p90FctS = NearestRank(completedFcts, 0.90);
         summary.p95FctS = NearestRank(completedFcts, 0.95);

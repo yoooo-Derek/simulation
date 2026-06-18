@@ -1,9 +1,12 @@
 #include "ns3/eps-topology-builder.h"
 #include "ns3/flow-launcher.h"
 #include "ns3/flow-path-selector.h"
+#include "ns3/cooperative-router.h"
 #include "ns3/metrics-collector.h"
 #include "ns3/flow-spec.h"
 #include "ns3/ocs-admission.h"
+#include "ns3/optical-core-topology.h"
+#include "ns3/optical-link-state-manager.h"
 #include "ns3/ocs-link-manager.h"
 #include "ns3/simulation-config.h"
 #include "ns3/simulator.h"
@@ -21,6 +24,13 @@ void
 DeviceMacTxTrace(std::shared_ptr<uint64_t> bytes, Ptr<const Packet> packet)
 {
     *bytes += packet->GetSize();
+}
+
+Ptr<NetDevice>
+GetOcsDeviceForHop(const NodeIndex& index, uint32_t sourceTor, uint32_t destinationTor)
+{
+    const NodeIndex::OcsLinkInfo link = index.GetOcsLink(sourceTor, destinationTor);
+    return sourceTor == link.torA ? link.torADevice : link.torBDevice;
 }
 
 SimulationConfig
@@ -42,6 +52,82 @@ BuildFourGroupHybridOptions()
     options.serversPerLeaf = 1;
     options.memsCount = 4;
     return options;
+}
+
+FlowPathDecision
+BuildOpticalDecision(const FlowSpec& flow,
+                     const CooperativeRouteDecision& route,
+                     const NodeIndex& index)
+{
+    FlowPathDecision decision;
+    decision.flowId = flow.GetFlowId();
+    decision.pathType = route.pathType;
+    decision.destinationAddress =
+        index.GetOcsServerIpv4Address(flow.GetDestinationTorId(),
+                                      flow.GetDestinationServerId());
+    decision.admittedToOcs = route.admittedToOptical;
+    decision.installable = route.installable;
+    decision.waiting = route.waiting;
+    decision.reason = route.reason;
+    decision.torPath = route.torPath;
+    decision.sourceTor = route.sourceTor;
+    decision.destinationTor = route.destinationTor;
+    return decision;
+}
+
+struct MultiHopRunResult
+{
+    CooperativeRouteDecision route;
+    bool canInstall = false;
+    uint32_t installedFlows = 0;
+    std::vector<FlowMetricRecord> metrics;
+    std::vector<uint64_t> hopTxBytes;
+};
+
+MultiHopRunResult
+RunMultiHopOpticalFlow(const std::vector<std::pair<uint32_t, uint32_t>>& activeEdges,
+                       const FlowSpec& flow)
+{
+    SimulationConfig simulation = BuildFourGroupConfig();
+    simulation.SetStopTime(MilliSeconds(120));
+
+    NodeIndex index = EpsTopologyBuilder().Build(simulation, 4, BuildFourGroupHybridOptions());
+    OpticalCoreTopology topology(4);
+    topology.ApplyEdges(activeEdges);
+    OpticalLinkStateManager linkState(10000000000);
+    linkState.ApplyTopology(topology);
+
+    MultiHopRunResult result;
+    result.route = CooperativeRouter().Route(flow, topology, linkState);
+    const FlowPathDecision decision = BuildOpticalDecision(flow, result.route, index);
+    result.canInstall = CanInstallOcsHostRoutes(flow, decision, index);
+
+    std::vector<std::shared_ptr<uint64_t>> hopTxBytes;
+    for (uint32_t hopIndex = 1; hopIndex < result.route.torPath.size(); ++hopIndex)
+    {
+        auto bytes = std::make_shared<uint64_t>(0);
+        GetOcsDeviceForHop(index,
+                           result.route.torPath[hopIndex - 1],
+                           result.route.torPath[hopIndex])
+            ->TraceConnectWithoutContext("MacTx",
+                                         MakeBoundCallback(&DeviceMacTxTrace, bytes));
+        hopTxBytes.push_back(bytes);
+    }
+
+    InstallOcsHostRoutes(flow, decision, index);
+    const FlowLaunchResult launch =
+        FlowLauncher().Install({flow}, {decision}, index, simulation.GetStopTime(), 16000);
+    Simulator::Stop(simulation.GetStopTime());
+    Simulator::Run();
+
+    result.installedFlows = launch.installedFlows;
+    result.metrics = MetricsCollector().Collect(launch.metricSources, "tl-ocs");
+    for (const auto& bytes : hopTxBytes)
+    {
+        result.hopTxBytes.push_back(*bytes);
+    }
+    Simulator::Destroy();
+    return result;
 }
 
 } // namespace
@@ -267,6 +353,169 @@ class TlOcsFlowPathActiveSetClosureTestCase : public TestCase
     }
 };
 
+class TlOcsTwoHopDataPlaneCompletionTestCase : public TestCase
+{
+  public:
+    TlOcsTwoHopDataPlaneCompletionTestCase()
+        : TestCase("TL-HOC two-hop optical route completes in the data plane")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        const FlowSpec flow(20,
+                            0,
+                            0,
+                            3,
+                            0,
+                            50000,
+                            MilliSeconds(1),
+                            "two-hop-datapath",
+                            1000000000);
+        const MultiHopRunResult result = RunMultiHopOpticalFlow({{0, 1}, {1, 3}}, flow);
+        NS_TEST_ASSERT_MSG_EQ(result.route.installable,
+                              true,
+                              "route decision should be installable");
+        NS_TEST_ASSERT_MSG_EQ(result.route.pathType,
+                              "optical-two-hop",
+                              "unexpected route path type");
+        NS_TEST_ASSERT_MSG_EQ(result.canInstall,
+                              true,
+                              "route should be data-plane installable");
+        NS_TEST_ASSERT_MSG_EQ(result.installedFlows, 1, "flow should install");
+        NS_TEST_ASSERT_MSG_EQ(result.metrics.size(), 1, "expected one metric record");
+        NS_TEST_ASSERT_MSG_EQ(result.metrics[0].completed,
+                              true,
+                              "two-hop OCS flow did not complete");
+        NS_TEST_ASSERT_MSG_EQ(result.metrics[0].receivedBytes,
+                              flow.GetSizeBytes(),
+                              "two-hop OCS received byte count mismatch");
+        for (uint64_t bytes : result.hopTxBytes)
+        {
+            NS_TEST_ASSERT_MSG_GT(bytes, 0, "an OCS hop transmitted no bytes");
+        }
+    }
+};
+
+class TlOcsReachableDataPlaneCompletionTestCase : public TestCase
+{
+  public:
+    TlOcsReachableDataPlaneCompletionTestCase()
+        : TestCase("TL-HOC reachable multi-hop optical route completes in the data plane")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        const FlowSpec flow(21,
+                            0,
+                            0,
+                            3,
+                            0,
+                            50000,
+                            MilliSeconds(1),
+                            "reachable-datapath",
+                            1000000000);
+        const MultiHopRunResult result =
+            RunMultiHopOpticalFlow({{0, 1}, {1, 2}, {2, 3}}, flow);
+        NS_TEST_ASSERT_MSG_EQ(result.route.installable,
+                              true,
+                              "route decision should be installable");
+        NS_TEST_ASSERT_MSG_EQ(result.route.pathType,
+                              "optical-reachable",
+                              "unexpected route path type");
+        NS_TEST_ASSERT_MSG_EQ(result.canInstall,
+                              true,
+                              "route should be data-plane installable");
+        NS_TEST_ASSERT_MSG_EQ(result.installedFlows, 1, "flow should install");
+        NS_TEST_ASSERT_MSG_EQ(result.metrics.size(), 1, "expected one metric record");
+        NS_TEST_ASSERT_MSG_EQ(result.metrics[0].completed,
+                              true,
+                              "reachable OCS flow did not complete");
+        NS_TEST_ASSERT_MSG_EQ(result.metrics[0].receivedBytes,
+                              flow.GetSizeBytes(),
+                              "reachable OCS received byte count mismatch");
+        for (uint64_t bytes : result.hopTxBytes)
+        {
+            NS_TEST_ASSERT_MSG_GT(bytes, 0, "an OCS hop transmitted no bytes");
+        }
+    }
+};
+
+class IntermediateDifferentSpineForwardingTestCase : public TestCase
+{
+  public:
+    IntermediateDifferentSpineForwardingTestCase()
+        : TestCase("TL-HOC intermediate group forwards between different optical spines")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SimulationConfig simulation = BuildFourGroupConfig();
+        simulation.SetStopTime(MilliSeconds(120));
+        NodeIndex index =
+            EpsTopologyBuilder().Build(simulation, 4, BuildFourGroupHybridOptions());
+
+        const FlowSpec flow(22,
+                            0,
+                            0,
+                            3,
+                            0,
+                            50000,
+                            MilliSeconds(1),
+                            "different-spine-datapath",
+                            1000000000);
+        OpticalCoreTopology topology(4);
+        topology.ApplyEdges({{0, 1}, {1, 3}});
+        OpticalLinkStateManager linkState(10000000000);
+        linkState.ApplyTopology(topology);
+        const CooperativeRouteDecision route =
+            CooperativeRouter().Route(flow, topology, linkState);
+        const FlowPathDecision decision = BuildOpticalDecision(flow, route, index);
+
+        const NodeIndex::OcsLinkInfo first = index.GetOcsLink(0, 1);
+        const NodeIndex::OcsLinkInfo second = index.GetOcsLink(1, 3);
+        const uint32_t ingressSpine = first.torA == 1 ? first.torASpineId : first.torBSpineId;
+        const uint32_t egressSpine = second.torA == 1 ? second.torASpineId : second.torBSpineId;
+
+        NS_TEST_ASSERT_MSG_EQ(route.pathType,
+                              "optical-two-hop",
+                              "test should exercise two-hop route");
+        NS_TEST_ASSERT_MSG_NE(ingressSpine,
+                              egressSpine,
+                              "test topology should use different intermediate spines");
+        NS_TEST_ASSERT_MSG_EQ(index.HasLeafSpineLink(1, 0, ingressSpine),
+                              true,
+                              "missing ingress spine to bridge leaf path");
+        NS_TEST_ASSERT_MSG_EQ(index.HasLeafSpineLink(1, 0, egressSpine),
+                              true,
+                              "missing bridge leaf to egress spine path");
+        NS_TEST_ASSERT_MSG_EQ(CanInstallOcsHostRoutes(flow, decision, index),
+                              true,
+                              "different-spine route should be installable");
+
+        InstallOcsHostRoutes(flow, decision, index);
+        const FlowLaunchResult launch =
+            FlowLauncher().Install({flow}, {decision}, index, simulation.GetStopTime(), 17000);
+        Simulator::Stop(simulation.GetStopTime());
+        Simulator::Run();
+        const auto metrics = MetricsCollector().Collect(launch.metricSources, "tl-ocs");
+
+        NS_TEST_ASSERT_MSG_EQ(launch.epsFlows, 0, "test must not use cross-group EPS fallback");
+        NS_TEST_ASSERT_MSG_EQ(metrics[0].completed,
+                              true,
+                              "different-spine OCS flow did not complete");
+        NS_TEST_ASSERT_MSG_EQ(metrics[0].receivedBytes,
+                              flow.GetSizeBytes(),
+                              "different-spine OCS received byte count mismatch");
+        Simulator::Destroy();
+    }
+};
+
 class TlOcsFlowPathSelectorTestSuite : public TestSuite
 {
   public:
@@ -279,6 +528,9 @@ TlOcsFlowPathSelectorTestSuite::TlOcsFlowPathSelectorTestSuite()
     AddTestCase(new TlOcsFlowPathSelectorTestCase);
     AddTestCase(new TlOcsFlowPathDataPlaneConsistencyTestCase);
     AddTestCase(new TlOcsFlowPathActiveSetClosureTestCase);
+    AddTestCase(new TlOcsTwoHopDataPlaneCompletionTestCase);
+    AddTestCase(new TlOcsReachableDataPlaneCompletionTestCase);
+    AddTestCase(new IntermediateDifferentSpineForwardingTestCase);
 }
 
 static TlOcsFlowPathSelectorTestSuite g_tlOcsFlowPathSelectorTestSuite;

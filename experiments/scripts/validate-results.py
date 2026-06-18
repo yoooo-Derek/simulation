@@ -25,8 +25,18 @@ SUMMARY_FIELDS = {
     "installed_flows",
     "total_flows",
     "completed_flows",
+    "install_rate",
+    "completion_rate_generated",
+    "completion_rate_installed",
+    "uninstalled_flows",
+    "installed_incomplete_flows",
     "avg_receiver_throughput_bps",
+    "avg_receiver_throughput_installed_dest_bps",
+    "receiver_count_installed_dest",
+    "total_received_bps",
+    "avg_receiver_throughput_fraction_of_access_capacity",
     "avg_fct_s",
+    "avg_fct_completed_only_s",
     "offered_load_factor",
     "measurement_duration_s",
     "offered_bytes_measurement",
@@ -62,7 +72,12 @@ NONNEGATIVE_SUMMARY_FIELDS = {
     "installed_flows",
     "completed_flows",
     "avg_receiver_throughput_bps",
+    "avg_receiver_throughput_installed_dest_bps",
+    "receiver_count_installed_dest",
+    "total_received_bps",
+    "avg_receiver_throughput_fraction_of_access_capacity",
     "avg_fct_s",
+    "avg_fct_completed_only_s",
     "p90_fct_s",
     "p95_fct_s",
     "avg_network_link_utilization",
@@ -70,6 +85,12 @@ NONNEGATIVE_SUMMARY_FIELDS = {
     "retried_flows",
     "interrupted_flows",
     "residual_flows",
+    "deferred_arrivals",
+    "max_deferred_arrivals",
+    "stage_boundary_blocked_count",
+    "active_flows_at_stage_boundary",
+    "final_active_flows",
+    "final_waiting_flows",
     "ocs_flow_hit_rate",
     "ocs_byte_hit_rate",
     "offered_load_factor",
@@ -167,6 +188,45 @@ def validate_summary(path, fieldnames, rows, load_tolerance):
             raise ValueError(f"{path}:{row_number}: installed_flows exceeds generated_flows")
         if completed > total:
             raise ValueError(f"{path}:{row_number}: completed_flows exceeds total_flows")
+        if completed > installed:
+            raise ValueError(f"{path}:{row_number}: completed_flows exceeds installed_flows")
+
+        uninstalled = parse_required_number(path, row_number, row, "uninstalled_flows")
+        installed_incomplete = parse_required_number(
+            path, row_number, row, "installed_incomplete_flows"
+        )
+        if uninstalled != generated - installed:
+            raise ValueError(
+                f"{path}:{row_number}: uninstalled_flows must equal generated-installed"
+            )
+        if installed_incomplete != installed - completed:
+            raise ValueError(
+                f"{path}:{row_number}: installed_incomplete_flows must equal installed-completed"
+            )
+
+        install_rate = parse_required_number(path, row_number, row, "install_rate")
+        completion_rate_generated = parse_required_number(
+            path, row_number, row, "completion_rate_generated"
+        )
+        completion_rate_installed = parse_required_number(
+            path, row_number, row, "completion_rate_installed"
+        )
+        expected_install_rate = installed / generated if generated > 0 else 0.0
+        expected_completion_generated = completed / generated if generated > 0 else 0.0
+        expected_completion_installed = completed / installed if installed > 0 else 0.0
+        for field, actual, expected in (
+            ("install_rate", install_rate, expected_install_rate),
+            ("completion_rate_generated", completion_rate_generated, expected_completion_generated),
+            ("completion_rate_installed", completion_rate_installed, expected_completion_installed),
+        ):
+            if abs(actual - expected) > 1e-9:
+                raise ValueError(
+                    f"{path}:{row_number}: {field}={actual} does not match expected {expected}"
+                )
+
+        for field, value in row.items():
+            if field.endswith("_bps") and value != "" and parse_number(path, row_number, field, value) < 0:
+                raise ValueError(f"{path}:{row_number}: {field} must be a non-negative rate")
 
 
 def validate_flows(path, fieldnames, rows):

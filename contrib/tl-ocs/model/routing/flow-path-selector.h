@@ -46,6 +46,11 @@ void InstallOcsHostRoutes(const FlowSpec& flow,
                           const FlowPathDecision& decision,
                           const NodeIndex& nodeIndex);
 
+bool CanInstallOcsHostRoutes(const FlowSpec& flow,
+                             const FlowPathDecision& decision,
+                             const NodeIndex& nodeIndex,
+                             std::string* reason = nullptr);
+
 void InstallOcsHostRoutes(const std::vector<FlowSpec>& flows,
                           const std::vector<FlowPathDecision>& decisions,
                           const NodeIndex& nodeIndex);

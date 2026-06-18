@@ -14,8 +14,27 @@ SCHEMA_VERSION = "tl-hoc-v7"
 SCHEMES = ("electrical-only", "static-ocs", "tl-hoc")
 RHOS = (0.3, 0.5, 0.7, 0.9)
 METRICS = (
+    ("avg_fct_completed_only_s", "avg_fct_completed_only_ms", 1000.0),
     ("avg_fct_s", "avg_fct_ms", 1000.0),
     ("avg_receiver_throughput_bps", "avg_receiver_throughput_gbps", 1e-9),
+    (
+        "avg_receiver_throughput_installed_dest_bps",
+        "avg_receiver_throughput_installed_dest_gbps",
+        1e-9,
+    ),
+    ("total_received_bps", "total_received_gbps", 1e-9),
+    (
+        "avg_receiver_throughput_fraction_of_access_capacity",
+        "avg_receiver_throughput_fraction_of_access_capacity",
+        1.0,
+    ),
+    ("install_rate", "install_rate", 1.0),
+    ("completion_rate_generated", "completion_rate_generated", 1.0),
+    ("completion_rate_installed", "completion_rate_installed", 1.0),
+    ("uninstalled_flows", "uninstalled_flows", 1.0),
+    ("installed_incomplete_flows", "installed_incomplete_flows", 1.0),
+    ("deferred_arrivals", "deferred_arrivals", 1.0),
+    ("stage_boundary_blocked_count", "stage_boundary_blocked_count", 1.0),
 )
 
 OUTPUT_FIELDS = [

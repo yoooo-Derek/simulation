@@ -824,6 +824,12 @@ main(int argc, char* argv[])
     std::optional<uint32_t> retriedFlows;
     std::optional<uint32_t> interruptedFlows;
     std::optional<uint32_t> residualFlows;
+    std::optional<uint32_t> deferredArrivals;
+    std::optional<uint32_t> maxDeferredArrivals;
+    std::optional<uint32_t> stageBoundaryBlockedCount;
+    std::optional<uint32_t> activeFlowsAtStageBoundary;
+    std::optional<uint32_t> finalActiveFlows;
+    std::optional<uint32_t> finalWaitingFlows;
     std::optional<double> communityInternalSelectedEdgeRatio;
     std::optional<uint32_t> timelineCycles;
     std::optional<uint32_t> schedulingRoundCount;
@@ -1029,7 +1035,8 @@ main(int argc, char* argv[])
                     MetricsCollector().Summarize(
                         flowMetrics,
                         (config.GetMeasurementEndTime() - config.GetMeasurementStartTime())
-                            .GetSeconds());
+                            .GetSeconds(),
+                        effectiveServerAccessRateBps);
                 std::cout << "TL-OCS datapath diagnostic: mode=" << diagnosticMode
                           << ", diagnostic_only=true"
                           << ", flows=" << installedFlows.value()
@@ -1093,6 +1100,12 @@ main(int argc, char* argv[])
                 retriedFlows = scenarioResult.retriedFlows;
                 interruptedFlows = scenarioResult.interruptedFlows;
                 residualFlows = scenarioResult.residualFlows;
+                deferredArrivals = scenarioResult.deferredArrivals;
+                maxDeferredArrivals = scenarioResult.maxDeferredArrivals;
+                stageBoundaryBlockedCount = scenarioResult.stageBoundaryBlockedCount;
+                activeFlowsAtStageBoundary = scenarioResult.activeFlowsAtStageBoundary;
+                finalActiveFlows = scenarioResult.finalActiveFlows;
+                finalWaitingFlows = scenarioResult.finalWaitingFlows;
                 communityInternalSelectedEdgeRatio =
                     scenarioResult.communityInternalSelectedEdgeRatio;
                 status = scenarioResult.status;
@@ -1474,6 +1487,12 @@ main(int argc, char* argv[])
                                  retriedFlows,
                                  interruptedFlows,
                                  residualFlows,
+                                 deferredArrivals,
+                                 maxDeferredArrivals,
+                                 stageBoundaryBlockedCount,
+                                 activeFlowsAtStageBoundary,
+                                 finalActiveFlows,
+                                 finalWaitingFlows,
                                  communityInternalSelectedEdgeRatio,
                                  timelineCycles,
                                  schedulingRoundCount,

@@ -45,6 +45,12 @@ struct SmokeScenarioResult
     uint32_t retriedFlows = 0;
     uint32_t interruptedFlows = 0;
     uint32_t residualFlows = 0;
+    uint32_t deferredArrivals = 0;
+    uint32_t maxDeferredArrivals = 0;
+    uint32_t stageBoundaryBlockedCount = 0;
+    uint32_t activeFlowsAtStageBoundary = 0;
+    uint32_t finalActiveFlows = 0;
+    uint32_t finalWaitingFlows = 0;
     double communityInternalSelectedEdgeRatio = 0.0;
     uint32_t timelineCycles = 0;
     uint32_t schedulingRoundCount = 0;

@@ -62,6 +62,24 @@ TlOcsResultWriterSmokeSummaryTestCase::DoRun()
     NS_TEST_ASSERT_MSG_NE(text.find("avg_receiver_throughput_bps"),
                           std::string::npos,
                           "missing V2 receiver throughput CSV field");
+    NS_TEST_ASSERT_MSG_NE(text.find("avg_receiver_throughput_installed_dest_bps"),
+                          std::string::npos,
+                          "missing explicit receiver throughput CSV field");
+    NS_TEST_ASSERT_MSG_NE(text.find("install_rate"),
+                          std::string::npos,
+                          "missing install-rate CSV field");
+    NS_TEST_ASSERT_MSG_NE(text.find("installed_incomplete_flows"),
+                          std::string::npos,
+                          "missing installed-incomplete CSV field");
+    NS_TEST_ASSERT_MSG_NE(text.find("avg_fct_completed_only_s"),
+                          std::string::npos,
+                          "missing completed-only FCT CSV field");
+    NS_TEST_ASSERT_MSG_NE(text.find("deferred_arrivals"),
+                          std::string::npos,
+                          "missing deferred arrivals CSV field");
+    NS_TEST_ASSERT_MSG_NE(text.find("final_waiting_flows"),
+                          std::string::npos,
+                          "missing final waiting flows CSV field");
     NS_TEST_ASSERT_MSG_NE(text.find("avg_network_link_utilization"),
                           std::string::npos,
                           "missing V2 link utilization CSV field");
