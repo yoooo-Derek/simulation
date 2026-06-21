@@ -1,0 +1,23 @@
+# Ignore everything by default.
+/*
+
+# Keep this ignore policy tracked.
+!/.gitignore
+
+# Track custom ns-3 contribution module files.
+!/contrib/
+/contrib/*
+!/contrib/.gitignore
+!/contrib/smtra/
+!/contrib/smtra/**
+
+# Track custom project documentation.
+!/docs/
+/docs/*
+!/docs/paper/
+!/docs/paper/**
+
+# Track custom scratch entry points only.
+!/scratch/
+/scratch/*
+!/scratch/smtra-runner.cc
