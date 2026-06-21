@@ -37,6 +37,7 @@ build_lib(
     test/smtra-electrical-only-topology-test-suite.cc
     test/smtra-baseline-strategy-test-suite.cc
     test/smtra-shortest-path-routing-test-suite.cc
+    test/smtra-ocs-coverage-test-suite.cc
     test/smtra-performance-metrics-test-suite.cc
     test/smtra-runner-smoke-test-suite.cc
 )

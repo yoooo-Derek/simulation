@@ -72,6 +72,7 @@ TrafficMatrix BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
                                            Time trafficStopTime,
                                            uint32_t podCount = 8,
                                            uint32_t serversPerPod = 16);
+TrafficMatrix ScaleTrafficMatrix(const TrafficMatrix& matrix, double scale);
 std::vector<FlowSpec> BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
                                                 const std::string& trafficModel,
                                                 uint32_t serversPerPod,

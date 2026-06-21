@@ -64,6 +64,7 @@ main(int argc, char* argv[])
     std::string trafficModel = "data-parallel";
     std::string strategy = "v8";
     double offeredLoad = 0.2;
+    double workloadScale = 0.001;
     uint64_t messageSizeBytes = 16384;
     double trafficStartSeconds = 0.001;
     double trafficStopSeconds = 0.05;
@@ -85,6 +86,7 @@ main(int argc, char* argv[])
                  trafficModel);
     cmd.AddValue("strategy", "Routing strategy: e-only, static-ocs, traffic-greedy, v8", strategy);
     cmd.AddValue("offeredLoad", "Normalized server offered load", offeredLoad);
+    cmd.AddValue("workloadScale", "Scale factor applied to offered bytes for NS-3 flow generation", workloadScale);
     cmd.AddValue("messageSizeBytes", "Fixed TCP message/flow size in bytes", messageSizeBytes);
     cmd.AddValue("trafficStartTime", "Traffic start time in seconds", trafficStartSeconds);
     cmd.AddValue("trafficStopTime", "Traffic injection stop time in seconds", trafficStopSeconds);
@@ -130,14 +132,15 @@ main(int argc, char* argv[])
                                                                                       topologyOptions)
                               : DragonflyPlusOcsTopologyBuilder().Build(config, topologyOptions);
 
-    TrafficMatrix observed = BuildAiTrainingTrafficMatrix(trafficModel,
-                                                          offeredLoad,
-                                                          kServerAccessBps,
-                                                          trafficStartTime,
-                                                          trafficStopTime,
-                                                          8,
-                                                          config.GetServersPerTor());
-    std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(observed,
+    TrafficMatrix offeredMatrix = BuildAiTrainingTrafficMatrix(trafficModel,
+                                                               offeredLoad,
+                                                               kServerAccessBps,
+                                                               trafficStartTime,
+                                                               trafficStopTime,
+                                                               8,
+                                                               config.GetServersPerTor());
+    TrafficMatrix simulatedMatrix = ScaleTrafficMatrix(offeredMatrix, workloadScale);
+    std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(simulatedMatrix,
                                                             trafficModel,
                                                             config.GetServersPerTor(),
                                                             messageSizeBytes,
@@ -170,7 +173,7 @@ main(int argc, char* argv[])
     }
     else if (strategy == "traffic-greedy")
     {
-        deployedState = BuildTrafficGreedyBaselineState(observed, parameters);
+        deployedState = BuildTrafficGreedyBaselineState(simulatedMatrix, parameters);
         decisions = pathInstaller.SelectShortestOcs(flows, deployedState, nodeIndex);
         pathInstaller.Install(flows, decisions, nodeIndex);
     }
@@ -181,7 +184,7 @@ main(int argc, char* argv[])
         empty.R = DenseMatrix(config.GetNumTors());
         empty.A = DenseMatrix(config.GetNumTors());
         empty.ocsPlane = OcsPlane(config.GetNumTors(), parameters.memsCount, circuitCapacityBps);
-        const SmtraControlResult smtra = SmtraController().Run(observed, empty, parameters);
+        const SmtraControlResult smtra = SmtraController().Run(simulatedMatrix, empty, parameters);
         deployedState = smtra.deployedState;
         decisions = pathInstaller.Select(flows, deployedState, nodeIndex);
         pathInstaller.Install(flows, decisions, nodeIndex);
@@ -211,6 +214,13 @@ main(int argc, char* argv[])
             installableFlows++;
         }
     }
+    const uint32_t generatedFlows = static_cast<uint32_t>(flows.size());
+    const uint32_t unservedFlows = generatedFlows - installableFlows;
+    const double installRatio = generatedFlows == 0
+                                    ? 1.0
+                                    : static_cast<double>(installableFlows) /
+                                          static_cast<double>(generatedFlows);
+    const bool ocsCoverageOk = unservedFlows == 0;
     auto completedCallbacks = std::make_shared<uint32_t>(0);
     auto completionCallback = [completedCallbacks, installableFlows](uint32_t) {
         (*completedCallbacks)++;
@@ -237,7 +247,15 @@ main(int argc, char* argv[])
     std::cout << "SMTRA experiment: trafficModel=" << trafficModel
               << ", strategy=" << strategy
               << ", offeredLoad=" << offeredLoad
-              << ", offeredBytes=" << observed.GetTotalBytes()
+              << ", workloadScale=" << workloadScale
+              << ", messageSizeBytes=" << messageSizeBytes
+              << ", offeredBytes=" << offeredMatrix.GetTotalBytes()
+              << ", simulatedBytes=" << simulatedMatrix.GetTotalBytes()
+              << ", generatedFlows=" << generatedFlows
+              << ", installableFlows=" << installableFlows
+              << ", unservedFlows=" << unservedFlows
+              << ", installRatio=" << installRatio
+              << ", ocsCoverageOk=" << (ocsCoverageOk ? "true" : "false")
               << ", installedFlows=" << performance.installedFlows
               << ", completedFlows=" << performance.completedFlows
               << ", incompleteFlows=" << performance.incompleteFlows

@@ -276,6 +276,50 @@ BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
     return matrix;
 }
 
+TrafficMatrix
+ScaleTrafficMatrix(const TrafficMatrix& matrix, double scale)
+{
+    if (scale < 0.0)
+    {
+        throw std::runtime_error("workloadScale must be non-negative");
+    }
+    TrafficMatrix scaled(matrix.GetPodCount());
+    uint64_t assignedBytes = 0;
+    uint32_t lastSource = 0;
+    uint32_t lastDestination = 0;
+    bool hasLast = false;
+    for (uint32_t source = 0; source < matrix.GetPodCount(); ++source)
+    {
+        for (uint32_t destination = 0; destination < matrix.GetPodCount(); ++destination)
+        {
+            if (source == destination)
+            {
+                continue;
+            }
+            const uint64_t originalBytes = matrix.GetBytes(source, destination);
+            if (originalBytes == 0)
+            {
+                continue;
+            }
+            const uint64_t bytes =
+                static_cast<uint64_t>(std::floor(static_cast<double>(originalBytes) * scale));
+            scaled.SetBytes(source, destination, bytes);
+            assignedBytes += bytes;
+            lastSource = source;
+            lastDestination = destination;
+            hasLast = true;
+        }
+    }
+
+    const uint64_t targetTotal =
+        static_cast<uint64_t>(std::llround(static_cast<double>(matrix.GetTotalBytes()) * scale));
+    if (hasLast && targetTotal > assignedBytes)
+    {
+        scaled.AddBytes(lastSource, lastDestination, targetTotal - assignedBytes);
+    }
+    return scaled;
+}
+
 std::vector<FlowSpec>
 BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
                           const std::string& trafficModel,
