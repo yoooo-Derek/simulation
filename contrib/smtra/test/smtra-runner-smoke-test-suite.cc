@@ -17,7 +17,7 @@ class SmtraRunnerSmokeTestCase : public TestCase
     void DoRun() override
     {
         TrafficMatrix observed = BuildAiTrainingTrafficMatrix("data-parallel",
-                                                              0.2,
+                                                              0.000001,
                                                               32000000000ULL,
                                                               Seconds(0.001),
                                                               Seconds(0.05),
@@ -26,7 +26,7 @@ class SmtraRunnerSmokeTestCase : public TestCase
         std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(observed,
                                                                 "data-parallel",
                                                                 16,
-                                                                4,
+                                                                16384,
                                                                 Seconds(0.001),
                                                                 Seconds(0.05),
                                                                 32000000000ULL);

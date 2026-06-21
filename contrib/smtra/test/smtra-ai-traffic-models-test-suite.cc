@@ -41,15 +41,19 @@ class SmtraAiTrafficModelsTestCase : public TestCase
         NS_TEST_ASSERT_MSG_GT(tensor.GetBytes(0, 1), 0, "tensor community edge is missing");
         NS_TEST_ASSERT_MSG_EQ(tensor.GetBytes(1, 2), 0, "cross-community edge should be empty");
 
-        std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(dataParallel,
+        TrafficMatrix tiny(8);
+        tiny.SetBytes(0, 1, 100);
+        std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(tiny,
                                                                 "data-parallel",
                                                                 16,
-                                                                4,
+                                                                16,
                                                                 Seconds(0.001),
                                                                 Seconds(0.05),
                                                                 serverAccessBps);
-        NS_TEST_ASSERT_MSG_EQ(flows.size(), 64, "flow split count mismatch");
-        NS_TEST_ASSERT_MSG_EQ(flows.front().GetStartTime() > Seconds(0.001), true, "bad start");
+        NS_TEST_ASSERT_MSG_EQ(flows.size(), 7, "message-size flow count mismatch");
+        NS_TEST_ASSERT_MSG_EQ(flows.front().GetSizeBytes(), 16, "message size mismatch");
+        NS_TEST_ASSERT_MSG_EQ(flows.back().GetSizeBytes(), 4, "tail message size mismatch");
+        NS_TEST_ASSERT_MSG_EQ(flows.front().GetStartTime() >= Seconds(0.001), true, "bad start");
         NS_TEST_ASSERT_MSG_EQ(flows.back().GetStartTime() < Seconds(0.05), true, "bad stop");
     }
 };

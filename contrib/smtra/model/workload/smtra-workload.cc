@@ -280,14 +280,14 @@ std::vector<FlowSpec>
 BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
                           const std::string& trafficModel,
                           uint32_t serversPerPod,
-                          uint32_t flowsPerPair,
+                          uint64_t messageSizeBytes,
                           Time trafficStartTime,
                           Time trafficStopTime,
                           uint64_t estimatedRateBps)
 {
-    if (flowsPerPair == 0)
+    if (messageSizeBytes == 0)
     {
-        throw std::runtime_error("flowsPerPair must be positive");
+        throw std::runtime_error("messageSizeBytes must be positive");
     }
     if (trafficStopTime <= trafficStartTime)
     {
@@ -311,21 +311,25 @@ BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
             {
                 continue;
             }
-            const uint64_t baseSize = bytes / flowsPerPair;
-            const uint64_t remainder = bytes % flowsPerPair;
-            for (uint32_t split = 0; split < flowsPerPair; ++split)
+            const uint64_t flowCount =
+                static_cast<uint64_t>(std::ceil(static_cast<double>(bytes) /
+                                                static_cast<double>(messageSizeBytes)));
+            for (uint64_t split = 0; split < flowCount; ++split)
             {
-                const uint64_t flowSize = baseSize + (split < remainder ? 1 : 0);
+                const uint64_t sentBefore = split * messageSizeBytes;
+                const uint64_t remaining = bytes > sentBefore ? bytes - sentBefore : 0;
+                const uint64_t flowSize = std::min<uint64_t>(messageSizeBytes, remaining);
                 if (flowSize == 0)
                 {
                     continue;
                 }
-                const double fraction = (static_cast<double>(split) + 0.5) /
-                                        static_cast<double>(flowsPerPair);
+                const double fraction =
+                    static_cast<double>(split) / static_cast<double>(flowCount);
                 const Time startTime = trafficStartTime + Seconds(duration.GetSeconds() * fraction);
-                const uint32_t sourceServer = (flowId + source + split) % serversPerPod;
+                const uint32_t splitIndex = static_cast<uint32_t>(split);
+                const uint32_t sourceServer = (flowId + source + splitIndex) % serversPerPod;
                 const uint32_t destinationServer =
-                    (flowId + destination + split + 1) % serversPerPod;
+                    (flowId + destination + splitIndex + 1) % serversPerPod;
                 flows.emplace_back(flowId,
                                    source,
                                    sourceServer,

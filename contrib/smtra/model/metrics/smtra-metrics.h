@@ -65,6 +65,8 @@ struct SmtraPerformanceMetrics
     uint32_t installedFlows = 0;
     uint32_t completedFlows = 0;
     uint32_t incompleteFlows = 0;
+    double completionRatio = 0.0;
+    bool fullyCompleted = false;
     uint64_t receivedBytes = 0;
     uint64_t measurementReceivedBytes = 0;
 };

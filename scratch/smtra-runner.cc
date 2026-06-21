@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -63,7 +64,7 @@ main(int argc, char* argv[])
     std::string trafficModel = "data-parallel";
     std::string strategy = "v8";
     double offeredLoad = 0.2;
-    uint32_t flowsPerPair = 32;
+    uint64_t messageSizeBytes = 16384;
     double trafficStartSeconds = 0.001;
     double trafficStopSeconds = 0.05;
     double simulationStopSeconds = 0.2;
@@ -84,7 +85,7 @@ main(int argc, char* argv[])
                  trafficModel);
     cmd.AddValue("strategy", "Routing strategy: e-only, static-ocs, traffic-greedy, v8", strategy);
     cmd.AddValue("offeredLoad", "Normalized server offered load", offeredLoad);
-    cmd.AddValue("flowsPerPair", "TCP flows generated for each non-zero pod pair", flowsPerPair);
+    cmd.AddValue("messageSizeBytes", "Fixed TCP message/flow size in bytes", messageSizeBytes);
     cmd.AddValue("trafficStartTime", "Traffic start time in seconds", trafficStartSeconds);
     cmd.AddValue("trafficStopTime", "Traffic injection stop time in seconds", trafficStopSeconds);
     cmd.AddValue("simulationStopTime", "Simulation stop time in seconds", simulationStopSeconds);
@@ -139,7 +140,7 @@ main(int argc, char* argv[])
     std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(observed,
                                                             trafficModel,
                                                             config.GetServersPerTor(),
-                                                            flowsPerPair,
+                                                            messageSizeBytes,
                                                             trafficStartTime,
                                                             trafficStopTime,
                                                             kServerAccessBps);
@@ -200,19 +201,38 @@ main(int argc, char* argv[])
     {
         AddActiveOcsDevices(nodeIndex, deployedState, linkMonitor);
     }
-    linkMonitor.Enable(trafficStartTime, simulationStopTime);
+    linkMonitor.Enable(trafficStartTime, trafficStopTime);
+
+    uint32_t installableFlows = 0;
+    for (const auto& decision : decisions)
+    {
+        if (decision.installable)
+        {
+            installableFlows++;
+        }
+    }
+    auto completedCallbacks = std::make_shared<uint32_t>(0);
+    auto completionCallback = [completedCallbacks, installableFlows](uint32_t) {
+        (*completedCallbacks)++;
+        if (installableFlows > 0 && *completedCallbacks >= installableFlows)
+        {
+            Simulator::Stop(NanoSeconds(1));
+        }
+    };
 
     FlowLaunchResult launch = FlowLauncher().Install(flows,
                                                      decisions,
                                                      nodeIndex,
                                                      simulationStopTime,
                                                      trafficStartTime,
-                                                     simulationStopTime);
+                                                     trafficStopTime,
+                                                     10000,
+                                                     completionCallback);
     Simulator::Stop(simulationStopTime);
     Simulator::Run();
 
     const SmtraPerformanceMetrics performance =
-        BuildSmtraPerformanceMetrics(launch, linkMonitor, trafficStartTime, simulationStopTime);
+        BuildSmtraPerformanceMetrics(launch, linkMonitor, trafficStartTime, trafficStopTime);
 
     std::cout << "SMTRA experiment: trafficModel=" << trafficModel
               << ", strategy=" << strategy
@@ -221,6 +241,8 @@ main(int argc, char* argv[])
               << ", installedFlows=" << performance.installedFlows
               << ", completedFlows=" << performance.completedFlows
               << ", incompleteFlows=" << performance.incompleteFlows
+              << ", completionRatio=" << performance.completionRatio
+              << ", fullyCompleted=" << (performance.fullyCompleted ? "true" : "false")
               << ", avgFctSeconds=" << performance.avgFctSeconds
               << ", throughputGbps=" << performance.throughputGbps
               << ", avgLinkUtilization=" << performance.avgLinkUtilization << std::endl;

@@ -75,7 +75,7 @@ TrafficMatrix BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
 std::vector<FlowSpec> BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
                                                 const std::string& trafficModel,
                                                 uint32_t serversPerPod,
-                                                uint32_t flowsPerPair,
+                                                uint64_t messageSizeBytes,
                                                 Time trafficStartTime,
                                                 Time trafficStopTime,
                                                 uint64_t estimatedRateBps);

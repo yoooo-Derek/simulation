@@ -1,6 +1,7 @@
 #include "smtra-metrics.h"
 
 #include <algorithm>
+#include <limits>
 #include <set>
 
 #include "ns3/packet.h"
@@ -214,6 +215,16 @@ BuildSmtraPerformanceMetrics(const FlowLaunchResult& launch,
     if (metrics.completedFlows > 0)
     {
         metrics.avgFctSeconds = fctTotalSeconds / static_cast<double>(metrics.completedFlows);
+    }
+    if (metrics.installedFlows > 0)
+    {
+        metrics.completionRatio =
+            static_cast<double>(metrics.completedFlows) / static_cast<double>(metrics.installedFlows);
+    }
+    metrics.fullyCompleted = metrics.incompleteFlows == 0;
+    if (!metrics.fullyCompleted)
+    {
+        metrics.avgFctSeconds = std::numeric_limits<double>::quiet_NaN();
     }
     const double measurementSeconds = (measurementEndTime - measurementStartTime).GetSeconds();
     if (measurementSeconds > 0.0)
