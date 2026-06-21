@@ -1,0 +1,37 @@
+build_lib(
+  LIBNAME smtra
+  SOURCE_FILES
+    model/applications/flow-launcher.cc
+    model/config/simulation-config.cc
+    model/control/ocs-plane.cc
+    model/control/smtra-controller.cc
+    model/datapath/smtra-path-installer.cc
+    model/metrics/smtra-metrics.cc
+    model/topology/dragonfly-plus-ocs-topology-builder.cc
+    model/topology/node-index.cc
+    model/workload/smtra-workload.cc
+  HEADER_FILES
+    model/applications/flow-launcher.h
+    model/config/simulation-config.h
+    model/control/ocs-plane.h
+    model/control/smtra-controller.h
+    model/datapath/smtra-path-installer.h
+    model/metrics/smtra-metrics.h
+    model/topology/dragonfly-plus-ocs-topology-builder.h
+    model/topology/node-index.h
+    model/workload/smtra-workload.h
+  LIBRARIES_TO_LINK
+    ${libapplications}
+    ${libcore}
+    ${libinternet}
+    ${libnetwork}
+    ${libpoint-to-point}
+  TEST_SOURCES
+    test/smtra-structural-state-test-suite.cc
+    test/smtra-smd-test-suite.cc
+    test/smtra-raa-test-suite.cc
+    test/smtra-taa-test-suite.cc
+    test/smtra-controller-test-suite.cc
+    test/smtra-dragonfly-plus-topology-test-suite.cc
+    test/smtra-runner-smoke-test-suite.cc
+)
