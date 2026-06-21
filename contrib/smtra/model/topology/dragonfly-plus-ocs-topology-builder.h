@@ -19,6 +19,8 @@ class DragonflyPlusOcsTopologyBuilder
         uint32_t spinesPerPod = 4;
         uint32_t serversPerLeaf = 4;
         uint32_t memsCount = 8;
+        bool enableOcs = true;
+        bool interPodElectricalFullMesh = false;
         std::string electricalDataRate = "32Gbps";
         std::string ocsDataRate = "100Gbps";
         Time electricalDelay = MicroSeconds(20);
@@ -26,6 +28,7 @@ class DragonflyPlusOcsTopologyBuilder
     };
 
     NodeIndex Build(const SimulationConfig& config, const BuildOptions& options) const;
+    NodeIndex BuildElectricalOnly(const SimulationConfig& config, const BuildOptions& options) const;
 };
 
 } // namespace smtra

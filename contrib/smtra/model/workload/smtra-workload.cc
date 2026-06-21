@@ -1,6 +1,8 @@
 #include "smtra-workload.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -171,59 +173,131 @@ FlowSpec::GetPatternName() const
 }
 
 TrafficMatrix
-BuildSmtraTrafficMatrix(const std::string& matrixPattern, uint64_t matrixScaleBytes, uint32_t podCount)
+BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
+                             double offeredLoad,
+                             uint64_t serverAccessBps,
+                             Time trafficStartTime,
+                             Time trafficStopTime,
+                             uint32_t podCount,
+                             uint32_t serversPerPod)
 {
+    if (podCount != 8)
+    {
+        throw std::runtime_error("SMTRA AI traffic models require 8 pods");
+    }
+    if (offeredLoad < 0.0)
+    {
+        throw std::runtime_error("offeredLoad must be non-negative");
+    }
+    const double trafficDurationSeconds =
+        (trafficStopTime - trafficStartTime).GetSeconds();
+    if (trafficDurationSeconds <= 0.0)
+    {
+        throw std::runtime_error("trafficStopTime must be after trafficStartTime");
+    }
+
+    std::vector<std::vector<double>> weights(podCount, std::vector<double>(podCount, 0.0));
+    auto addBidirectional = [&weights](uint32_t a, uint32_t b, double weight) {
+        weights[a][b] += weight;
+        weights[b][a] += weight;
+    };
+
+    if (trafficModel == "data-parallel")
+    {
+        for (uint32_t pod = 0; pod < podCount; ++pod)
+        {
+            addBidirectional(pod, (pod + 1) % podCount, 1.0);
+        }
+    }
+    else if (trafficModel == "tensor-community")
+    {
+        addBidirectional(0, 1, 1.0);
+        addBidirectional(2, 3, 1.0);
+        addBidirectional(4, 5, 1.0);
+        addBidirectional(6, 7, 1.0);
+    }
+    else if (trafficModel == "pipeline")
+    {
+        for (uint32_t pod = 0; pod + 1 < podCount; ++pod)
+        {
+            addBidirectional(pod, pod + 1, 1.0);
+        }
+    }
+    else
+    {
+        throw std::runtime_error("unsupported SMTRA AI traffic model: " + trafficModel);
+    }
+
+    double weightTotal = 0.0;
+    for (const auto& row : weights)
+    {
+        for (double value : row)
+        {
+            weightTotal += value;
+        }
+    }
+    if (weightTotal <= 0.0)
+    {
+        throw std::runtime_error("SMTRA AI traffic model produced no traffic");
+    }
+
+    const double serverCount = static_cast<double>(podCount * serversPerPod);
+    const double totalOfferedBytes =
+        offeredLoad * serverCount * static_cast<double>(serverAccessBps) *
+        trafficDurationSeconds / 8.0;
+
     TrafficMatrix matrix(podCount);
-    if (matrixPattern == "structured")
+    uint64_t assignedBytes = 0;
+    uint32_t lastSource = 0;
+    uint32_t lastDestination = 0;
+    bool hasLast = false;
+    for (uint32_t source = 0; source < podCount; ++source)
     {
-        matrix.AddBytes(0, 1, matrixScaleBytes);
-        matrix.AddBytes(1, 0, matrixScaleBytes);
-        matrix.AddBytes(2, 3, matrixScaleBytes);
-        matrix.AddBytes(3, 2, matrixScaleBytes);
-        matrix.AddBytes(4, 5, matrixScaleBytes / 2);
-        matrix.AddBytes(5, 4, matrixScaleBytes / 2);
-        matrix.AddBytes(6, 7, matrixScaleBytes / 2);
-        matrix.AddBytes(7, 6, matrixScaleBytes / 2);
-        matrix.AddBytes(0, 4, matrixScaleBytes / 8);
-        matrix.AddBytes(4, 0, matrixScaleBytes / 8);
-        return matrix;
-    }
-    if (matrixPattern == "skewed")
-    {
-        for (uint32_t pod = 1; pod < podCount; ++pod)
+        for (uint32_t destination = 0; destination < podCount; ++destination)
         {
-            matrix.AddBytes(pod, 0, matrixScaleBytes);
-            matrix.AddBytes(0, pod, matrixScaleBytes / 4);
-        }
-        return matrix;
-    }
-    if (matrixPattern == "uniform-smoke")
-    {
-        const uint64_t bytes = std::max<uint64_t>(1, matrixScaleBytes / podCount);
-        for (uint32_t i = 0; i < podCount; ++i)
-        {
-            for (uint32_t j = 0; j < podCount; ++j)
+            if (source == destination || weights[source][destination] <= 0.0)
             {
-                if (i != j)
-                {
-                    matrix.AddBytes(i, j, bytes);
-                }
+                continue;
             }
+            const double exactBytes = totalOfferedBytes * weights[source][destination] / weightTotal;
+            const uint64_t bytes = static_cast<uint64_t>(std::floor(exactBytes));
+            matrix.SetBytes(source, destination, bytes);
+            assignedBytes += bytes;
+            lastSource = source;
+            lastDestination = destination;
+            hasLast = true;
         }
-        return matrix;
     }
-    throw std::runtime_error("unsupported SMTRA matrix pattern: " + matrixPattern);
+    const uint64_t roundedTotal = static_cast<uint64_t>(std::llround(totalOfferedBytes));
+    if (hasLast && roundedTotal > assignedBytes)
+    {
+        matrix.AddBytes(lastSource, lastDestination, roundedTotal - assignedBytes);
+    }
+    return matrix;
 }
 
 std::vector<FlowSpec>
 BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
-                          const std::string& matrixPattern,
+                          const std::string& trafficModel,
                           uint32_t serversPerPod,
+                          uint32_t flowsPerPair,
+                          Time trafficStartTime,
+                          Time trafficStopTime,
                           uint64_t estimatedRateBps)
 {
+    if (flowsPerPair == 0)
+    {
+        throw std::runtime_error("flowsPerPair must be positive");
+    }
+    if (trafficStopTime <= trafficStartTime)
+    {
+        throw std::runtime_error("trafficStopTime must be after trafficStartTime");
+    }
+
     std::vector<FlowSpec> flows;
     uint32_t flowId = 0;
     const uint32_t podCount = matrix.GetPodCount();
+    const Time duration = trafficStopTime - trafficStartTime;
     for (uint32_t source = 0; source < podCount; ++source)
     {
         for (uint32_t destination = 0; destination < podCount; ++destination)
@@ -237,18 +311,32 @@ BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
             {
                 continue;
             }
-            const uint32_t sourceServer = flowId % serversPerPod;
-            const uint32_t destinationServer = (flowId + 1) % serversPerPod;
-            flows.emplace_back(flowId,
-                               source,
-                               sourceServer,
-                               destination,
-                               destinationServer,
-                               bytes,
-                               MicroSeconds(100 + flowId * 10),
-                               matrixPattern,
-                               estimatedRateBps);
-            flowId++;
+            const uint64_t baseSize = bytes / flowsPerPair;
+            const uint64_t remainder = bytes % flowsPerPair;
+            for (uint32_t split = 0; split < flowsPerPair; ++split)
+            {
+                const uint64_t flowSize = baseSize + (split < remainder ? 1 : 0);
+                if (flowSize == 0)
+                {
+                    continue;
+                }
+                const double fraction = (static_cast<double>(split) + 0.5) /
+                                        static_cast<double>(flowsPerPair);
+                const Time startTime = trafficStartTime + Seconds(duration.GetSeconds() * fraction);
+                const uint32_t sourceServer = (flowId + source + split) % serversPerPod;
+                const uint32_t destinationServer =
+                    (flowId + destination + split + 1) % serversPerPod;
+                flows.emplace_back(flowId,
+                                   source,
+                                   sourceServer,
+                                   destination,
+                                   destinationServer,
+                                   flowSize,
+                                   startTime,
+                                   trafficModel,
+                                   estimatedRateBps);
+                flowId++;
+            }
         }
     }
     return flows;

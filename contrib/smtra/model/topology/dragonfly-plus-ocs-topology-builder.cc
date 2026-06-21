@@ -4,6 +4,7 @@
 #include "ns3/ipv4-address-helper.h"
 #include "ns3/ipv4-global-routing-helper.h"
 #include "ns3/ipv4-interface-address.h"
+#include "ns3/data-rate.h"
 #include "ns3/point-to-point-helper.h"
 #include "ns3/string.h"
 
@@ -38,11 +39,17 @@ void
 ValidateOptions(const DragonflyPlusOcsTopologyBuilder::BuildOptions& options)
 {
     if (options.podCount != 8 || options.leafsPerPod != 4 || options.spinesPerPod != 4 ||
-        options.serversPerLeaf != 4 || options.memsCount != 8)
+        options.serversPerLeaf != 4 || (options.enableOcs && options.memsCount != 8))
     {
         throw std::runtime_error("SMTRA topology requires 8 pods, 4 leafs/pod, 4 spines/pod, "
                                  "4 servers/leaf, and 8 MEMS switches");
     }
+}
+
+uint64_t
+GetBitRate(const std::string& dataRate)
+{
+    return DataRate(dataRate).GetBitRate();
 }
 
 } // namespace
@@ -59,8 +66,8 @@ DragonflyPlusOcsTopologyBuilder::Build(const SimulationConfig& config,
                              options.leafsPerPod,
                              options.spinesPerPod,
                              options.serversPerLeaf,
-                             options.memsCount,
-                             false);
+                             options.enableOcs ? options.memsCount : 0,
+                             options.interPodElectricalFullMesh);
 
     NodeContainer podGateways;
     podGateways.Create(options.podCount);
@@ -92,9 +99,12 @@ DragonflyPlusOcsTopologyBuilder::Build(const SimulationConfig& config,
     index.SetSpineNodes(allSpines);
 
     NodeContainer mems;
-    mems.Create(options.memsCount);
-    index.SetMemsNodes(mems);
-    allNodes.Add(mems);
+    if (options.enableOcs)
+    {
+        mems.Create(options.memsCount);
+        index.SetMemsNodes(mems);
+        allNodes.Add(mems);
+    }
 
     InternetStackHelper internet;
     internet.Install(allNodes);
@@ -114,6 +124,13 @@ DragonflyPlusOcsTopologyBuilder::Build(const SimulationConfig& config,
     PointToPointHelper circuitLink;
     circuitLink.SetDeviceAttribute("DataRate", StringValue(options.ocsDataRate));
     circuitLink.SetChannelAttribute("Delay", StringValue(FormatSeconds(options.ocsDelay)));
+
+    PointToPointHelper interPodElectricalLink;
+    interPodElectricalLink.SetDeviceAttribute("DataRate", StringValue(options.electricalDataRate));
+    interPodElectricalLink.SetChannelAttribute("Delay", StringValue(FormatSeconds(options.electricalDelay)));
+
+    const uint64_t electricalBps = GetBitRate(options.electricalDataRate);
+    const uint64_t ocsBps = GetBitRate(options.ocsDataRate);
 
     Ipv4AddressHelper ipv4;
     ipv4.SetBase("10.0.0.0", "255.255.255.252");
@@ -136,7 +153,8 @@ DragonflyPlusOcsTopologyBuilder::Build(const SimulationConfig& config,
                                      interfaces.Get(0).second,
                                      interfaces.Get(1).second,
                                      devices.Get(0),
-                                     devices.Get(1)});
+                                     devices.Get(1),
+                                     electricalBps});
             index.SetTorIngressDevice(podId, serverId, devices.Get(1));
             const uint32_t serverIndex = podId * serversPerPod + serverId;
             const Ipv4Address ocsServerAddress(0xac100001 + serverIndex);
@@ -168,7 +186,8 @@ DragonflyPlusOcsTopologyBuilder::Build(const SimulationConfig& config,
                                         interfaces.Get(0).second,
                                         interfaces.Get(1).second,
                                         devices.Get(0),
-                                        devices.Get(1)});
+                                        devices.Get(1),
+                                        electricalBps});
                 if (leafId == 0)
                 {
                     const uint32_t globalSpineId = podId * options.spinesPerPod + spineId;
@@ -179,57 +198,102 @@ DragonflyPlusOcsTopologyBuilder::Build(const SimulationConfig& config,
                                            interfaces.Get(0).second,
                                            interfaces.Get(1).second,
                                            devices.Get(0),
-                                           devices.Get(1)});
+                                           devices.Get(1),
+                                           electricalBps});
                 }
                 ipv4.NewNetwork();
             }
         }
     }
 
-    for (uint32_t podId = 0; podId < options.podCount; ++podId)
+    if (options.interPodElectricalFullMesh)
     {
-        for (uint32_t spineId = 0; spineId < options.spinesPerPod; ++spineId)
-        {
-            for (uint32_t plane = 0; plane < 2; ++plane)
-            {
-                const uint32_t memsId = spineId + 4 * plane;
-                NetDeviceContainer devices =
-                    opticalAccessLink.Install(NodeContainer(index.GetGroupSpine(podId, spineId),
-                                                            index.GetMems(memsId)));
-                index.AddOpticalAccessLink({podId, spineId, memsId, devices.Get(0), devices.Get(1)});
-            }
-        }
-    }
-
-    for (uint32_t memsId = 0; memsId < options.memsCount; ++memsId)
-    {
-        const uint32_t spineId = memsId % options.spinesPerPod;
+        const uint32_t gatewayLeafId = 0;
         for (uint32_t podA = 0; podA < options.podCount; ++podA)
         {
             for (uint32_t podB = podA + 1; podB < options.podCount; ++podB)
             {
                 NetDeviceContainer devices =
-                    circuitLink.Install(NodeContainer(index.GetGroupSpine(podA, spineId),
-                                                      index.GetGroupSpine(podB, spineId)));
+                    interPodElectricalLink.Install(NodeContainer(index.GetLeaf(podA, gatewayLeafId),
+                                                                 index.GetLeaf(podB, gatewayLeafId)));
                 Ipv4InterfaceContainer interfaces = ipv4.Assign(devices);
-                index.AddOcsLink({podA,
-                                  podB,
-                                  memsId,
-                                  spineId,
-                                  spineId,
-                                  interfaces.GetAddress(0),
-                                  interfaces.GetAddress(1),
-                                  interfaces.Get(0).second,
-                                  interfaces.Get(1).second,
-                                  devices.Get(0),
-                                  devices.Get(1)});
+                index.AddInterPodElectricalLink({podA,
+                                                 podB,
+                                                 interfaces.GetAddress(0),
+                                                 interfaces.GetAddress(1),
+                                                 interfaces.Get(0).second,
+                                                 interfaces.Get(1).second,
+                                                 devices.Get(0),
+                                                 devices.Get(1),
+                                                 electricalBps});
                 ipv4.NewNetwork();
+            }
+        }
+    }
+
+    if (options.enableOcs)
+    {
+        for (uint32_t podId = 0; podId < options.podCount; ++podId)
+        {
+            for (uint32_t spineId = 0; spineId < options.spinesPerPod; ++spineId)
+            {
+                for (uint32_t plane = 0; plane < 2; ++plane)
+                {
+                    const uint32_t memsId = spineId + 4 * plane;
+                    NetDeviceContainer devices =
+                        opticalAccessLink.Install(NodeContainer(index.GetGroupSpine(podId, spineId),
+                                                                index.GetMems(memsId)));
+                    index.AddOpticalAccessLink({podId,
+                                                spineId,
+                                                memsId,
+                                                devices.Get(0),
+                                                devices.Get(1)});
+                }
+            }
+        }
+
+        for (uint32_t memsId = 0; memsId < options.memsCount; ++memsId)
+        {
+            const uint32_t spineId = memsId % options.spinesPerPod;
+            for (uint32_t podA = 0; podA < options.podCount; ++podA)
+            {
+                for (uint32_t podB = podA + 1; podB < options.podCount; ++podB)
+                {
+                    NetDeviceContainer devices =
+                        circuitLink.Install(NodeContainer(index.GetGroupSpine(podA, spineId),
+                                                          index.GetGroupSpine(podB, spineId)));
+                    Ipv4InterfaceContainer interfaces = ipv4.Assign(devices);
+                    index.AddOcsLink({podA,
+                                      podB,
+                                      memsId,
+                                      spineId,
+                                      spineId,
+                                      interfaces.GetAddress(0),
+                                      interfaces.GetAddress(1),
+                                      interfaces.Get(0).second,
+                                      interfaces.Get(1).second,
+                                      devices.Get(0),
+                                      devices.Get(1),
+                                      ocsBps});
+                    ipv4.NewNetwork();
+                }
             }
         }
     }
 
     Ipv4GlobalRoutingHelper::PopulateRoutingTables();
     return index;
+}
+
+NodeIndex
+DragonflyPlusOcsTopologyBuilder::BuildElectricalOnly(const SimulationConfig& config,
+                                                     const BuildOptions& options) const
+{
+    BuildOptions electricalOptions = options;
+    electricalOptions.enableOcs = false;
+    electricalOptions.interPodElectricalFullMesh = true;
+    electricalOptions.memsCount = 0;
+    return Build(config, electricalOptions);
 }
 
 } // namespace smtra

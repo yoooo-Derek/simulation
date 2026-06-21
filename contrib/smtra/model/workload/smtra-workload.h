@@ -65,13 +65,20 @@ class FlowSpec
     std::string m_patternName = "none";
 };
 
-TrafficMatrix BuildSmtraTrafficMatrix(const std::string& matrixPattern,
-                                      uint64_t matrixScaleBytes,
-                                      uint32_t podCount = 8);
+TrafficMatrix BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
+                                           double offeredLoad,
+                                           uint64_t serverAccessBps,
+                                           Time trafficStartTime,
+                                           Time trafficStopTime,
+                                           uint32_t podCount = 8,
+                                           uint32_t serversPerPod = 16);
 std::vector<FlowSpec> BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
-                                                const std::string& matrixPattern,
-                                                uint32_t serversPerPod = 16,
-                                                uint64_t estimatedRateBps = 1000000000);
+                                                const std::string& trafficModel,
+                                                uint32_t serversPerPod,
+                                                uint32_t flowsPerPair,
+                                                Time trafficStartTime,
+                                                Time trafficStopTime,
+                                                uint64_t estimatedRateBps);
 
 } // namespace smtra
 } // namespace ns3

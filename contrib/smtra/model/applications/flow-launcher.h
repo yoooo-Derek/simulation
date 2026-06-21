@@ -22,6 +22,7 @@ namespace smtra
 struct FlowMetricTrackingState
 {
     uint64_t receivedBytes = 0;
+    uint64_t measurementReceivedBytes = 0;
     bool completed = false;
     std::optional<Time> completionTime;
 };
@@ -52,12 +53,16 @@ class FlowLauncher
     FlowLaunchResult Install(const std::vector<FlowSpec>& flows,
                              const NodeIndex& nodeIndex,
                              Time stopTime,
+                             Time measurementStartTime = Seconds(0),
+                             Time measurementEndTime = Seconds(0),
                              uint16_t portBase = 10000,
                              const std::function<void(uint32_t)>& completionCallback = {}) const;
     FlowLaunchResult Install(const std::vector<FlowSpec>& flows,
                              const std::vector<FlowPathDecision>& decisions,
                              const NodeIndex& nodeIndex,
                              Time stopTime,
+                             Time measurementStartTime = Seconds(0),
+                             Time measurementEndTime = Seconds(0),
                              uint16_t portBase = 10000,
                              const std::function<void(uint32_t)>& completionCallback = {}) const;
 };

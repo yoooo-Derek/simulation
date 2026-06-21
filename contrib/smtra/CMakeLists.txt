@@ -3,8 +3,8 @@ build_lib(
   SOURCE_FILES
     model/applications/flow-launcher.cc
     model/config/simulation-config.cc
-    model/control/ocs-plane.cc
-    model/control/smtra-controller.cc
+    model/controller/ocs-plane.cc
+    model/controller/smtra-controller.cc
     model/datapath/smtra-path-installer.cc
     model/metrics/smtra-metrics.cc
     model/topology/dragonfly-plus-ocs-topology-builder.cc
@@ -13,8 +13,8 @@ build_lib(
   HEADER_FILES
     model/applications/flow-launcher.h
     model/config/simulation-config.h
-    model/control/ocs-plane.h
-    model/control/smtra-controller.h
+    model/controller/ocs-plane.h
+    model/controller/smtra-controller.h
     model/datapath/smtra-path-installer.h
     model/metrics/smtra-metrics.h
     model/topology/dragonfly-plus-ocs-topology-builder.h
@@ -33,5 +33,10 @@ build_lib(
     test/smtra-taa-test-suite.cc
     test/smtra-controller-test-suite.cc
     test/smtra-dragonfly-plus-topology-test-suite.cc
+    test/smtra-ai-traffic-models-test-suite.cc
+    test/smtra-electrical-only-topology-test-suite.cc
+    test/smtra-baseline-strategy-test-suite.cc
+    test/smtra-shortest-path-routing-test-suite.cc
+    test/smtra-performance-metrics-test-suite.cc
     test/smtra-runner-smoke-test-suite.cc
 )

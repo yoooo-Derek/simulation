@@ -49,22 +49,22 @@ NormalizePair(uint32_t a, uint32_t b)
 }
 
 double
-GetPairGain(const DenseMatrix& gain, uint32_t a, uint32_t b)
+GetPairWeight(const DenseMatrix& weights, uint32_t a, uint32_t b)
 {
-    return gain.Get(std::min(a, b), std::max(a, b));
+    return weights.Get(std::min(a, b), std::max(a, b));
 }
 
 double
-ComputeScore(const DenseMatrix& gain, const std::vector<uint32_t>& labels)
+ComputeScore(const DenseMatrix& weights, const std::vector<uint32_t>& labels)
 {
     double score = 0.0;
-    for (uint32_t i = 0; i < gain.GetSize(); ++i)
+    for (uint32_t i = 0; i < weights.GetSize(); ++i)
     {
-        for (uint32_t j = i + 1; j < gain.GetSize(); ++j)
+        for (uint32_t j = i + 1; j < weights.GetSize(); ++j)
         {
             if (labels[i] == labels[j])
             {
-                score += gain.Get(i, j);
+                score += weights.Get(i, j);
             }
         }
     }
@@ -72,15 +72,15 @@ ComputeScore(const DenseMatrix& gain, const std::vector<uint32_t>& labels)
 }
 
 double
-ComputeMoveGain(const DenseMatrix& gain,
-                const std::vector<uint32_t>& labels,
-                uint32_t node,
-                uint32_t targetCommunity)
+ComputeMoveDelta(const DenseMatrix& weights,
+                 const std::vector<uint32_t>& labels,
+                 uint32_t node,
+                 uint32_t targetCommunity)
 {
     const uint32_t oldCommunity = labels[node];
-    double removedGain = 0.0;
-    double addedGain = 0.0;
-    for (uint32_t other = 0; other < gain.GetSize(); ++other)
+    double removedWeight = 0.0;
+    double addedWeight = 0.0;
+    for (uint32_t other = 0; other < weights.GetSize(); ++other)
     {
         if (other == node)
         {
@@ -88,14 +88,14 @@ ComputeMoveGain(const DenseMatrix& gain,
         }
         if (labels[other] == oldCommunity)
         {
-            removedGain += GetPairGain(gain, node, other);
+            removedWeight += GetPairWeight(weights, node, other);
         }
         if (labels[other] == targetCommunity)
         {
-            addedGain += GetPairGain(gain, node, other);
+            addedWeight += GetPairWeight(weights, node, other);
         }
     }
-    return addedGain - removedGain;
+    return addedWeight - removedWeight;
 }
 
 uint32_t
@@ -111,11 +111,11 @@ GetUnusedCommunityLabel(const std::vector<uint32_t>& labels)
 }
 
 LocalMoveResult
-RunLocalMoving(const DenseMatrix& gain, uint32_t maxPasses, double minGain)
+RunLocalMoving(const DenseMatrix& weights, uint32_t maxPasses, double minDelta)
 {
     LocalMoveResult result;
-    result.labels.resize(gain.GetSize());
-    for (uint32_t i = 0; i < gain.GetSize(); ++i)
+    result.labels.resize(weights.GetSize());
+    for (uint32_t i = 0; i < weights.GetSize(); ++i)
     {
         result.labels[i] = i;
     }
@@ -123,13 +123,13 @@ RunLocalMoving(const DenseMatrix& gain, uint32_t maxPasses, double minGain)
     for (uint32_t pass = 0; pass < maxPasses; ++pass)
     {
         bool moved = false;
-        for (uint32_t node = 0; node < gain.GetSize(); ++node)
+        for (uint32_t node = 0; node < weights.GetSize(); ++node)
         {
             const uint32_t oldCommunity = result.labels[node];
             std::vector<uint32_t> candidates{oldCommunity};
-            for (uint32_t neighbor = 0; neighbor < gain.GetSize(); ++neighbor)
+            for (uint32_t neighbor = 0; neighbor < weights.GetSize(); ++neighbor)
             {
-                if (neighbor == node || GetPairGain(gain, node, neighbor) == 0.0)
+                if (neighbor == node || GetPairWeight(weights, node, neighbor) == 0.0)
                 {
                     continue;
                 }
@@ -147,20 +147,20 @@ RunLocalMoving(const DenseMatrix& gain, uint32_t maxPasses, double minGain)
             }
 
             uint32_t bestCommunity = oldCommunity;
-            double bestGain = 0.0;
+            double bestDelta = 0.0;
             for (uint32_t candidate : candidates)
             {
                 if (candidate == oldCommunity)
                 {
                     continue;
                 }
-                const double moveGain = ComputeMoveGain(gain, result.labels, node, candidate);
-                if (moveGain > minGain &&
-                    (bestCommunity == oldCommunity || moveGain > bestGain + minGain ||
-                     (std::abs(moveGain - bestGain) <= minGain && candidate < bestCommunity)))
+                const double moveDelta = ComputeMoveDelta(weights, result.labels, node, candidate);
+                if (moveDelta > minDelta &&
+                    (bestCommunity == oldCommunity || moveDelta > bestDelta + minDelta ||
+                     (std::abs(moveDelta - bestDelta) <= minDelta && candidate < bestCommunity)))
                 {
                     bestCommunity = candidate;
-                    bestGain = moveGain;
+                    bestDelta = moveDelta;
                 }
             }
 
@@ -179,25 +179,25 @@ RunLocalMoving(const DenseMatrix& gain, uint32_t maxPasses, double minGain)
     }
 
     NormalizeLabels(result.labels);
-    result.score = ComputeScore(gain, result.labels);
+    result.score = ComputeScore(weights, result.labels);
     return result;
 }
 
 DenseMatrix
-BuildAggregatedMatrix(const DenseMatrix& gain,
+BuildAggregatedMatrix(const DenseMatrix& weights,
                       const std::vector<uint32_t>& labels,
                       uint32_t communityCount)
 {
     DenseMatrix aggregated(communityCount);
-    for (uint32_t i = 0; i < gain.GetSize(); ++i)
+    for (uint32_t i = 0; i < weights.GetSize(); ++i)
     {
-        for (uint32_t j = i + 1; j < gain.GetSize(); ++j)
+        for (uint32_t j = i + 1; j < weights.GetSize(); ++j)
         {
             if (labels[i] == labels[j])
             {
                 continue;
             }
-            const double value = gain.Get(i, j);
+            const double value = weights.Get(i, j);
             aggregated.Add(labels[i], labels[j], value);
             aggregated.Add(labels[j], labels[i], value);
         }
@@ -206,21 +206,21 @@ BuildAggregatedMatrix(const DenseMatrix& gain,
 }
 
 std::vector<uint32_t>
-RunLouvain(const DenseMatrix& gain)
+RunLouvain(const DenseMatrix& weights)
 {
-    std::vector<uint32_t> labels(gain.GetSize());
-    for (uint32_t i = 0; i < gain.GetSize(); ++i)
+    std::vector<uint32_t> labels(weights.GetSize());
+    for (uint32_t i = 0; i < weights.GetSize(); ++i)
     {
         labels[i] = i;
     }
 
-    DenseMatrix current = gain;
+    DenseMatrix current = weights;
     constexpr uint32_t maxLevels = 16;
     constexpr uint32_t maxPasses = 32;
-    constexpr double minGain = 1e-9;
+    constexpr double minDelta = 1e-9;
     for (uint32_t level = 0; level < maxLevels && current.GetSize() > 0; ++level)
     {
-        const LocalMoveResult local = RunLocalMoving(current, maxPasses, minGain);
+        const LocalMoveResult local = RunLocalMoving(current, maxPasses, minDelta);
         std::vector<uint32_t> expanded(labels.size());
         for (uint32_t node = 0; node < labels.size(); ++node)
         {
@@ -261,7 +261,7 @@ BuildUndirectedTrafficMatrix(const TrafficMatrix& observed)
 }
 
 DenseMatrix
-BuildStructuralGain(const DenseMatrix& traffic, double eta)
+BuildStructuralResidual(const DenseMatrix& traffic, double eta)
 {
     std::vector<double> degree(traffic.GetSize(), 0.0);
     double total = 0.0;
@@ -275,18 +275,18 @@ BuildStructuralGain(const DenseMatrix& traffic, double eta)
     }
     total *= 0.5;
 
-    DenseMatrix gain(traffic.GetSize());
+    DenseMatrix structuralResidual(traffic.GetSize());
     for (uint32_t i = 0; i < traffic.GetSize(); ++i)
     {
         for (uint32_t j = i + 1; j < traffic.GetSize(); ++j)
         {
             const double expected = total > 0.0 ? degree[i] * degree[j] / (2.0 * total) : 0.0;
             const double value = traffic.Get(i, j) - eta * expected;
-            gain.Set(i, j, value);
-            gain.Set(j, i, value);
+            structuralResidual.Set(i, j, value);
+            structuralResidual.Set(j, i, value);
         }
     }
-    return gain;
+    return structuralResidual;
 }
 
 double
@@ -442,19 +442,19 @@ SmtraController::BuildStructuralState(const TrafficMatrix& observedT,
 {
     SmtraStructuralState structural;
     structural.T = BuildUndirectedTrafficMatrix(observedT);
-    const DenseMatrix modularityGain = BuildStructuralGain(structural.T, parameters.eta);
+    const DenseMatrix structuralResidual = BuildStructuralResidual(structural.T, parameters.eta);
     structural.S = DenseMatrix(structural.T.GetSize());
-    for (uint32_t i = 0; i < modularityGain.GetSize(); ++i)
+    for (uint32_t i = 0; i < structuralResidual.GetSize(); ++i)
     {
-        for (uint32_t j = i + 1; j < modularityGain.GetSize(); ++j)
+        for (uint32_t j = i + 1; j < structuralResidual.GetSize(); ++j)
         {
-            const double value = std::max(0.0, modularityGain.Get(i, j));
+            const double value = std::max(0.0, structuralResidual.Get(i, j));
             structural.S.Set(i, j, value);
             structural.S.Set(j, i, value);
         }
     }
 
-    structural.communityLabels = RunLouvain(modularityGain);
+    structural.communityLabels = RunLouvain(structural.S);
     structural.Omega = DenseMatrix(structural.T.GetSize());
     structural.Psi = DenseMatrix(structural.T.GetSize());
     for (uint32_t i = 0; i < structural.T.GetSize(); ++i)
@@ -615,8 +615,8 @@ SmtraController::RunRaa(const DenseMatrix& C,
         state.R.Set(destination,
                     source,
                     static_cast<double>(bestRoute == destination ? source : bestRoute));
-        state.A.Set(source, destination, bestAllocation.effectiveBytes);
-        state.A.Set(destination, source, bestAllocation.effectiveBytes);
+        state.A.Set(source, destination, bestAllocation.occupiedBytes);
+        state.A.Set(destination, source, bestAllocation.occupiedBytes);
         state.allocations[NormalizePair(source, destination)] = bestAllocation;
         for (const auto& link : bestAllocation.links)
         {
@@ -710,6 +710,120 @@ SmtraController::Run(const TrafficMatrix& observedT,
     result.smdAfter = result.deployedState.smd;
     result.updated = true;
     return result;
+}
+
+SmtraTopologyRouteState
+BuildStaticOcsBaselineState(uint32_t podCount, const SmtraParameters& parameters)
+{
+    SmtraTopologyRouteState state;
+    state.C = DenseMatrix(podCount);
+    state.R = DenseMatrix(podCount);
+    state.A = DenseMatrix(podCount);
+    state.ocsPlane = OcsPlane(podCount, parameters.memsCount, parameters.circuitCapacityBps);
+
+    std::vector<uint32_t> podDegree(podCount, 0);
+    for (uint32_t memsId = 0; memsId < parameters.memsCount; ++memsId)
+    {
+        std::vector<uint32_t> rotating;
+        for (uint32_t pod = 0; pod + 1 < podCount; ++pod)
+        {
+            rotating.push_back(pod);
+        }
+        const uint32_t round = memsId % (podCount - 1);
+        std::rotate(rotating.begin(), rotating.begin() + round, rotating.end());
+
+        std::vector<std::pair<uint32_t, uint32_t>> matching;
+        matching.emplace_back(podCount - 1, rotating[0]);
+        for (uint32_t offset = 1; offset < podCount / 2; ++offset)
+        {
+            matching.emplace_back(rotating[offset], rotating[podCount - 1 - offset]);
+        }
+
+        for (const auto& pair : matching)
+        {
+            const uint32_t a = pair.first;
+            const uint32_t b = pair.second;
+            if (podDegree[a] >= parameters.podPortLimitB ||
+                podDegree[b] >= parameters.podPortLimitB)
+            {
+                continue;
+            }
+            if (state.ocsPlane.Activate(a, b, memsId))
+            {
+                state.C.Set(a, b, state.C.Get(a, b) + 1.0);
+                state.C.Set(b, a, state.C.Get(a, b));
+                podDegree[a]++;
+                podDegree[b]++;
+            }
+        }
+    }
+    return state;
+}
+
+SmtraTopologyRouteState
+BuildTrafficGreedyBaselineState(const TrafficMatrix& observedT,
+                                const SmtraParameters& parameters)
+{
+    const uint32_t podCount = observedT.GetPodCount();
+    SmtraTopologyRouteState state;
+    state.C = DenseMatrix(podCount);
+    state.R = DenseMatrix(podCount);
+    state.A = DenseMatrix(podCount);
+    state.ocsPlane = OcsPlane(podCount, parameters.memsCount, parameters.circuitCapacityBps);
+
+    struct PairDemand
+    {
+        uint32_t a = 0;
+        uint32_t b = 0;
+        uint64_t bytes = 0;
+    };
+    std::vector<PairDemand> pairs;
+    for (uint32_t i = 0; i < podCount; ++i)
+    {
+        for (uint32_t j = i + 1; j < podCount; ++j)
+        {
+            const uint64_t bytes = observedT.GetBytes(i, j) + observedT.GetBytes(j, i);
+            if (bytes > 0)
+            {
+                pairs.push_back({i, j, bytes});
+            }
+        }
+    }
+    std::sort(pairs.begin(), pairs.end(), [](const PairDemand& left, const PairDemand& right) {
+        if (left.bytes != right.bytes)
+        {
+            return left.bytes > right.bytes;
+        }
+        return std::tie(left.a, left.b) < std::tie(right.a, right.b);
+    });
+
+    std::vector<uint32_t> podDegree(podCount, 0);
+    bool changed = true;
+    while (changed)
+    {
+        changed = false;
+        for (const auto& pair : pairs)
+        {
+            if (podDegree[pair.a] >= parameters.podPortLimitB ||
+                podDegree[pair.b] >= parameters.podPortLimitB)
+            {
+                continue;
+            }
+            for (uint32_t memsId = 0; memsId < parameters.memsCount; ++memsId)
+            {
+                if (state.ocsPlane.Activate(pair.a, pair.b, memsId))
+                {
+                    state.C.Set(pair.a, pair.b, state.C.Get(pair.a, pair.b) + 1.0);
+                    state.C.Set(pair.b, pair.a, state.C.Get(pair.a, pair.b));
+                    podDegree[pair.a]++;
+                    podDegree[pair.b]++;
+                    changed = true;
+                    break;
+                }
+            }
+        }
+    }
+    return state;
 }
 
 } // namespace smtra

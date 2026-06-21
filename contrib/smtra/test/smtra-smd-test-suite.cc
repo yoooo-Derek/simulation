@@ -33,6 +33,7 @@ class SmtraSmdFormulaTestCase : public TestCase
         allocation.sourcePod = 0;
         allocation.destinationPod = 1;
         allocation.routeValue = 1;
+        allocation.occupiedBytes = 50.0;
         allocation.effectiveBytes = 25.0;
         state.allocations[{0, 1}] = allocation;
 
@@ -45,6 +46,10 @@ class SmtraSmdFormulaTestCase : public TestCase
                                   -std::log(0.5 + parameters.epsilon),
                                   1e-9,
                                   "SMD formula mismatch");
+        NS_TEST_ASSERT_MSG_EQ_TOL(state.Gamma.Get(0, 1),
+                                  25.0,
+                                  1e-9,
+                                  "Gamma must aggregate effective capacity");
         NS_TEST_ASSERT_MSG_EQ_TOL(state.Phi.Get(0, 1), 25.0, 1e-9, "Phi coverage mismatch");
     }
 };

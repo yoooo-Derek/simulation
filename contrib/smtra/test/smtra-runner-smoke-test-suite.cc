@@ -16,11 +16,24 @@ class SmtraRunnerSmokeTestCase : public TestCase
   private:
     void DoRun() override
     {
-        TrafficMatrix observed = BuildSmtraTrafficMatrix("structured", 1000000, 8);
+        TrafficMatrix observed = BuildAiTrainingTrafficMatrix("data-parallel",
+                                                              0.2,
+                                                              32000000000ULL,
+                                                              Seconds(0.001),
+                                                              Seconds(0.05),
+                                                              8,
+                                                              16);
+        std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(observed,
+                                                                "data-parallel",
+                                                                16,
+                                                                4,
+                                                                Seconds(0.001),
+                                                                Seconds(0.05),
+                                                                32000000000ULL);
         SmtraParameters parameters;
         parameters.alpha = 0.5;
         parameters.theta = 0.0;
-        parameters.observerWindowSeconds = 0.001;
+        parameters.observerWindowSeconds = 0.049;
 
         SmtraTopologyRouteState empty;
         empty.C = DenseMatrix(8);
@@ -34,6 +47,7 @@ class SmtraRunnerSmokeTestCase : public TestCase
         NS_TEST_ASSERT_MSG_GT(metrics.psiTotal, 0.0, "missing structural mass");
         NS_TEST_ASSERT_MSG_GT(metrics.activeCircuitCount, 0, "no active circuits selected");
         NS_TEST_ASSERT_MSG_EQ(metrics.memsMatchingViolationCount, 0, "matching violation");
+        NS_TEST_ASSERT_MSG_EQ(flows.empty(), false, "runner workload produced no flows");
     }
 };
 

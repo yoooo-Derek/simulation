@@ -16,11 +16,17 @@ class SmtraTaaTestCase : public TestCase
   private:
     void DoRun() override
     {
-        TrafficMatrix observed = BuildSmtraTrafficMatrix("structured", 1000000, 8);
+        TrafficMatrix observed = BuildAiTrainingTrafficMatrix("data-parallel",
+                                                              0.001,
+                                                              32000000000ULL,
+                                                              Seconds(0.001),
+                                                              Seconds(0.003),
+                                                              8,
+                                                              16);
         SmtraParameters parameters;
         parameters.theta = -1.0;
         parameters.podPortLimitB = 2;
-        parameters.observerWindowSeconds = 0.001;
+        parameters.observerWindowSeconds = 0.002;
 
         SmtraController controller;
         const SmtraStructuralState structural =

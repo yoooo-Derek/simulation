@@ -38,6 +38,16 @@ class SmtraPathInstaller
     FlowPathDecision Select(const FlowSpec& flow,
                             const SmtraTopologyRouteState& state,
                             const NodeIndex& nodeIndex) const;
+    std::vector<FlowPathDecision> SelectElectricalOnly(const std::vector<FlowSpec>& flows,
+                                                       const NodeIndex& nodeIndex) const;
+    FlowPathDecision SelectElectricalOnly(const FlowSpec& flow,
+                                          const NodeIndex& nodeIndex) const;
+    std::vector<FlowPathDecision> SelectShortestOcs(const std::vector<FlowSpec>& flows,
+                                                    const SmtraTopologyRouteState& state,
+                                                    const NodeIndex& nodeIndex) const;
+    FlowPathDecision SelectShortestOcs(const FlowSpec& flow,
+                                       const SmtraTopologyRouteState& state,
+                                       const NodeIndex& nodeIndex) const;
 
     void Install(const FlowSpec& flow,
                  const FlowPathDecision& decision,

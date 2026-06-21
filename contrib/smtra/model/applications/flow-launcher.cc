@@ -27,15 +27,23 @@ void
 SinkRxTrace(std::shared_ptr<FlowMetricTrackingState> tracking,
             uint64_t expectedBytes,
             uint32_t flowId,
+            Time measurementStartTime,
+            Time measurementEndTime,
             std::shared_ptr<std::function<void(uint32_t)>> completionCallback,
             Ptr<const Packet> packet,
             const Address&)
 {
     tracking->receivedBytes += packet->GetSize();
+    const Time now = Simulator::Now();
+    if (measurementEndTime <= measurementStartTime ||
+        (now >= measurementStartTime && now <= measurementEndTime))
+    {
+        tracking->measurementReceivedBytes += packet->GetSize();
+    }
     if (!tracking->completed && tracking->receivedBytes >= expectedBytes)
     {
         tracking->completed = true;
-        tracking->completionTime = Simulator::Now();
+        tracking->completionTime = now;
         if (*completionCallback)
         {
             (*completionCallback)(flowId);
@@ -60,6 +68,8 @@ FlowLaunchResult
 FlowLauncher::Install(const std::vector<FlowSpec>& flows,
                       const NodeIndex& nodeIndex,
                       Time stopTime,
+                      Time measurementStartTime,
+                      Time measurementEndTime,
                       uint16_t portBase,
                       const std::function<void(uint32_t)>& completionCallback) const
 {
@@ -79,7 +89,14 @@ FlowLauncher::Install(const std::vector<FlowSpec>& flows,
         decision.reason = "same-pod";
         decisions.push_back(decision);
     }
-    return Install(flows, decisions, nodeIndex, stopTime, portBase, completionCallback);
+    return Install(flows,
+                   decisions,
+                   nodeIndex,
+                   stopTime,
+                   measurementStartTime,
+                   measurementEndTime,
+                   portBase,
+                   completionCallback);
 }
 
 FlowLaunchResult
@@ -87,6 +104,8 @@ FlowLauncher::Install(const std::vector<FlowSpec>& flows,
                       const std::vector<FlowPathDecision>& decisions,
                       const NodeIndex& nodeIndex,
                       Time stopTime,
+                      Time measurementStartTime,
+                      Time measurementEndTime,
                       uint16_t portBase,
                       const std::function<void(uint32_t)>& completionCallback) const
 {
@@ -130,6 +149,8 @@ FlowLauncher::Install(const std::vector<FlowSpec>& flows,
                                                            tracking,
                                                            flow.GetSizeBytes(),
                                                            flow.GetFlowId(),
+                                                           measurementStartTime,
+                                                           measurementEndTime,
                                                            sharedCompletionCallback));
         result.metricSources.push_back({flow, decision, tracking});
 

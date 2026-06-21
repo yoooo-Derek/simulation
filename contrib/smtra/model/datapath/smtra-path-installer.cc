@@ -4,7 +4,9 @@
 #include "ns3/ipv4-static-routing.h"
 #include "ns3/ipv4.h"
 
+#include <algorithm>
 #include <limits>
+#include <queue>
 #include <stdexcept>
 
 namespace ns3
@@ -87,6 +89,58 @@ ResolveRouteValue(const SmtraRouteAllocation& allocation, uint32_t source, uint3
                                                                  : allocation.routeValue;
     }
     return std::numeric_limits<uint32_t>::max();
+}
+
+std::vector<uint32_t>
+FindShortestActiveOcsPath(const OcsPlane& plane, uint32_t source, uint32_t destination)
+{
+    const uint32_t podCount = plane.GetPodCount();
+    std::vector<std::vector<uint32_t>> adjacency(podCount);
+    for (const auto& circuit : plane.GetActiveCircuits())
+    {
+        adjacency[circuit.podA].push_back(circuit.podB);
+        adjacency[circuit.podB].push_back(circuit.podA);
+    }
+    for (auto& neighbors : adjacency)
+    {
+        std::sort(neighbors.begin(), neighbors.end());
+        neighbors.erase(std::unique(neighbors.begin(), neighbors.end()), neighbors.end());
+    }
+
+    std::vector<uint32_t> parent(podCount, std::numeric_limits<uint32_t>::max());
+    std::queue<uint32_t> frontier;
+    parent[source] = source;
+    frontier.push(source);
+    while (!frontier.empty())
+    {
+        const uint32_t node = frontier.front();
+        frontier.pop();
+        if (node == destination)
+        {
+            break;
+        }
+        for (uint32_t neighbor : adjacency[node])
+        {
+            if (parent[neighbor] != std::numeric_limits<uint32_t>::max())
+            {
+                continue;
+            }
+            parent[neighbor] = node;
+            frontier.push(neighbor);
+        }
+    }
+    if (parent[destination] == std::numeric_limits<uint32_t>::max())
+    {
+        return {};
+    }
+    std::vector<uint32_t> path;
+    for (uint32_t node = destination; node != source; node = parent[node])
+    {
+        path.push_back(node);
+    }
+    path.push_back(source);
+    std::reverse(path.begin(), path.end());
+    return path;
 }
 
 } // namespace
@@ -176,6 +230,108 @@ SmtraPathInstaller::Select(const FlowSpec& flow,
     decision.admittedToOcs = true;
     decision.installable = true;
     decision.reason = "smtra-route";
+    return decision;
+}
+
+std::vector<FlowPathDecision>
+SmtraPathInstaller::SelectElectricalOnly(const std::vector<FlowSpec>& flows,
+                                         const NodeIndex& nodeIndex) const
+{
+    std::vector<FlowPathDecision> decisions;
+    decisions.reserve(flows.size());
+    for (const auto& flow : flows)
+    {
+        decisions.push_back(SelectElectricalOnly(flow, nodeIndex));
+    }
+    return decisions;
+}
+
+FlowPathDecision
+SmtraPathInstaller::SelectElectricalOnly(const FlowSpec& flow, const NodeIndex& nodeIndex) const
+{
+    FlowPathDecision decision;
+    decision.flowId = flow.GetFlowId();
+    decision.sourceTor = flow.GetSourceTorId();
+    decision.destinationTor = flow.GetDestinationTorId();
+    decision.destinationAddress =
+        nodeIndex.GetServerIpv4Address(flow.GetDestinationTorId(),
+                                       flow.GetDestinationServerId());
+    if (!nodeIndex.HasPureElectricalPath(flow.GetSourceTorId(), flow.GetDestinationTorId()))
+    {
+        decision.reason = "no-pure-electrical-path";
+        return decision;
+    }
+    decision.pathType = flow.GetSourceTorId() == flow.GetDestinationTorId()
+                            ? "intra-pod-electrical"
+                            : "inter-pod-electrical";
+    decision.installable = true;
+    decision.reason = "electrical-shortest";
+    decision.torPath = {flow.GetSourceTorId(), flow.GetDestinationTorId()};
+    return decision;
+}
+
+std::vector<FlowPathDecision>
+SmtraPathInstaller::SelectShortestOcs(const std::vector<FlowSpec>& flows,
+                                      const SmtraTopologyRouteState& state,
+                                      const NodeIndex& nodeIndex) const
+{
+    std::vector<FlowPathDecision> decisions;
+    decisions.reserve(flows.size());
+    for (const auto& flow : flows)
+    {
+        decisions.push_back(SelectShortestOcs(flow, state, nodeIndex));
+    }
+    return decisions;
+}
+
+FlowPathDecision
+SmtraPathInstaller::SelectShortestOcs(const FlowSpec& flow,
+                                      const SmtraTopologyRouteState& state,
+                                      const NodeIndex& nodeIndex) const
+{
+    FlowPathDecision decision;
+    decision.flowId = flow.GetFlowId();
+    decision.sourceTor = flow.GetSourceTorId();
+    decision.destinationTor = flow.GetDestinationTorId();
+    decision.destinationAddress =
+        nodeIndex.GetOcsServerIpv4Address(flow.GetDestinationTorId(),
+                                          flow.GetDestinationServerId());
+
+    if (flow.GetSourceTorId() == flow.GetDestinationTorId())
+    {
+        decision.pathType = "intra-pod-electrical";
+        decision.destinationAddress =
+            nodeIndex.GetServerIpv4Address(flow.GetDestinationTorId(),
+                                           flow.GetDestinationServerId());
+        decision.installable = true;
+        decision.reason = "same-pod";
+        decision.torPath = {flow.GetSourceTorId()};
+        return decision;
+    }
+
+    const std::vector<uint32_t> path =
+        FindShortestActiveOcsPath(state.ocsPlane, flow.GetSourceTorId(), flow.GetDestinationTorId());
+    if (path.empty())
+    {
+        decision.reason = "no-active-ocs-path";
+        return decision;
+    }
+    decision.torPath = path;
+    for (uint32_t index = 1; index < path.size(); ++index)
+    {
+        const uint32_t memsId = PickMemsForPair(state, path[index - 1], path[index]);
+        if (memsId == std::numeric_limits<uint32_t>::max())
+        {
+            decision.reason = "missing-shortest-path-circuit";
+            decision.torPath.clear();
+            return decision;
+        }
+        decision.memsPath.push_back(memsId);
+    }
+    decision.pathType = path.size() == 2 ? "ocs-shortest-direct" : "ocs-shortest-multihop";
+    decision.admittedToOcs = true;
+    decision.installable = true;
+    decision.reason = "ocs-shortest";
     return decision;
 }
 

@@ -174,6 +174,17 @@ NodeIndex::AddOcsLink(const OcsLinkInfo& linkInfo)
     m_ocsLinks[NormalizePair(linkInfo.torA, linkInfo.torB)].push_back(linkInfo);
 }
 
+void
+NodeIndex::AddInterPodElectricalLink(const InterPodElectricalLinkInfo& linkInfo)
+{
+    if (linkInfo.podA >= m_groupCount || linkInfo.podB >= m_groupCount ||
+        linkInfo.podA == linkInfo.podB)
+    {
+        throw std::out_of_range("SMTRA inter-pod electrical link index is out of range");
+    }
+    m_interPodElectricalLinks[NormalizePair(linkInfo.podA, linkInfo.podB)] = linkInfo;
+}
+
 Ptr<Node>
 NodeIndex::GetServer(uint32_t torId, uint32_t serverId) const
 {
@@ -396,6 +407,30 @@ NodeIndex::GetTorSpineLinks() const
     std::vector<TorSpineLinkInfo> links;
     links.reserve(m_torSpineLinks.size());
     for (const auto& [key, link] : m_torSpineLinks)
+    {
+        links.push_back(link);
+    }
+    return links;
+}
+
+std::vector<NodeIndex::LeafSpineLinkInfo>
+NodeIndex::GetLeafSpineLinks() const
+{
+    std::vector<LeafSpineLinkInfo> links;
+    links.reserve(m_leafSpineLinks.size());
+    for (const auto& [key, link] : m_leafSpineLinks)
+    {
+        links.push_back(link);
+    }
+    return links;
+}
+
+std::vector<NodeIndex::InterPodElectricalLinkInfo>
+NodeIndex::GetInterPodElectricalLinks() const
+{
+    std::vector<InterPodElectricalLinkInfo> links;
+    links.reserve(m_interPodElectricalLinks.size());
+    for (const auto& [key, link] : m_interPodElectricalLinks)
     {
         links.push_back(link);
     }

@@ -58,7 +58,22 @@ class SmtraRaaRoutesTestCase : public TestCase
                               true,
                               "missing two-hop allocation");
         NS_TEST_ASSERT_MSG_EQ(state.allocations.at({0, 3}).routeValue, 2, "two-hop route mismatch");
-        NS_TEST_ASSERT_MSG_GT(state.A.Get(0, 3), 0.0, "A matrix was not updated");
+        NS_TEST_ASSERT_MSG_EQ_TOL(state.allocations.at({0, 3}).occupiedBytes,
+                                  160.0,
+                                  1e-9,
+                                  "two-hop occupied capacity mismatch");
+        NS_TEST_ASSERT_MSG_EQ_TOL(state.allocations.at({0, 3}).effectiveBytes,
+                                  80.0,
+                                  1e-9,
+                                  "two-hop effective capacity mismatch");
+        NS_TEST_ASSERT_MSG_EQ_TOL(state.A.Get(0, 3),
+                                  160.0,
+                                  1e-9,
+                                  "A must store occupied capacity");
+        NS_TEST_ASSERT_MSG_EQ_TOL(state.Gamma.Get(0, 3),
+                                  80.0,
+                                  1e-9,
+                                  "Gamma must store effective capacity");
     }
 };
 

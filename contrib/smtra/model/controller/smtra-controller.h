@@ -107,6 +107,11 @@ class SmtraController
 
 using TopologyRouteState = SmtraTopologyRouteState;
 
+SmtraTopologyRouteState BuildStaticOcsBaselineState(uint32_t podCount,
+                                                    const SmtraParameters& parameters);
+SmtraTopologyRouteState BuildTrafficGreedyBaselineState(const TrafficMatrix& observedT,
+                                                        const SmtraParameters& parameters);
+
 } // namespace smtra
 } // namespace ns3
 

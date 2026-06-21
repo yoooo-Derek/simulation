@@ -29,6 +29,7 @@ class NodeIndex
         uint32_t torInterfaceIndex = 0;
         Ptr<NetDevice> serverDevice;
         Ptr<NetDevice> torDevice;
+        uint64_t dataRateBps = 0;
     };
 
     struct OcsLinkInfo
@@ -44,6 +45,7 @@ class NodeIndex
         uint32_t torBInterfaceIndex = 0;
         Ptr<NetDevice> torADevice;
         Ptr<NetDevice> torBDevice;
+        uint64_t dataRateBps = 0;
     };
 
     struct TorSpineLinkInfo
@@ -56,6 +58,7 @@ class NodeIndex
         uint32_t spineInterfaceIndex = 0;
         Ptr<NetDevice> torDevice;
         Ptr<NetDevice> spineDevice;
+        uint64_t dataRateBps = 0;
     };
 
     struct LeafSpineLinkInfo
@@ -69,6 +72,7 @@ class NodeIndex
         uint32_t spineInterfaceIndex = 0;
         Ptr<NetDevice> leafDevice;
         Ptr<NetDevice> spineDevice;
+        uint64_t dataRateBps = 0;
     };
 
     struct OpticalAccessLinkInfo
@@ -78,6 +82,19 @@ class NodeIndex
         uint32_t memsId = 0;
         Ptr<NetDevice> spineDevice;
         Ptr<NetDevice> memsDevice;
+    };
+
+    struct InterPodElectricalLinkInfo
+    {
+        uint32_t podA = 0;
+        uint32_t podB = 0;
+        Ipv4Address podAAddress;
+        Ipv4Address podBAddress;
+        uint32_t podAInterfaceIndex = 0;
+        uint32_t podBInterfaceIndex = 0;
+        Ptr<NetDevice> podADevice;
+        Ptr<NetDevice> podBDevice;
+        uint64_t dataRateBps = 0;
     };
 
     void SetTorNodes(const NodeContainer& tors);
@@ -100,6 +117,7 @@ class NodeIndex
     void AddLeafSpineLink(const LeafSpineLinkInfo& linkInfo);
     void AddOpticalAccessLink(const OpticalAccessLinkInfo& linkInfo);
     void AddOcsLink(const OcsLinkInfo& linkInfo);
+    void AddInterPodElectricalLink(const InterPodElectricalLinkInfo& linkInfo);
 
     Ptr<Node> GetServer(uint32_t torId, uint32_t serverId) const;
     Ptr<Node> GetTor(uint32_t torId) const;
@@ -127,6 +145,8 @@ class NodeIndex
     bool HasOcsLink(uint32_t torA, uint32_t torB, uint32_t memsId) const;
     OcsLinkInfo GetOcsLink(uint32_t torA, uint32_t torB, uint32_t memsId) const;
     std::vector<TorSpineLinkInfo> GetTorSpineLinks() const;
+    std::vector<LeafSpineLinkInfo> GetLeafSpineLinks() const;
+    std::vector<InterPodElectricalLinkInfo> GetInterPodElectricalLinks() const;
     std::vector<OcsLinkInfo> GetOcsLinks() const;
     std::vector<OcsLinkInfo> GetOcsLinks(uint32_t torA, uint32_t torB) const;
     Ipv4Address GetOcsPeerAddress(uint32_t sourceTor, uint32_t destinationTor) const;
@@ -167,6 +187,7 @@ class NodeIndex
     std::map<std::tuple<uint32_t, uint32_t, uint32_t>, LeafSpineLinkInfo> m_leafSpineLinks;
     std::map<std::tuple<uint32_t, uint32_t, uint32_t>, OpticalAccessLinkInfo> m_opticalAccessLinks;
     std::map<std::pair<uint32_t, uint32_t>, std::vector<OcsLinkInfo>> m_ocsLinks;
+    std::map<std::pair<uint32_t, uint32_t>, InterPodElectricalLinkInfo> m_interPodElectricalLinks;
     uint32_t m_groupCount = 0;
     uint32_t m_leafsPerGroup = 0;
     uint32_t m_spinesPerGroup = 0;
