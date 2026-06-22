@@ -25,6 +25,7 @@ class SmtraTaaTestCase : public TestCase
                                                               16);
         SmtraParameters parameters;
         parameters.theta = -1.0;
+        parameters.memsCount = 2;
         parameters.podPortLimitB = 2;
         parameters.observerWindowSeconds = 0.002;
 
@@ -35,7 +36,7 @@ class SmtraTaaTestCase : public TestCase
         empty.C = DenseMatrix(8);
         empty.R = DenseMatrix(8);
         empty.A = DenseMatrix(8);
-        empty.ocsPlane = OcsPlane(8, 8, parameters.circuitCapacityBps);
+        empty.ocsPlane = OcsPlane(8, parameters.memsCount, parameters.circuitCapacityBps);
         controller.ComputeSmd(empty, structural, parameters);
 
         const SmtraTopologyRouteState allocated = controller.RunTaa(structural, parameters);
@@ -51,6 +52,9 @@ class SmtraTaaTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(metrics.memsMatchingViolationCount,
                               0,
                               "MEMS matching constraint violated");
+        NS_TEST_ASSERT_MSG_EQ(metrics.activeCircuitCount <= parameters.memsCount * 4,
+                              true,
+                              "TAA exceeds MEMS matching capacity");
     }
 };
 

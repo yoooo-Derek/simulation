@@ -65,6 +65,13 @@ class FlowSpec
     std::string m_patternName = "none";
 };
 
+struct FlowGenerationOptions
+{
+    std::string mode = "fixed-flows-per-pair";
+    uint64_t messageSizeBytes = 16384;
+    uint32_t flowsPerActivePair = 16;
+};
+
 TrafficMatrix BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
                                            double offeredLoad,
                                            uint64_t serverAccessBps,
@@ -76,7 +83,7 @@ TrafficMatrix ScaleTrafficMatrix(const TrafficMatrix& matrix, double scale);
 std::vector<FlowSpec> BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
                                                 const std::string& trafficModel,
                                                 uint32_t serversPerPod,
-                                                uint64_t messageSizeBytes,
+                                                const FlowGenerationOptions& options,
                                                 Time trafficStartTime,
                                                 Time trafficStopTime,
                                                 uint64_t estimatedRateBps);

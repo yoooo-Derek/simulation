@@ -324,14 +324,22 @@ std::vector<FlowSpec>
 BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
                           const std::string& trafficModel,
                           uint32_t serversPerPod,
-                          uint64_t messageSizeBytes,
+                          const FlowGenerationOptions& options,
                           Time trafficStartTime,
                           Time trafficStopTime,
                           uint64_t estimatedRateBps)
 {
-    if (messageSizeBytes == 0)
+    if (options.mode != "fixed-message-size" && options.mode != "fixed-flows-per-pair")
+    {
+        throw std::runtime_error("unsupported SMTRA flowGenerationMode: " + options.mode);
+    }
+    if (options.messageSizeBytes == 0)
     {
         throw std::runtime_error("messageSizeBytes must be positive");
+    }
+    if (options.mode == "fixed-flows-per-pair" && options.flowsPerActivePair == 0)
+    {
+        throw std::runtime_error("flowsPerActivePair must be positive");
     }
     if (trafficStopTime <= trafficStartTime)
     {
@@ -355,14 +363,27 @@ BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
             {
                 continue;
             }
-            const uint64_t flowCount =
-                static_cast<uint64_t>(std::ceil(static_cast<double>(bytes) /
-                                                static_cast<double>(messageSizeBytes)));
+            const uint64_t flowCount = options.mode == "fixed-message-size"
+                                           ? static_cast<uint64_t>(
+                                                 std::ceil(static_cast<double>(bytes) /
+                                                           static_cast<double>(
+                                                               options.messageSizeBytes)))
+                                           : options.flowsPerActivePair;
             for (uint64_t split = 0; split < flowCount; ++split)
             {
-                const uint64_t sentBefore = split * messageSizeBytes;
-                const uint64_t remaining = bytes > sentBefore ? bytes - sentBefore : 0;
-                const uint64_t flowSize = std::min<uint64_t>(messageSizeBytes, remaining);
+                uint64_t flowSize = 0;
+                if (options.mode == "fixed-message-size")
+                {
+                    const uint64_t sentBefore = split * options.messageSizeBytes;
+                    const uint64_t remaining = bytes > sentBefore ? bytes - sentBefore : 0;
+                    flowSize = std::min<uint64_t>(options.messageSizeBytes, remaining);
+                }
+                else
+                {
+                    const uint64_t baseSize = bytes / flowCount;
+                    const uint64_t remainder = bytes % flowCount;
+                    flowSize = baseSize + (split < remainder ? 1 : 0);
+                }
                 if (flowSize == 0)
                 {
                     continue;

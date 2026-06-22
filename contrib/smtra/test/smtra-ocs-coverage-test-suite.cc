@@ -102,10 +102,13 @@ class SmtraOcsCoverageTestCase : public TestCase
                                                                  8,
                                                                  16);
             TrafficMatrix simulated = ScaleTrafficMatrix(offered, 0.001);
+            FlowGenerationOptions flowOptions;
+            flowOptions.mode = "fixed-flows-per-pair";
+            flowOptions.flowsPerActivePair = 16;
             std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(simulated,
                                                                     input.trafficModel,
                                                                     16,
-                                                                    16384,
+                                                                    flowOptions,
                                                                     Seconds(0.001),
                                                                     Seconds(0.003),
                                                                     32000000000ULL);

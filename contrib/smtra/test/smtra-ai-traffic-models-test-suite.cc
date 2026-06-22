@@ -43,10 +43,13 @@ class SmtraAiTrafficModelsTestCase : public TestCase
 
         TrafficMatrix tiny(8);
         tiny.SetBytes(0, 1, 100);
+        FlowGenerationOptions fixedMessages;
+        fixedMessages.mode = "fixed-message-size";
+        fixedMessages.messageSizeBytes = 16;
         std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(tiny,
                                                                 "data-parallel",
                                                                 16,
-                                                                16,
+                                                                fixedMessages,
                                                                 Seconds(0.001),
                                                                 Seconds(0.05),
                                                                 serverAccessBps);
@@ -55,6 +58,24 @@ class SmtraAiTrafficModelsTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(flows.back().GetSizeBytes(), 4, "tail message size mismatch");
         NS_TEST_ASSERT_MSG_EQ(flows.front().GetStartTime() >= Seconds(0.001), true, "bad start");
         NS_TEST_ASSERT_MSG_EQ(flows.back().GetStartTime() < Seconds(0.05), true, "bad stop");
+
+        FlowGenerationOptions fixedCount;
+        fixedCount.mode = "fixed-flows-per-pair";
+        fixedCount.flowsPerActivePair = 4;
+        std::vector<FlowSpec> pairFlows = BuildSmtraFlowsFromMatrix(tiny,
+                                                                    "data-parallel",
+                                                                    16,
+                                                                    fixedCount,
+                                                                    Seconds(0.001),
+                                                                    Seconds(0.05),
+                                                                    serverAccessBps);
+        NS_TEST_ASSERT_MSG_EQ(pairFlows.size(), 4, "fixed pair flow count mismatch");
+        uint64_t generatedBytes = 0;
+        for (const auto& flow : pairFlows)
+        {
+            generatedBytes += flow.GetSizeBytes();
+        }
+        NS_TEST_ASSERT_MSG_EQ(generatedBytes, 100, "fixed pair bytes mismatch");
     }
 };
 

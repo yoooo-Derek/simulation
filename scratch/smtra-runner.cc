@@ -1,4 +1,5 @@
 #include "ns3/core-module.h"
+#include "ns3/data-rate.h"
 #include "ns3/dragonfly-plus-ocs-topology-builder.h"
 #include "ns3/flow-launcher.h"
 #include "ns3/smtra-controller.h"
@@ -8,7 +9,9 @@
 
 #include <cstdint>
 #include <iostream>
+#include <map>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -19,8 +22,32 @@ using namespace ns3::smtra;
 namespace
 {
 
-constexpr uint64_t kServerAccessBps = 32000000000ULL;
-constexpr uint64_t kCircuitCapacityBps = 100000000000ULL;
+constexpr uint64_t kDefaultCircuitCapacityBps = 0;
+
+Time
+ParseTimeArgument(const std::string& value)
+{
+    const auto parseNumber = [&value](std::size_t suffixLength) {
+        return std::stod(value.substr(0, value.size() - suffixLength));
+    };
+    if (value.size() > 2 && value.substr(value.size() - 2) == "us")
+    {
+        return Seconds(parseNumber(2) * 1e-6);
+    }
+    if (value.size() > 2 && value.substr(value.size() - 2) == "ms")
+    {
+        return Seconds(parseNumber(2) * 1e-3);
+    }
+    if (value.size() > 2 && value.substr(value.size() - 2) == "ns")
+    {
+        return Seconds(parseNumber(2) * 1e-9);
+    }
+    if (value.size() > 1 && value.back() == 's')
+    {
+        return Seconds(parseNumber(1));
+    }
+    return Seconds(std::stod(value));
+}
 
 void
 AddPodElectricalDevices(const NodeIndex& nodeIndex, LinkUtilizationMonitor& monitor)
@@ -56,6 +83,23 @@ AddInterPodElectricalDevices(const NodeIndex& nodeIndex, LinkUtilizationMonitor&
     }
 }
 
+std::string
+BuildPathTypeCountsString(const std::map<std::string, uint32_t>& counts)
+{
+    std::ostringstream out;
+    bool first = true;
+    for (const auto& [pathType, count] : counts)
+    {
+        if (!first)
+        {
+            out << "|";
+        }
+        out << pathType << ":" << count;
+        first = false;
+    }
+    return out.str();
+}
+
 } // namespace
 
 int
@@ -65,20 +109,26 @@ main(int argc, char* argv[])
     std::string strategy = "v8";
     double offeredLoad = 0.2;
     double workloadScale = 0.001;
+    std::string flowGenerationMode = "fixed-flows-per-pair";
     uint64_t messageSizeBytes = 16384;
+    uint32_t flowsPerActivePair = 16;
     double trafficStartSeconds = 0.001;
     double trafficStopSeconds = 0.05;
     double simulationStopSeconds = 0.2;
     uint32_t randomSeed = 1;
     uint32_t runId = 1;
+    std::string electricalDataRate = "3.2Gbps";
+    std::string ocsDataRate = "10Gbps";
+    std::string electricalDelay = "20us";
+    std::string ocsDelay = "5us";
 
     double eta = 1.0;
     double alpha = 0.5;
     double theta = 0.0;
     double epsilon = 1e-12;
-    uint32_t podPortLimitB = 8;
-    uint32_t memsCount = 8;
-    uint64_t circuitCapacityBps = kCircuitCapacityBps;
+    uint32_t podPortLimitB = 2;
+    uint32_t memsCount = 2;
+    uint64_t circuitCapacityBps = kDefaultCircuitCapacityBps;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("trafficModel",
@@ -87,12 +137,20 @@ main(int argc, char* argv[])
     cmd.AddValue("strategy", "Routing strategy: e-only, static-ocs, traffic-greedy, v8", strategy);
     cmd.AddValue("offeredLoad", "Normalized server offered load", offeredLoad);
     cmd.AddValue("workloadScale", "Scale factor applied to offered bytes for NS-3 flow generation", workloadScale);
+    cmd.AddValue("flowGenerationMode",
+                 "Flow generation mode: fixed-flows-per-pair or fixed-message-size",
+                 flowGenerationMode);
     cmd.AddValue("messageSizeBytes", "Fixed TCP message/flow size in bytes", messageSizeBytes);
+    cmd.AddValue("flowsPerActivePair", "TCP flows generated for each active pod pair", flowsPerActivePair);
     cmd.AddValue("trafficStartTime", "Traffic start time in seconds", trafficStartSeconds);
     cmd.AddValue("trafficStopTime", "Traffic injection stop time in seconds", trafficStopSeconds);
     cmd.AddValue("simulationStopTime", "Simulation stop time in seconds", simulationStopSeconds);
     cmd.AddValue("randomSeed", "Random seed for ns-3 run metadata", randomSeed);
     cmd.AddValue("runId", "Run id stored in SimulationConfig", runId);
+    cmd.AddValue("electricalDataRate", "Electrical link data rate", electricalDataRate);
+    cmd.AddValue("ocsDataRate", "OCS link data rate", ocsDataRate);
+    cmd.AddValue("electricalDelay", "Electrical link delay, e.g. 20us", electricalDelay);
+    cmd.AddValue("ocsDelay", "OCS link delay, e.g. 5us", ocsDelay);
     cmd.AddValue("eta", "SMTRA structural resolution parameter", eta);
     cmd.AddValue("alpha", "SMTRA cross-community Omega weight", alpha);
     cmd.AddValue("theta", "SMTRA controller SMD threshold", theta);
@@ -109,13 +167,16 @@ main(int argc, char* argv[])
     {
         throw std::runtime_error("expected trafficStartTime < trafficStopTime < simulationStopTime");
     }
+    const uint64_t serverAccessBps = DataRate(electricalDataRate).GetBitRate();
+    const uint64_t resolvedCircuitCapacityBps =
+        circuitCapacityBps == 0 ? DataRate(ocsDataRate).GetBitRate() : circuitCapacityBps;
 
     SimulationConfig config;
     config.SetNumTors(8);
     config.SetServersPerTor(16);
-    config.SetServerAccessDataRate("32Gbps");
-    config.SetEpsDataRate("32Gbps");
-    config.SetOcsDataRate("100Gbps");
+    config.SetServerAccessDataRate(electricalDataRate);
+    config.SetEpsDataRate(electricalDataRate);
+    config.SetOcsDataRate(ocsDataRate);
     config.SetTrafficStopTime(trafficStopTime);
     config.SetMeasurementStartTime(trafficStartTime);
     config.SetMeasurementEndTime(simulationStopTime);
@@ -125,8 +186,10 @@ main(int argc, char* argv[])
     config.SetRunId(runId);
 
     DragonflyPlusOcsTopologyBuilder::BuildOptions topologyOptions;
-    topologyOptions.electricalDataRate = "32Gbps";
-    topologyOptions.ocsDataRate = "100Gbps";
+    topologyOptions.electricalDataRate = electricalDataRate;
+    topologyOptions.ocsDataRate = ocsDataRate;
+    topologyOptions.electricalDelay = ParseTimeArgument(electricalDelay);
+    topologyOptions.ocsDelay = ParseTimeArgument(ocsDelay);
     NodeIndex nodeIndex = strategy == "e-only"
                               ? DragonflyPlusOcsTopologyBuilder().BuildElectricalOnly(config,
                                                                                       topologyOptions)
@@ -134,19 +197,23 @@ main(int argc, char* argv[])
 
     TrafficMatrix offeredMatrix = BuildAiTrainingTrafficMatrix(trafficModel,
                                                                offeredLoad,
-                                                               kServerAccessBps,
+                                                               serverAccessBps,
                                                                trafficStartTime,
                                                                trafficStopTime,
                                                                8,
                                                                config.GetServersPerTor());
     TrafficMatrix simulatedMatrix = ScaleTrafficMatrix(offeredMatrix, workloadScale);
+    FlowGenerationOptions flowOptions;
+    flowOptions.mode = flowGenerationMode;
+    flowOptions.messageSizeBytes = messageSizeBytes;
+    flowOptions.flowsPerActivePair = flowsPerActivePair;
     std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(simulatedMatrix,
                                                             trafficModel,
                                                             config.GetServersPerTor(),
-                                                            messageSizeBytes,
+                                                            flowOptions,
                                                             trafficStartTime,
                                                             trafficStopTime,
-                                                            kServerAccessBps);
+                                                            serverAccessBps);
 
     SmtraParameters parameters;
     parameters.eta = eta;
@@ -155,7 +222,7 @@ main(int argc, char* argv[])
     parameters.epsilon = epsilon;
     parameters.podPortLimitB = podPortLimitB;
     parameters.memsCount = memsCount;
-    parameters.circuitCapacityBps = circuitCapacityBps;
+    parameters.circuitCapacityBps = resolvedCircuitCapacityBps;
     parameters.observerWindowSeconds = (trafficStopTime - trafficStartTime).GetSeconds();
 
     SmtraPathInstaller pathInstaller;
@@ -183,7 +250,9 @@ main(int argc, char* argv[])
         empty.C = DenseMatrix(config.GetNumTors());
         empty.R = DenseMatrix(config.GetNumTors());
         empty.A = DenseMatrix(config.GetNumTors());
-        empty.ocsPlane = OcsPlane(config.GetNumTors(), parameters.memsCount, circuitCapacityBps);
+        empty.ocsPlane = OcsPlane(config.GetNumTors(),
+                                  parameters.memsCount,
+                                  parameters.circuitCapacityBps);
         const SmtraControlResult smtra = SmtraController().Run(simulatedMatrix, empty, parameters);
         deployedState = smtra.deployedState;
         decisions = pathInstaller.Select(flows, deployedState, nodeIndex);
@@ -221,6 +290,42 @@ main(int argc, char* argv[])
                                     : static_cast<double>(installableFlows) /
                                           static_cast<double>(generatedFlows);
     const bool ocsCoverageOk = unservedFlows == 0;
+    std::map<std::string, uint32_t> pathTypeCounts;
+    uint32_t oneHopPathFlows = 0;
+    uint32_t twoHopPathFlows = 0;
+    uint32_t multiHopPathFlows = 0;
+    uint32_t maxPathHopCount = 0;
+    uint64_t totalPathHopCount = 0;
+    for (const auto& decision : decisions)
+    {
+        pathTypeCounts[decision.pathType]++;
+        if (!decision.installable)
+        {
+            continue;
+        }
+        const uint32_t hopCount = decision.torPath.empty()
+                                      ? 0
+                                      : static_cast<uint32_t>(decision.torPath.size() - 1);
+        totalPathHopCount += hopCount;
+        maxPathHopCount = std::max(maxPathHopCount, hopCount);
+        if (hopCount == 1)
+        {
+            oneHopPathFlows++;
+        }
+        else if (hopCount == 2)
+        {
+            twoHopPathFlows++;
+        }
+        else if (hopCount > 2)
+        {
+            multiHopPathFlows++;
+        }
+    }
+    const double avgPathHopCount = installableFlows == 0
+                                       ? 0.0
+                                       : static_cast<double>(totalPathHopCount) /
+                                             static_cast<double>(installableFlows);
+
     auto completedCallbacks = std::make_shared<uint32_t>(0);
     auto completionCallback = [completedCallbacks, installableFlows](uint32_t) {
         (*completedCallbacks)++;
@@ -248,7 +353,14 @@ main(int argc, char* argv[])
               << ", strategy=" << strategy
               << ", offeredLoad=" << offeredLoad
               << ", workloadScale=" << workloadScale
+              << ", flowGenerationMode=" << flowGenerationMode
               << ", messageSizeBytes=" << messageSizeBytes
+              << ", flowsPerActivePair=" << flowsPerActivePair
+              << ", electricalDataRate=" << electricalDataRate
+              << ", ocsDataRate=" << ocsDataRate
+              << ", memsCount=" << memsCount
+              << ", podPortLimitB=" << podPortLimitB
+              << ", circuitCapacityBps=" << parameters.circuitCapacityBps
               << ", offeredBytes=" << offeredMatrix.GetTotalBytes()
               << ", simulatedBytes=" << simulatedMatrix.GetTotalBytes()
               << ", generatedFlows=" << generatedFlows
@@ -256,6 +368,12 @@ main(int argc, char* argv[])
               << ", unservedFlows=" << unservedFlows
               << ", installRatio=" << installRatio
               << ", ocsCoverageOk=" << (ocsCoverageOk ? "true" : "false")
+              << ", pathTypeCounts=" << BuildPathTypeCountsString(pathTypeCounts)
+              << ", oneHopPathFlows=" << oneHopPathFlows
+              << ", twoHopPathFlows=" << twoHopPathFlows
+              << ", multiHopPathFlows=" << multiHopPathFlows
+              << ", avgPathHopCount=" << avgPathHopCount
+              << ", maxPathHopCount=" << maxPathHopCount
               << ", installedFlows=" << performance.installedFlows
               << ", completedFlows=" << performance.completedFlows
               << ", incompleteFlows=" << performance.incompleteFlows

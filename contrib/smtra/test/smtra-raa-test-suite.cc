@@ -39,11 +39,14 @@ class SmtraRaaRoutesTestCase : public TestCase
         C.Set(2, 0, 1.0);
         C.Set(2, 3, 1.0);
         C.Set(3, 2, 1.0);
+        C.Set(0, 3, 1.0);
+        C.Set(3, 0, 1.0);
 
         OcsPlane plane(4, 8, 100000000000ULL);
         plane.Activate(0, 1, 0);
         plane.Activate(0, 2, 1);
         plane.Activate(2, 3, 2);
+        plane.Activate(0, 3, 3);
 
         SmtraParameters parameters;
         parameters.observerWindowSeconds = 1.0;
@@ -56,18 +59,20 @@ class SmtraRaaRoutesTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(state.allocations.at({0, 1}).routeValue, 1, "direct route mismatch");
         NS_TEST_ASSERT_MSG_EQ(state.allocations.find({0, 3}) != state.allocations.end(),
                               true,
-                              "missing two-hop allocation");
-        NS_TEST_ASSERT_MSG_EQ(state.allocations.at({0, 3}).routeValue, 2, "two-hop route mismatch");
+                              "missing tied allocation");
+        NS_TEST_ASSERT_MSG_EQ(state.allocations.at({0, 3}).routeValue,
+                              3,
+                              "direct route must win tied two-hop improvement");
         NS_TEST_ASSERT_MSG_EQ_TOL(state.allocations.at({0, 3}).occupiedBytes,
-                                  160.0,
+                                  80.0,
                                   1e-9,
-                                  "two-hop occupied capacity mismatch");
+                                  "direct occupied capacity mismatch");
         NS_TEST_ASSERT_MSG_EQ_TOL(state.allocations.at({0, 3}).effectiveBytes,
                                   80.0,
                                   1e-9,
-                                  "two-hop effective capacity mismatch");
+                                  "direct effective capacity mismatch");
         NS_TEST_ASSERT_MSG_EQ_TOL(state.A.Get(0, 3),
-                                  160.0,
+                                  80.0,
                                   1e-9,
                                   "A must store occupied capacity");
         NS_TEST_ASSERT_MSG_EQ_TOL(state.Gamma.Get(0, 3),

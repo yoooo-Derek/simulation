@@ -22,6 +22,56 @@ struct LocalMoveResult
     double score = 0.0;
 };
 
+struct RaaRouteCandidateScore
+{
+    double improvement = -std::numeric_limits<double>::infinity();
+    bool direct = false;
+    uint32_t hopCount = std::numeric_limits<uint32_t>::max();
+    double occupiedBytes = std::numeric_limits<double>::infinity();
+    double bottleneckBytes = 0.0;
+    uint32_t stableRouteValue = std::numeric_limits<uint32_t>::max();
+};
+
+bool
+IsBetterRaaCandidate(const RaaRouteCandidateScore& candidate,
+                     const RaaRouteCandidateScore& best,
+                     double tolerance)
+{
+    if (candidate.improvement > best.improvement + tolerance)
+    {
+        return true;
+    }
+    if (candidate.improvement + tolerance < best.improvement)
+    {
+        return false;
+    }
+    if (candidate.direct != best.direct)
+    {
+        return candidate.direct;
+    }
+    if (candidate.hopCount != best.hopCount)
+    {
+        return candidate.hopCount < best.hopCount;
+    }
+    if (candidate.occupiedBytes + tolerance < best.occupiedBytes)
+    {
+        return true;
+    }
+    if (candidate.occupiedBytes > best.occupiedBytes + tolerance)
+    {
+        return false;
+    }
+    if (candidate.bottleneckBytes > best.bottleneckBytes + tolerance)
+    {
+        return true;
+    }
+    if (candidate.bottleneckBytes + tolerance < best.bottleneckBytes)
+    {
+        return false;
+    }
+    return candidate.stableRouteValue < best.stableRouteValue;
+}
+
 uint32_t
 NormalizeLabels(std::vector<uint32_t>& labels)
 {
@@ -563,7 +613,8 @@ SmtraController::RunRaa(const DenseMatrix& C,
             continue;
         }
 
-        double bestImprovement = -std::numeric_limits<double>::infinity();
+        constexpr double kRaaTieTolerance = 1e-12;
+        RaaRouteCandidateScore bestScore;
         uint32_t bestRoute = std::numeric_limits<uint32_t>::max();
         SmtraRouteAllocation bestAllocation;
         for (uint32_t routeValue : candidates)
@@ -598,10 +649,16 @@ SmtraController::RunRaa(const DenseMatrix& C,
             const double before = state.smd;
             const double after = ComputeSmd(trial, structural, parameters);
             const double improvement = before - after;
-            if (improvement > bestImprovement ||
-                (improvement == bestImprovement && routeValue < bestRoute))
+            RaaRouteCandidateScore score;
+            score.improvement = improvement;
+            score.direct = routeValue == destination;
+            score.hopCount = static_cast<uint32_t>(links.size());
+            score.occupiedBytes = occupied;
+            score.bottleneckBytes = routeCapacity;
+            score.stableRouteValue = routeValue;
+            if (IsBetterRaaCandidate(score, bestScore, kRaaTieTolerance))
             {
-                bestImprovement = improvement;
+                bestScore = score;
                 bestRoute = routeValue;
                 bestAllocation = allocation;
             }

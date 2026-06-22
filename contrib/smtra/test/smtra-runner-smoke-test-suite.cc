@@ -23,10 +23,13 @@ class SmtraRunnerSmokeTestCase : public TestCase
                                                               Seconds(0.05),
                                                               8,
                                                               16);
+        FlowGenerationOptions flowOptions;
+        flowOptions.mode = "fixed-flows-per-pair";
+        flowOptions.flowsPerActivePair = 16;
         std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(observed,
                                                                 "data-parallel",
                                                                 16,
-                                                                16384,
+                                                                flowOptions,
                                                                 Seconds(0.001),
                                                                 Seconds(0.05),
                                                                 32000000000ULL);

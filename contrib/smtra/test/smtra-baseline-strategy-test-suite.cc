@@ -2,8 +2,10 @@
 #include "ns3/smtra-metrics.h"
 #include "ns3/test.h"
 
+#include <algorithm>
 #include <map>
 #include <set>
+#include <vector>
 
 using namespace ns3;
 using namespace ns3::smtra;
@@ -30,6 +32,18 @@ CountMatchingViolations(const OcsPlane& plane)
     return violations;
 }
 
+uint32_t
+MaxPodDegree(const OcsPlane& plane, uint32_t podCount)
+{
+    std::vector<uint32_t> degree(podCount, 0);
+    for (const auto& circuit : plane.GetActiveCircuits())
+    {
+        degree[circuit.podA]++;
+        degree[circuit.podB]++;
+    }
+    return *std::max_element(degree.begin(), degree.end());
+}
+
 } // namespace
 
 class SmtraStaticOcsStrategyTestCase : public TestCase
@@ -44,13 +58,20 @@ class SmtraStaticOcsStrategyTestCase : public TestCase
     void DoRun() override
     {
         SmtraParameters parameters;
-        parameters.podPortLimitB = 8;
+        parameters.memsCount = 2;
+        parameters.podPortLimitB = 2;
         const SmtraTopologyRouteState first = BuildStaticOcsBaselineState(8, parameters);
         const SmtraTopologyRouteState second = BuildStaticOcsBaselineState(8, parameters);
 
         NS_TEST_ASSERT_MSG_EQ(first.ocsPlane.GetActiveCircuitCount(),
-                              32,
+                              8,
                               "static OCS circuit count mismatch");
+        NS_TEST_ASSERT_MSG_EQ(first.ocsPlane.GetActiveCircuitCount() < 28,
+                              true,
+                              "static OCS must not approximate full K8 coverage");
+        NS_TEST_ASSERT_MSG_EQ(MaxPodDegree(first.ocsPlane, 8) <= parameters.podPortLimitB,
+                              true,
+                              "static OCS violates pod port limit");
         NS_TEST_ASSERT_MSG_EQ(first.C.ToString(), second.C.ToString(), "static OCS is not stable");
         NS_TEST_ASSERT_MSG_EQ(CountMatchingViolations(first.ocsPlane),
                               0,
@@ -79,6 +100,7 @@ class SmtraTrafficGreedyStrategyTestCase : public TestCase
         matrix.SetBytes(3, 2, 100);
 
         SmtraParameters parameters;
+        parameters.memsCount = 2;
         parameters.podPortLimitB = 2;
         const SmtraTopologyRouteState greedy = BuildTrafficGreedyBaselineState(matrix, parameters);
         NS_TEST_ASSERT_MSG_GT(greedy.ocsPlane.GetActiveCircuitCount(0, 1),
@@ -90,6 +112,13 @@ class SmtraTrafficGreedyStrategyTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(CountMatchingViolations(greedy.ocsPlane),
                               0,
                               "traffic-greedy violates MEMS matching");
+        NS_TEST_ASSERT_MSG_EQ(MaxPodDegree(greedy.ocsPlane, 8) <= parameters.podPortLimitB,
+                              true,
+                              "traffic-greedy violates pod port limit");
+        NS_TEST_ASSERT_MSG_EQ(greedy.ocsPlane.GetActiveCircuitCount() <=
+                                  parameters.memsCount * (matrix.GetPodCount() / 2),
+                              true,
+                              "traffic-greedy exceeds MEMS matching capacity");
         NS_TEST_ASSERT_MSG_EQ(greedy.allocations.empty(),
                               true,
                               "traffic-greedy must not run RAA allocations");
