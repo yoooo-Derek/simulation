@@ -190,7 +190,9 @@ main(int argc, char* argv[])
     cmd.AddValue("neighborWeight", "ai-neighbor-skew neighbor pair weight", neighborWeight);
     cmd.AddValue("crossStageWeight", "ai-neighbor-skew cross-stage pair weight", crossStageWeight);
     cmd.AddValue("backgroundWeight", "ai-neighbor-skew background pair weight", backgroundWeight);
-    cmd.AddValue("strategy", "Routing strategy: e-only, static-ocs, traffic-greedy, traffic-fair, v8", strategy);
+    cmd.AddValue("strategy",
+                 "Routing strategy: e-only, static-ocs, traffic-greedy, traffic-fair, v8, v8-shortest",
+                 strategy);
     cmd.AddValue("offeredLoad", "Normalized server offered load", offeredLoad);
     cmd.AddValue("workloadScale", "Scale factor applied to offered bytes for NS-3 flow generation", workloadScale);
     cmd.AddValue("flowGenerationMode",
@@ -365,6 +367,20 @@ main(int argc, char* argv[])
         const SmtraControlResult smtra = SmtraController().Run(observeMatrix, empty, parameters);
         deployedState = smtra.deployedState;
         decisions = pathInstaller.Select(flows, deployedState, nodeIndex);
+        pathInstaller.Install(flows, decisions, nodeIndex);
+    }
+    else if (strategy == "v8-shortest")
+    {
+        SmtraTopologyRouteState empty;
+        empty.C = DenseMatrix(config.GetNumTors());
+        empty.R = DenseMatrix(config.GetNumTors());
+        empty.A = DenseMatrix(config.GetNumTors());
+        empty.ocsPlane = OcsPlane(config.GetNumTors(),
+                                  parameters.memsCount,
+                                  parameters.circuitCapacityBps);
+        const SmtraControlResult smtra = SmtraController().Run(observeMatrix, empty, parameters);
+        deployedState = smtra.deployedState;
+        decisions = pathInstaller.SelectShortestOcs(flows, deployedState, nodeIndex);
         pathInstaller.Install(flows, decisions, nodeIndex);
     }
     else
