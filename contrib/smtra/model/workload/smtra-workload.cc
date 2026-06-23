@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -318,6 +319,80 @@ ScaleTrafficMatrix(const TrafficMatrix& matrix, double scale)
         scaled.AddBytes(lastSource, lastDestination, targetTotal - assignedBytes);
     }
     return scaled;
+}
+
+TrafficMatrix
+BuildScalePairsPerturbedMatrix(const TrafficMatrix& matrix,
+                               double perturbationRatio,
+                               uint32_t randomSeed)
+{
+    if (perturbationRatio < 0.0)
+    {
+        throw std::runtime_error("testPerturbationRatio must be non-negative");
+    }
+    struct ActivePair
+    {
+        uint32_t source = 0;
+        uint32_t destination = 0;
+        uint64_t bytes = 0;
+    };
+    std::vector<ActivePair> activePairs;
+    for (uint32_t source = 0; source < matrix.GetPodCount(); ++source)
+    {
+        for (uint32_t destination = 0; destination < matrix.GetPodCount(); ++destination)
+        {
+            if (source == destination)
+            {
+                continue;
+            }
+            const uint64_t bytes = matrix.GetBytes(source, destination);
+            if (bytes > 0)
+            {
+                activePairs.push_back({source, destination, bytes});
+            }
+        }
+    }
+    if (activePairs.empty() || perturbationRatio == 0.0)
+    {
+        return matrix;
+    }
+
+    std::mt19937 rng(randomSeed);
+    std::shuffle(activePairs.begin(), activePairs.end(), rng);
+
+    std::vector<double> perturbedBytes(activePairs.size(), 0.0);
+    double perturbedTotal = 0.0;
+    for (uint32_t index = 0; index < activePairs.size(); ++index)
+    {
+        const double factor = index % 2 == 0
+                                  ? 1.0 + perturbationRatio
+                                  : std::max(0.0, 1.0 - perturbationRatio);
+        perturbedBytes[index] = static_cast<double>(activePairs[index].bytes) * factor;
+        perturbedTotal += perturbedBytes[index];
+    }
+    if (perturbedTotal <= 0.0)
+    {
+        throw std::runtime_error("scale-pairs perturbation removed all traffic");
+    }
+
+    TrafficMatrix perturbed(matrix.GetPodCount());
+    uint64_t assignedBytes = 0;
+    uint32_t lastIndex = 0;
+    const uint64_t targetTotal = matrix.GetTotalBytes();
+    for (uint32_t index = 0; index < activePairs.size(); ++index)
+    {
+        const uint64_t bytes = static_cast<uint64_t>(
+            std::floor(perturbedBytes[index] * static_cast<double>(targetTotal) / perturbedTotal));
+        perturbed.SetBytes(activePairs[index].source, activePairs[index].destination, bytes);
+        assignedBytes += bytes;
+        lastIndex = index;
+    }
+    if (targetTotal > assignedBytes)
+    {
+        const auto& pair = activePairs[lastIndex];
+        perturbed.AddBytes(pair.source, pair.destination, targetTotal - assignedBytes);
+    }
+    return perturbed;
 }
 
 std::vector<FlowSpec>

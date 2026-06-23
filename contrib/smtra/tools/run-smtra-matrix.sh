@@ -3,6 +3,9 @@ set -euo pipefail
 
 MODE="pilot"
 WORKLOAD_SCALE="0.001"
+MATRIX_MODE="observe-test"
+TEST_PERTURBATION_MODE="scale-pairs"
+TEST_PERTURBATION_RATIO="0.2"
 FLOW_GENERATION_MODE="fixed-flows-per-pair"
 MESSAGE_SIZE_BYTES="16384"
 FLOWS_PER_ACTIVE_PAIR="16"
@@ -25,6 +28,9 @@ Usage: run-smtra-matrix.sh [options]
 Options:
   --mode=pilot|full              Experiment matrix size. pilot runs 24 cases; full runs 60 cases.
   --workloadScale=VALUE          Scale factor applied to offered bytes for NS-3 flow generation.
+  --matrixMode=MODE              Matrix mode. Only observe-test is supported.
+  --testPerturbationMode=MODE    none or scale-pairs.
+  --testPerturbationRatio=VALUE  Deterministic perturbation ratio.
   --flowGenerationMode=MODE      fixed-flows-per-pair or fixed-message-size.
   --messageSizeBytes=BYTES       Fixed TCP message size in bytes.
   --flowsPerActivePair=COUNT     TCP flows generated for each active pod pair.
@@ -46,6 +52,15 @@ for arg in "$@"; do
             ;;
         --workloadScale=*)
             WORKLOAD_SCALE="${arg#*=}"
+            ;;
+        --matrixMode=*)
+            MATRIX_MODE="${arg#*=}"
+            ;;
+        --testPerturbationMode=*)
+            TEST_PERTURBATION_MODE="${arg#*=}"
+            ;;
+        --testPerturbationRatio=*)
+            TEST_PERTURBATION_RATIO="${arg#*=}"
             ;;
         --flowGenerationMode=*)
             FLOW_GENERATION_MODE="${arg#*=}"
@@ -115,8 +130,8 @@ for traffic_model in "${TRAFFIC_MODELS[@]}"; do
         for offered_load in "${OFFERED_LOADS[@]}"; do
             log_file="${OUTPUT_DIR}/${traffic_model}__${strategy}__load-${offered_load}__seed-${RANDOM_SEED}.log"
             runtime_file="${log_file%.log}.runtime"
-            runner_args="smtra-runner --trafficModel=${traffic_model} --strategy=${strategy} --offeredLoad=${offered_load} --workloadScale=${WORKLOAD_SCALE} --flowGenerationMode=${FLOW_GENERATION_MODE} --messageSizeBytes=${MESSAGE_SIZE_BYTES} --flowsPerActivePair=${FLOWS_PER_ACTIVE_PAIR} --randomSeed=${RANDOM_SEED} --electricalDataRate=${ELECTRICAL_DATA_RATE} --ocsDataRate=${OCS_DATA_RATE} --memsCount=${MEMS_COUNT} --podPortLimitB=${POD_PORT_LIMIT_B} --circuitCapacityBps=${CIRCUIT_CAPACITY_BPS} --trafficStartTime=${TRAFFIC_START_TIME} --trafficStopTime=${TRAFFIC_STOP_TIME} --simulationStopTime=${SIMULATION_STOP_TIME}"
-            echo "RUN trafficModel=${traffic_model} strategy=${strategy} offeredLoad=${offered_load} log=${log_file}"
+            runner_args="smtra-runner --matrixMode=${MATRIX_MODE} --observeTrafficModel=${traffic_model} --testTrafficModel=${traffic_model} --testPerturbationMode=${TEST_PERTURBATION_MODE} --testPerturbationRatio=${TEST_PERTURBATION_RATIO} --strategy=${strategy} --offeredLoad=${offered_load} --workloadScale=${WORKLOAD_SCALE} --flowGenerationMode=${FLOW_GENERATION_MODE} --messageSizeBytes=${MESSAGE_SIZE_BYTES} --flowsPerActivePair=${FLOWS_PER_ACTIVE_PAIR} --randomSeed=${RANDOM_SEED} --electricalDataRate=${ELECTRICAL_DATA_RATE} --ocsDataRate=${OCS_DATA_RATE} --memsCount=${MEMS_COUNT} --podPortLimitB=${POD_PORT_LIMIT_B} --circuitCapacityBps=${CIRCUIT_CAPACITY_BPS} --trafficStartTime=${TRAFFIC_START_TIME} --trafficStopTime=${TRAFFIC_STOP_TIME} --simulationStopTime=${SIMULATION_STOP_TIME}"
+            echo "RUN observeTrafficModel=${traffic_model} testTrafficModel=${traffic_model} strategy=${strategy} offeredLoad=${offered_load} log=${log_file}"
             run_start=$SECONDS
             ./ns3 run "$runner_args" >"$log_file" 2>&1
             echo "$((SECONDS - run_start))" >"$runtime_file"

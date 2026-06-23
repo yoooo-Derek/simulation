@@ -22,54 +22,114 @@ struct LocalMoveResult
     double score = 0.0;
 };
 
-struct RaaRouteCandidateScore
+struct RaaRouteCandidate
 {
     double improvement = -std::numeric_limits<double>::infinity();
-    bool direct = false;
-    uint32_t hopCount = std::numeric_limits<uint32_t>::max();
+    double pathLoad = std::numeric_limits<double>::infinity();
     double occupiedBytes = std::numeric_limits<double>::infinity();
     double bottleneckBytes = 0.0;
-    uint32_t stableRouteValue = std::numeric_limits<uint32_t>::max();
+    uint32_t routeValue = std::numeric_limits<uint32_t>::max();
+    SmtraRouteAllocation allocation;
 };
 
 bool
-IsBetterRaaCandidate(const RaaRouteCandidateScore& candidate,
-                     const RaaRouteCandidateScore& best,
-                     double tolerance)
+DominatesRaaCandidate(const RaaRouteCandidate& a, const RaaRouteCandidate& b, double eps)
 {
-    if (candidate.improvement > best.improvement + tolerance)
+    const bool noWorse = a.improvement >= b.improvement - eps &&
+                         a.pathLoad <= b.pathLoad + eps &&
+                         a.bottleneckBytes >= b.bottleneckBytes - eps;
+    const bool strictlyBetter = a.improvement > b.improvement + eps ||
+                                a.pathLoad < b.pathLoad - eps ||
+                                a.bottleneckBytes > b.bottleneckBytes + eps;
+    return noWorse && strictlyBetter;
+}
+
+bool
+IsBetterRaaCandidate(const RaaRouteCandidate& candidate,
+                     const RaaRouteCandidate& best,
+                     double eps)
+{
+    if (candidate.improvement > best.improvement + eps)
     {
         return true;
     }
-    if (candidate.improvement + tolerance < best.improvement)
+    if (candidate.improvement + eps < best.improvement)
     {
         return false;
     }
-    if (candidate.direct != best.direct)
-    {
-        return candidate.direct;
-    }
-    if (candidate.hopCount != best.hopCount)
-    {
-        return candidate.hopCount < best.hopCount;
-    }
-    if (candidate.occupiedBytes + tolerance < best.occupiedBytes)
+    if (candidate.pathLoad + eps < best.pathLoad)
     {
         return true;
     }
-    if (candidate.occupiedBytes > best.occupiedBytes + tolerance)
+    if (candidate.pathLoad > best.pathLoad + eps)
     {
         return false;
     }
-    if (candidate.bottleneckBytes > best.bottleneckBytes + tolerance)
+    if (candidate.bottleneckBytes > best.bottleneckBytes + eps)
     {
         return true;
     }
-    if (candidate.bottleneckBytes + tolerance < best.bottleneckBytes)
+    if (candidate.bottleneckBytes + eps < best.bottleneckBytes)
     {
         return false;
     }
-    return candidate.stableRouteValue < best.stableRouteValue;
+    return candidate.routeValue < best.routeValue;
+}
+
+double
+ComputeTotalPathLoad(const SmtraTopologyRouteState& state)
+{
+    double total = 0.0;
+    for (const auto& entry : state.allocations)
+    {
+        total += entry.second.occupiedBytes * static_cast<double>(entry.second.links.size());
+    }
+    return total;
+}
+
+struct TaaTopologyCandidate
+{
+    uint32_t memsId = 0;
+    uint32_t podA = 0;
+    uint32_t podB = 0;
+    SmtraTopologyRouteState state;
+    double improvement = -std::numeric_limits<double>::infinity();
+    double totalPathLoad = std::numeric_limits<double>::infinity();
+};
+
+bool
+DominatesTaaCandidate(const TaaTopologyCandidate& a, const TaaTopologyCandidate& b, double eps)
+{
+    const bool noWorse = a.improvement >= b.improvement - eps &&
+                         a.totalPathLoad <= b.totalPathLoad + eps;
+    const bool strictlyBetter = a.improvement > b.improvement + eps ||
+                                a.totalPathLoad < b.totalPathLoad - eps;
+    return noWorse && strictlyBetter;
+}
+
+bool
+IsBetterTaaCandidate(const TaaTopologyCandidate& candidate,
+                     const TaaTopologyCandidate& best,
+                     double eps)
+{
+    if (candidate.improvement > best.improvement + eps)
+    {
+        return true;
+    }
+    if (candidate.improvement + eps < best.improvement)
+    {
+        return false;
+    }
+    if (candidate.totalPathLoad + eps < best.totalPathLoad)
+    {
+        return true;
+    }
+    if (candidate.totalPathLoad > best.totalPathLoad + eps)
+    {
+        return false;
+    }
+    return std::tie(candidate.memsId, candidate.podA, candidate.podB) <
+           std::tie(best.memsId, best.podA, best.podB);
 }
 
 uint32_t
@@ -613,10 +673,8 @@ SmtraController::RunRaa(const DenseMatrix& C,
             continue;
         }
 
-        constexpr double kRaaTieTolerance = 1e-12;
-        RaaRouteCandidateScore bestScore;
-        uint32_t bestRoute = std::numeric_limits<uint32_t>::max();
-        SmtraRouteAllocation bestAllocation;
+        constexpr double kParetoEpsilon = 1e-12;
+        std::vector<RaaRouteCandidate> routeCandidates;
         for (uint32_t routeValue : candidates)
         {
             const auto links = BuildRouteLinks(source, destination, routeValue);
@@ -649,24 +707,49 @@ SmtraController::RunRaa(const DenseMatrix& C,
             const double before = state.smd;
             const double after = ComputeSmd(trial, structural, parameters);
             const double improvement = before - after;
-            RaaRouteCandidateScore score;
-            score.improvement = improvement;
-            score.direct = routeValue == destination;
-            score.hopCount = static_cast<uint32_t>(links.size());
-            score.occupiedBytes = occupied;
-            score.bottleneckBytes = routeCapacity;
-            score.stableRouteValue = routeValue;
-            if (IsBetterRaaCandidate(score, bestScore, kRaaTieTolerance))
-            {
-                bestScore = score;
-                bestRoute = routeValue;
-                bestAllocation = allocation;
-            }
+            RaaRouteCandidate candidate;
+            candidate.improvement = improvement;
+            candidate.pathLoad = occupied * static_cast<double>(links.size());
+            candidate.occupiedBytes = occupied;
+            candidate.bottleneckBytes = routeCapacity;
+            candidate.routeValue = routeValue;
+            candidate.allocation = allocation;
+            routeCandidates.push_back(candidate);
         }
-        if (bestRoute == std::numeric_limits<uint32_t>::max())
+        if (routeCandidates.empty())
         {
             continue;
         }
+
+        std::vector<RaaRouteCandidate> paretoCandidates;
+        for (uint32_t i = 0; i < routeCandidates.size(); ++i)
+        {
+            bool dominated = false;
+            for (uint32_t j = 0; j < routeCandidates.size(); ++j)
+            {
+                if (i != j &&
+                    DominatesRaaCandidate(routeCandidates[j], routeCandidates[i], kParetoEpsilon))
+                {
+                    dominated = true;
+                    break;
+                }
+            }
+            if (!dominated)
+            {
+                paretoCandidates.push_back(routeCandidates[i]);
+            }
+        }
+
+        RaaRouteCandidate bestCandidate;
+        for (const auto& candidate : paretoCandidates)
+        {
+            if (IsBetterRaaCandidate(candidate, bestCandidate, kParetoEpsilon))
+            {
+                bestCandidate = candidate;
+            }
+        }
+        const SmtraRouteAllocation& bestAllocation = bestCandidate.allocation;
+        const uint32_t bestRoute = bestCandidate.routeValue;
 
         state.R.Set(source, destination, static_cast<double>(bestRoute));
         state.R.Set(destination,
@@ -696,11 +779,8 @@ SmtraController::RunTaa(const SmtraStructuralState& structural,
     std::vector<uint32_t> podDegree(size, 0);
     while (true)
     {
-        double bestImprovement = 0.0;
-        uint32_t bestA = 0;
-        uint32_t bestB = 0;
-        uint32_t bestMems = 0;
-        SmtraTopologyRouteState bestState;
+        constexpr double kParetoEpsilon = 1e-12;
+        std::vector<TaaTopologyCandidate> candidates;
         for (uint32_t memsId = 0; memsId < parameters.memsCount; ++memsId)
         {
             for (uint32_t i = 0; i < size; ++i)
@@ -721,28 +801,51 @@ SmtraController::RunTaa(const SmtraStructuralState& structural,
                     trialPlane.Activate(i, j, memsId);
                     SmtraTopologyRouteState trial = RunRaa(trialC, trialPlane, structural, parameters);
                     const double improvement = current.smd - trial.smd;
-                    if (improvement > bestImprovement ||
-                        (improvement == bestImprovement &&
-                         std::tie(memsId, i, j) < std::tie(bestMems, bestA, bestB)))
+                    if (improvement <= kParetoEpsilon)
                     {
-                        bestImprovement = improvement;
-                        bestA = i;
-                        bestB = j;
-                        bestMems = memsId;
-                        bestState = trial;
+                        continue;
                     }
+                    candidates.push_back({memsId, i, j, trial, improvement, ComputeTotalPathLoad(trial)});
                 }
             }
         }
-        if (bestImprovement <= 0.0)
+        if (candidates.empty())
         {
             break;
         }
-        C = bestState.C;
-        plane = bestState.ocsPlane;
-        podDegree[bestA]++;
-        podDegree[bestB]++;
-        current = bestState;
+
+        std::vector<TaaTopologyCandidate> paretoCandidates;
+        for (uint32_t i = 0; i < candidates.size(); ++i)
+        {
+            bool dominated = false;
+            for (uint32_t j = 0; j < candidates.size(); ++j)
+            {
+                if (i != j &&
+                    DominatesTaaCandidate(candidates[j], candidates[i], kParetoEpsilon))
+                {
+                    dominated = true;
+                    break;
+                }
+            }
+            if (!dominated)
+            {
+                paretoCandidates.push_back(candidates[i]);
+            }
+        }
+
+        TaaTopologyCandidate bestCandidate;
+        for (const auto& candidate : paretoCandidates)
+        {
+            if (IsBetterTaaCandidate(candidate, bestCandidate, kParetoEpsilon))
+            {
+                bestCandidate = candidate;
+            }
+        }
+        C = bestCandidate.state.C;
+        plane = bestCandidate.state.ocsPlane;
+        podDegree[bestCandidate.podA]++;
+        podDegree[bestCandidate.podB]++;
+        current = bestCandidate.state;
     }
     return current;
 }

@@ -100,12 +100,36 @@ BuildPathTypeCountsString(const std::map<std::string, uint32_t>& counts)
     return out.str();
 }
 
+uint64_t
+ComputeMatrixAbsoluteDifference(const TrafficMatrix& left, const TrafficMatrix& right)
+{
+    if (left.GetPodCount() != right.GetPodCount())
+    {
+        throw std::runtime_error("matrix distance requires equal pod counts");
+    }
+    uint64_t total = 0;
+    for (uint32_t source = 0; source < left.GetPodCount(); ++source)
+    {
+        for (uint32_t destination = 0; destination < left.GetPodCount(); ++destination)
+        {
+            const uint64_t a = left.GetBytes(source, destination);
+            const uint64_t b = right.GetBytes(source, destination);
+            total += a > b ? a - b : b - a;
+        }
+    }
+    return total;
+}
+
 } // namespace
 
 int
 main(int argc, char* argv[])
 {
-    std::string trafficModel = "data-parallel";
+    std::string matrixMode = "observe-test";
+    std::string observeTrafficModel = "data-parallel";
+    std::string testTrafficModel = "data-parallel";
+    std::string testPerturbationMode = "scale-pairs";
+    double testPerturbationRatio = 0.2;
     std::string strategy = "v8";
     double offeredLoad = 0.2;
     double workloadScale = 0.001;
@@ -131,9 +155,19 @@ main(int argc, char* argv[])
     uint64_t circuitCapacityBps = kDefaultCircuitCapacityBps;
 
     CommandLine cmd(__FILE__);
-    cmd.AddValue("trafficModel",
-                 "AI training traffic model: data-parallel, tensor-community, pipeline",
-                 trafficModel);
+    cmd.AddValue("matrixMode", "Matrix mode: observe-test", matrixMode);
+    cmd.AddValue("observeTrafficModel",
+                 "Observed AI traffic model: data-parallel, tensor-community, pipeline",
+                 observeTrafficModel);
+    cmd.AddValue("testTrafficModel",
+                 "Test AI traffic model: data-parallel, tensor-community, pipeline",
+                 testTrafficModel);
+    cmd.AddValue("testPerturbationMode",
+                 "Test perturbation mode: none or scale-pairs",
+                 testPerturbationMode);
+    cmd.AddValue("testPerturbationRatio",
+                 "Deterministic scale-pairs perturbation ratio",
+                 testPerturbationRatio);
     cmd.AddValue("strategy", "Routing strategy: e-only, static-ocs, traffic-greedy, v8", strategy);
     cmd.AddValue("offeredLoad", "Normalized server offered load", offeredLoad);
     cmd.AddValue("workloadScale", "Scale factor applied to offered bytes for NS-3 flow generation", workloadScale);
@@ -159,6 +193,15 @@ main(int argc, char* argv[])
     cmd.AddValue("memsCount", "Number of MEMS planes", memsCount);
     cmd.AddValue("circuitCapacityBps", "Single MEMS circuit capacity in bps", circuitCapacityBps);
     cmd.Parse(argc, argv);
+
+    if (matrixMode != "observe-test")
+    {
+        throw std::runtime_error("SMTRA runner only supports matrixMode=observe-test");
+    }
+    if (testPerturbationMode != "none" && testPerturbationMode != "scale-pairs")
+    {
+        throw std::runtime_error("unsupported testPerturbationMode: " + testPerturbationMode);
+    }
 
     const Time trafficStartTime = Seconds(trafficStartSeconds);
     const Time trafficStopTime = Seconds(trafficStopSeconds);
@@ -195,20 +238,34 @@ main(int argc, char* argv[])
                                                                                       topologyOptions)
                               : DragonflyPlusOcsTopologyBuilder().Build(config, topologyOptions);
 
-    TrafficMatrix offeredMatrix = BuildAiTrainingTrafficMatrix(trafficModel,
-                                                               offeredLoad,
-                                                               serverAccessBps,
-                                                               trafficStartTime,
-                                                               trafficStopTime,
-                                                               8,
-                                                               config.GetServersPerTor());
-    TrafficMatrix simulatedMatrix = ScaleTrafficMatrix(offeredMatrix, workloadScale);
+    TrafficMatrix offeredObserveMatrix = BuildAiTrainingTrafficMatrix(observeTrafficModel,
+                                                                      offeredLoad,
+                                                                      serverAccessBps,
+                                                                      trafficStartTime,
+                                                                      trafficStopTime,
+                                                                      8,
+                                                                      config.GetServersPerTor());
+    TrafficMatrix offeredTestMatrix = BuildAiTrainingTrafficMatrix(testTrafficModel,
+                                                                   offeredLoad,
+                                                                   serverAccessBps,
+                                                                   trafficStartTime,
+                                                                   trafficStopTime,
+                                                                   8,
+                                                                   config.GetServersPerTor());
+    TrafficMatrix observeMatrix = ScaleTrafficMatrix(offeredObserveMatrix, workloadScale);
+    TrafficMatrix testMatrix = ScaleTrafficMatrix(offeredTestMatrix, workloadScale);
+    if (testPerturbationMode == "scale-pairs")
+    {
+        testMatrix =
+            BuildScalePairsPerturbedMatrix(testMatrix, testPerturbationRatio, randomSeed);
+    }
+    const uint64_t matrixAbsDiffBytes = ComputeMatrixAbsoluteDifference(observeMatrix, testMatrix);
     FlowGenerationOptions flowOptions;
     flowOptions.mode = flowGenerationMode;
     flowOptions.messageSizeBytes = messageSizeBytes;
     flowOptions.flowsPerActivePair = flowsPerActivePair;
-    std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(simulatedMatrix,
-                                                            trafficModel,
+    std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(testMatrix,
+                                                            testTrafficModel,
                                                             config.GetServersPerTor(),
                                                             flowOptions,
                                                             trafficStartTime,
@@ -240,7 +297,7 @@ main(int argc, char* argv[])
     }
     else if (strategy == "traffic-greedy")
     {
-        deployedState = BuildTrafficGreedyBaselineState(simulatedMatrix, parameters);
+        deployedState = BuildTrafficGreedyBaselineState(observeMatrix, parameters);
         decisions = pathInstaller.SelectShortestOcs(flows, deployedState, nodeIndex);
         pathInstaller.Install(flows, decisions, nodeIndex);
     }
@@ -253,7 +310,7 @@ main(int argc, char* argv[])
         empty.ocsPlane = OcsPlane(config.GetNumTors(),
                                   parameters.memsCount,
                                   parameters.circuitCapacityBps);
-        const SmtraControlResult smtra = SmtraController().Run(simulatedMatrix, empty, parameters);
+        const SmtraControlResult smtra = SmtraController().Run(observeMatrix, empty, parameters);
         deployedState = smtra.deployedState;
         decisions = pathInstaller.Select(flows, deployedState, nodeIndex);
         pathInstaller.Install(flows, decisions, nodeIndex);
@@ -349,7 +406,11 @@ main(int argc, char* argv[])
     const SmtraPerformanceMetrics performance =
         BuildSmtraPerformanceMetrics(launch, linkMonitor, trafficStartTime, trafficStopTime);
 
-    std::cout << "SMTRA experiment: trafficModel=" << trafficModel
+    std::cout << "SMTRA experiment: matrixMode=" << matrixMode
+              << ", observeTrafficModel=" << observeTrafficModel
+              << ", testTrafficModel=" << testTrafficModel
+              << ", testPerturbationMode=" << testPerturbationMode
+              << ", testPerturbationRatio=" << testPerturbationRatio
               << ", strategy=" << strategy
               << ", offeredLoad=" << offeredLoad
               << ", workloadScale=" << workloadScale
@@ -361,8 +422,9 @@ main(int argc, char* argv[])
               << ", memsCount=" << memsCount
               << ", podPortLimitB=" << podPortLimitB
               << ", circuitCapacityBps=" << parameters.circuitCapacityBps
-              << ", offeredBytes=" << offeredMatrix.GetTotalBytes()
-              << ", simulatedBytes=" << simulatedMatrix.GetTotalBytes()
+              << ", observeBytes=" << observeMatrix.GetTotalBytes()
+              << ", testBytes=" << testMatrix.GetTotalBytes()
+              << ", matrixAbsDiffBytes=" << matrixAbsDiffBytes
               << ", generatedFlows=" << generatedFlows
               << ", installableFlows=" << installableFlows
               << ", unservedFlows=" << unservedFlows

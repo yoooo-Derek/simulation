@@ -76,6 +76,23 @@ class SmtraAiTrafficModelsTestCase : public TestCase
             generatedBytes += flow.GetSizeBytes();
         }
         NS_TEST_ASSERT_MSG_EQ(generatedBytes, 100, "fixed pair bytes mismatch");
+
+        TrafficMatrix perturbBase(8);
+        perturbBase.SetBytes(0, 1, 1000);
+        perturbBase.SetBytes(1, 0, 1000);
+        perturbBase.SetBytes(2, 3, 1000);
+        perturbBase.SetBytes(3, 2, 1000);
+        const TrafficMatrix perturbedA = BuildScalePairsPerturbedMatrix(perturbBase, 0.25, 7);
+        const TrafficMatrix perturbedB = BuildScalePairsPerturbedMatrix(perturbBase, 0.25, 7);
+        NS_TEST_ASSERT_MSG_EQ(perturbedA.GetTotalBytes(),
+                              perturbBase.GetTotalBytes(),
+                              "scale-pairs must preserve total bytes");
+        NS_TEST_ASSERT_MSG_EQ(perturbedA.ToString(),
+                              perturbedB.ToString(),
+                              "scale-pairs must be deterministic for a seed");
+        NS_TEST_ASSERT_MSG_NE(perturbedA.ToString(),
+                              perturbBase.ToString(),
+                              "scale-pairs should change active pair distribution");
     }
 };
 
