@@ -87,6 +87,18 @@ struct SmtraControlResult
     bool updated = false;
 };
 
+struct CarrierMetrics
+{
+    uint64_t positivePairCount = 0;
+    uint64_t reachablePairCount = 0;
+    double unreachableBytes = 0.0;
+    uint32_t unreachablePairs = 0;
+    double weightedByteHop = 0.0;
+    double weightedAvgHop = 0.0;
+    uint32_t maxHop = 0;
+    uint32_t graphDiameter = 0;
+};
+
 class SmtraController
 {
   public:
@@ -101,9 +113,17 @@ class SmtraController
                                    const SmtraParameters& parameters) const;
     SmtraTopologyRouteState RunTaa(const SmtraStructuralState& structural,
                                    const SmtraParameters& parameters) const;
+    SmtraTopologyRouteState RunTaaCarrierAware(const SmtraStructuralState& structural,
+                                               const TrafficMatrix& observedT,
+                                               const SmtraParameters& parameters) const;
+    CarrierMetrics ComputeCarrierMetrics(const TrafficMatrix& observedT,
+                                          const OcsPlane& ocsPlane) const;
     SmtraControlResult Run(const TrafficMatrix& observedT,
                            const SmtraTopologyRouteState& currentState,
                            const SmtraParameters& parameters) const;
+    SmtraControlResult RunCarrierAware(const TrafficMatrix& observedT,
+                                       const SmtraTopologyRouteState& currentState,
+                                       const SmtraParameters& parameters) const;
 };
 
 using TopologyRouteState = SmtraTopologyRouteState;

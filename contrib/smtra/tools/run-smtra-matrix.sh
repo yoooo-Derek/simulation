@@ -43,7 +43,7 @@ usage() {
 Usage: run-smtra-matrix.sh [options]
 
 Options:
-  --mode=pilot|full|ai-structural-decoy-strict-fair
+  --mode=pilot|full|ai-structural-decoy-strict-fair|ai-structural-decoy-carrier-aware
                                   Experiment matrix size or named experiment mode.
   --workloadScale=VALUE          Scale factor applied to offered bytes for NS-3 flow generation.
   --matrixMode=MODE              Matrix mode. Only observe-test is supported.
@@ -190,8 +190,8 @@ for arg in "$@"; do
     esac
 done
 
-if [[ "$MODE" != "pilot" && "$MODE" != "full" && "$MODE" != "ai-structural-decoy-strict-fair" ]]; then
-    echo "--mode must be pilot, full, or ai-structural-decoy-strict-fair" >&2
+if [[ "$MODE" != "pilot" && "$MODE" != "full" && "$MODE" != "ai-structural-decoy-strict-fair" && "$MODE" != "ai-structural-decoy-carrier-aware" ]]; then
+    echo "--mode must be pilot, full, ai-structural-decoy-strict-fair, or ai-structural-decoy-carrier-aware" >&2
     exit 2
 fi
 
@@ -200,7 +200,7 @@ if [[ -z "$OUTPUT_DIR" ]]; then
     exit 2
 fi
 
-if [[ "$MODE" == "ai-structural-decoy-strict-fair" ]]; then
+if [[ "$MODE" == "ai-structural-decoy-strict-fair" || "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
     WORKLOAD_SCALE="0.5"
     TEST_PERTURBATION_MODE="none"
     FLOW_GENERATION_MODE="fixed-flows-per-pair"
@@ -216,7 +216,7 @@ if [[ "$MODE" == "ai-structural-decoy-strict-fair" ]]; then
     DECOY_LOW_ACTIVITY="1.0"
 fi
 
-if [[ "$MODE" == "ai-structural-decoy-strict-fair" ]]; then
+if [[ "$MODE" == "ai-structural-decoy-strict-fair" || "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
     TRAFFIC_MODELS=("ai-structural-decoy")
 elif [[ -n "$TRAFFIC_MODELS_CSV" ]]; then
     IFS=',' read -r -a TRAFFIC_MODELS <<<"$TRAFFIC_MODELS_CSV"
@@ -225,12 +225,14 @@ else
 fi
 if [[ "$MODE" == "ai-structural-decoy-strict-fair" ]]; then
     STRATEGIES=("traffic-fair" "v8-shortest")
+elif [[ "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
+    STRATEGIES=("traffic-fair" "v8-carrier")
 elif [[ -n "$STRATEGIES_CSV" ]]; then
     IFS=',' read -r -a STRATEGIES <<<"$STRATEGIES_CSV"
 else
     STRATEGIES=("e-only" "static-ocs" "traffic-greedy" "v8")
 fi
-if [[ "$MODE" == "ai-structural-decoy-strict-fair" ]]; then
+if [[ "$MODE" == "ai-structural-decoy-strict-fair" || "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
     OFFERED_LOADS=("0.1" "0.2" "0.4" "0.6" "0.8")
 elif [[ -n "$OFFERED_LOADS_CSV" ]]; then
     IFS=',' read -r -a OFFERED_LOADS <<<"$OFFERED_LOADS_CSV"
