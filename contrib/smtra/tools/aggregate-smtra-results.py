@@ -12,6 +12,13 @@ CSV_FIELDS = [
     "testTrafficModel",
     "testPerturbationMode",
     "testPerturbationRatio",
+    "phaseShift",
+    "phaseShiftWrap",
+    "communityRotationPattern",
+    "observeMixA",
+    "observeMixB",
+    "observeMixAWeight",
+    "testMixAWeight",
     "strategy",
     "offeredLoad",
     "workloadScale",
@@ -55,6 +62,8 @@ NUMERIC_FIELDS = {
     "offeredLoad",
     "workloadScale",
     "testPerturbationRatio",
+    "observeMixAWeight",
+    "testMixAWeight",
     "installRatio",
     "completionRatio",
     "avgFctSeconds",
@@ -67,6 +76,7 @@ NUMERIC_FIELDS = {
 INTEGER_FIELDS = {
     "messageSizeBytes",
     "flowsPerActivePair",
+    "phaseShift",
     "memsCount",
     "podPortLimitB",
     "circuitCapacityBps",
@@ -156,7 +166,7 @@ def main():
     rows = [parse_log(log) for log in logs]
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=CSV_FIELDS)
+        writer = csv.DictWriter(handle, fieldnames=CSV_FIELDS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 

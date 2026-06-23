@@ -82,7 +82,7 @@ ComputeTotalPathLoad(const SmtraTopologyRouteState& state)
     double total = 0.0;
     for (const auto& entry : state.allocations)
     {
-        total += entry.second.occupiedBytes * static_cast<double>(entry.second.links.size());
+        total += entry.second.effectiveBytes * static_cast<double>(entry.second.links.size());
     }
     return total;
 }
@@ -709,7 +709,8 @@ SmtraController::RunRaa(const DenseMatrix& C,
             const double improvement = before - after;
             RaaRouteCandidate candidate;
             candidate.improvement = improvement;
-            candidate.pathLoad = occupied * static_cast<double>(links.size());
+            candidate.pathLoad =
+                allocation.effectiveBytes * static_cast<double>(allocation.links.size());
             candidate.occupiedBytes = occupied;
             candidate.bottleneckBytes = routeCapacity;
             candidate.routeValue = routeValue;

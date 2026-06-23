@@ -17,6 +17,10 @@
 !/docs/paper/
 !/docs/paper/**
 
+# Track experiment outputs.
+!/results/
+!/results/**
+
 # Track custom scratch entry points only.
 !/scratch/
 /scratch/*

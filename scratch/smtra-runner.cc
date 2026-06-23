@@ -130,6 +130,13 @@ main(int argc, char* argv[])
     std::string testTrafficModel = "data-parallel";
     std::string testPerturbationMode = "scale-pairs";
     double testPerturbationRatio = 0.2;
+    uint32_t phaseShift = 1;
+    bool phaseShiftWrap = true;
+    std::string communityRotationPattern = "cross";
+    std::string observeMixA = "data-parallel";
+    std::string observeMixB = "tensor-community";
+    double observeMixAWeight = 0.7;
+    double testMixAWeight = 0.3;
     std::string strategy = "v8";
     double offeredLoad = 0.2;
     double workloadScale = 0.001;
@@ -163,11 +170,20 @@ main(int argc, char* argv[])
                  "Test AI traffic model: data-parallel, tensor-community, pipeline",
                  testTrafficModel);
     cmd.AddValue("testPerturbationMode",
-                 "Test perturbation mode: none or scale-pairs",
+                 "Test perturbation mode: none, scale-pairs, phase-shift, community-rotation, or mixed-stage-switch",
                  testPerturbationMode);
     cmd.AddValue("testPerturbationRatio",
                  "Deterministic scale-pairs perturbation ratio",
                  testPerturbationRatio);
+    cmd.AddValue("phaseShift", "Pod offset used by phase-shift perturbation", phaseShift);
+    cmd.AddValue("phaseShiftWrap", "Whether phase-shift wraps around pod ids", phaseShiftWrap);
+    cmd.AddValue("communityRotationPattern",
+                 "Community rotation pattern: cross or adjacent",
+                 communityRotationPattern);
+    cmd.AddValue("observeMixA", "First traffic model for mixed-stage-switch", observeMixA);
+    cmd.AddValue("observeMixB", "Second traffic model for mixed-stage-switch", observeMixB);
+    cmd.AddValue("observeMixAWeight", "Weight of observeMixA in mixed observe matrix", observeMixAWeight);
+    cmd.AddValue("testMixAWeight", "Weight of observeMixA in mixed test matrix", testMixAWeight);
     cmd.AddValue("strategy", "Routing strategy: e-only, static-ocs, traffic-greedy, v8", strategy);
     cmd.AddValue("offeredLoad", "Normalized server offered load", offeredLoad);
     cmd.AddValue("workloadScale", "Scale factor applied to offered bytes for NS-3 flow generation", workloadScale);
@@ -198,7 +214,10 @@ main(int argc, char* argv[])
     {
         throw std::runtime_error("SMTRA runner only supports matrixMode=observe-test");
     }
-    if (testPerturbationMode != "none" && testPerturbationMode != "scale-pairs")
+    if (testPerturbationMode != "none" && testPerturbationMode != "scale-pairs" &&
+        testPerturbationMode != "phase-shift" &&
+        testPerturbationMode != "community-rotation" &&
+        testPerturbationMode != "mixed-stage-switch")
     {
         throw std::runtime_error("unsupported testPerturbationMode: " + testPerturbationMode);
     }
@@ -238,26 +257,44 @@ main(int argc, char* argv[])
                                                                                       topologyOptions)
                               : DragonflyPlusOcsTopologyBuilder().Build(config, topologyOptions);
 
-    TrafficMatrix offeredObserveMatrix = BuildAiTrainingTrafficMatrix(observeTrafficModel,
-                                                                      offeredLoad,
-                                                                      serverAccessBps,
-                                                                      trafficStartTime,
-                                                                      trafficStopTime,
-                                                                      8,
-                                                                      config.GetServersPerTor());
-    TrafficMatrix offeredTestMatrix = BuildAiTrainingTrafficMatrix(testTrafficModel,
-                                                                   offeredLoad,
-                                                                   serverAccessBps,
-                                                                   trafficStartTime,
-                                                                   trafficStopTime,
-                                                                   8,
-                                                                   config.GetServersPerTor());
+    auto buildOfferedMatrix = [&](const std::string& model) {
+        return BuildAiTrainingTrafficMatrix(model,
+                                            offeredLoad,
+                                            serverAccessBps,
+                                            trafficStartTime,
+                                            trafficStopTime,
+                                            8,
+                                            config.GetServersPerTor());
+    };
+
+    TrafficMatrix offeredObserveMatrix(8);
+    TrafficMatrix offeredTestMatrix(8);
+    if (testPerturbationMode == "mixed-stage-switch")
+    {
+        const TrafficMatrix mixA = buildOfferedMatrix(observeMixA);
+        const TrafficMatrix mixB = buildOfferedMatrix(observeMixB);
+        offeredObserveMatrix = CombineTrafficMatrices(mixA, mixB, observeMixAWeight);
+        offeredTestMatrix = CombineTrafficMatrices(mixA, mixB, testMixAWeight);
+    }
+    else
+    {
+        offeredObserveMatrix = buildOfferedMatrix(observeTrafficModel);
+        offeredTestMatrix = buildOfferedMatrix(testTrafficModel);
+    }
     TrafficMatrix observeMatrix = ScaleTrafficMatrix(offeredObserveMatrix, workloadScale);
     TrafficMatrix testMatrix = ScaleTrafficMatrix(offeredTestMatrix, workloadScale);
     if (testPerturbationMode == "scale-pairs")
     {
         testMatrix =
             BuildScalePairsPerturbedMatrix(testMatrix, testPerturbationRatio, randomSeed);
+    }
+    else if (testPerturbationMode == "phase-shift")
+    {
+        testMatrix = BuildPhaseShiftMatrix(testMatrix, phaseShift, phaseShiftWrap);
+    }
+    else if (testPerturbationMode == "community-rotation")
+    {
+        testMatrix = BuildCommunityRotationMatrix(testMatrix, communityRotationPattern);
     }
     const uint64_t matrixAbsDiffBytes = ComputeMatrixAbsoluteDifference(observeMatrix, testMatrix);
     FlowGenerationOptions flowOptions;
@@ -411,6 +448,13 @@ main(int argc, char* argv[])
               << ", testTrafficModel=" << testTrafficModel
               << ", testPerturbationMode=" << testPerturbationMode
               << ", testPerturbationRatio=" << testPerturbationRatio
+              << ", phaseShift=" << phaseShift
+              << ", phaseShiftWrap=" << (phaseShiftWrap ? "true" : "false")
+              << ", communityRotationPattern=" << communityRotationPattern
+              << ", observeMixA=" << observeMixA
+              << ", observeMixB=" << observeMixB
+              << ", observeMixAWeight=" << observeMixAWeight
+              << ", testMixAWeight=" << testMixAWeight
               << ", strategy=" << strategy
               << ", offeredLoad=" << offeredLoad
               << ", workloadScale=" << workloadScale

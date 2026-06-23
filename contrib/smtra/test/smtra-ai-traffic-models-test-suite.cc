@@ -93,6 +93,48 @@ class SmtraAiTrafficModelsTestCase : public TestCase
         NS_TEST_ASSERT_MSG_NE(perturbedA.ToString(),
                               perturbBase.ToString(),
                               "scale-pairs should change active pair distribution");
+
+        const TrafficMatrix shifted = BuildPhaseShiftMatrix(dataParallel, 1, true);
+        NS_TEST_ASSERT_MSG_EQ(shifted.GetTotalBytes(),
+                              dataParallel.GetTotalBytes(),
+                              "phase-shift must preserve total bytes");
+        NS_TEST_ASSERT_MSG_EQ(shifted.GetBytes(1, 2),
+                              dataParallel.GetBytes(0, 1),
+                              "phase-shift must move directed support");
+        NS_TEST_ASSERT_MSG_EQ(shifted.GetBytes(0, 1),
+                              dataParallel.GetBytes(7, 0),
+                              "phase-shift wraparound mismatch");
+
+        const TrafficMatrix rotated = BuildCommunityRotationMatrix(tensor, "cross");
+        NS_TEST_ASSERT_MSG_EQ(rotated.GetTotalBytes(),
+                              tensor.GetTotalBytes(),
+                              "community rotation must preserve total bytes");
+        NS_TEST_ASSERT_MSG_EQ(rotated.GetBytes(0, 2),
+                              tensor.GetBytes(0, 1),
+                              "community rotation must remap 0-1 to 0-2");
+        NS_TEST_ASSERT_MSG_EQ(rotated.GetBytes(1, 3),
+                              tensor.GetBytes(2, 3),
+                              "community rotation must remap 2-3 to 1-3");
+        NS_TEST_ASSERT_MSG_EQ(rotated.GetBytes(0, 5),
+                              0,
+                              "community rotation must not create cross-community traffic");
+
+        const TrafficMatrix mixedObserve =
+            CombineTrafficMatrices(dataParallel, tensor, 0.7);
+        const TrafficMatrix mixedTest =
+            CombineTrafficMatrices(dataParallel, tensor, 0.3);
+        NS_TEST_ASSERT_MSG_EQ(mixedObserve.GetTotalBytes(),
+                              dataParallel.GetTotalBytes(),
+                              "mixed observe total mismatch");
+        NS_TEST_ASSERT_MSG_EQ(mixedTest.GetTotalBytes(),
+                              dataParallel.GetTotalBytes(),
+                              "mixed test total mismatch");
+        NS_TEST_ASSERT_MSG_GT(mixedObserve.GetBytes(1, 2),
+                              mixedTest.GetBytes(1, 2),
+                              "ring-only edge should be stronger in observe mix");
+        NS_TEST_ASSERT_MSG_LT(mixedObserve.GetBytes(0, 1),
+                              mixedTest.GetBytes(0, 1),
+                              "tensor edge should be stronger in test mix");
     }
 };
 

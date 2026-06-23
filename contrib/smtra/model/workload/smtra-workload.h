@@ -83,6 +83,14 @@ TrafficMatrix ScaleTrafficMatrix(const TrafficMatrix& matrix, double scale);
 TrafficMatrix BuildScalePairsPerturbedMatrix(const TrafficMatrix& matrix,
                                              double perturbationRatio,
                                              uint32_t randomSeed);
+TrafficMatrix BuildPhaseShiftMatrix(const TrafficMatrix& matrix,
+                                    uint32_t shift,
+                                    bool wrapAround);
+TrafficMatrix BuildCommunityRotationMatrix(const TrafficMatrix& matrix,
+                                           const std::string& pattern = "cross");
+TrafficMatrix CombineTrafficMatrices(const TrafficMatrix& a,
+                                      const TrafficMatrix& b,
+                                      double weightA);
 std::vector<FlowSpec> BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
                                                 const std::string& trafficModel,
                                                 uint32_t serversPerPod,

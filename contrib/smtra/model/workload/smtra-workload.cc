@@ -12,6 +12,84 @@ namespace ns3
 {
 namespace smtra
 {
+namespace
+{
+
+struct WeightedPair
+{
+    uint32_t source = 0;
+    uint32_t destination = 0;
+    double bytes = 0.0;
+};
+
+TrafficMatrix
+BuildMatrixFromWeightedPairs(uint32_t podCount,
+                             const std::vector<WeightedPair>& pairs,
+                             uint64_t targetTotal)
+{
+    TrafficMatrix result(podCount);
+    double weightTotal = 0.0;
+    for (const auto& pair : pairs)
+    {
+        if (pair.source == pair.destination || pair.bytes <= 0.0)
+        {
+            continue;
+        }
+        weightTotal += pair.bytes;
+    }
+    if (targetTotal == 0 || weightTotal <= 0.0)
+    {
+        return result;
+    }
+
+    uint64_t assignedBytes = 0;
+    uint32_t lastSource = 0;
+    uint32_t lastDestination = 0;
+    bool hasLast = false;
+    for (const auto& pair : pairs)
+    {
+        if (pair.source == pair.destination || pair.bytes <= 0.0)
+        {
+            continue;
+        }
+        const uint64_t bytes = static_cast<uint64_t>(
+            std::floor(pair.bytes * static_cast<double>(targetTotal) / weightTotal));
+        result.AddBytes(pair.source, pair.destination, bytes);
+        assignedBytes += bytes;
+        lastSource = pair.source;
+        lastDestination = pair.destination;
+        hasLast = true;
+    }
+    if (hasLast && targetTotal > assignedBytes)
+    {
+        result.AddBytes(lastSource, lastDestination, targetTotal - assignedBytes);
+    }
+    return result;
+}
+
+std::vector<WeightedPair>
+CollectWeightedPairs(const TrafficMatrix& matrix)
+{
+    std::vector<WeightedPair> pairs;
+    for (uint32_t source = 0; source < matrix.GetPodCount(); ++source)
+    {
+        for (uint32_t destination = 0; destination < matrix.GetPodCount(); ++destination)
+        {
+            if (source == destination)
+            {
+                continue;
+            }
+            const uint64_t bytes = matrix.GetBytes(source, destination);
+            if (bytes > 0)
+            {
+                pairs.push_back({source, destination, static_cast<double>(bytes)});
+            }
+        }
+    }
+    return pairs;
+}
+
+} // namespace
 
 TrafficMatrix::TrafficMatrix(uint32_t podCount)
     : m_bytes(podCount, std::vector<uint64_t>(podCount, 0))
@@ -393,6 +471,141 @@ BuildScalePairsPerturbedMatrix(const TrafficMatrix& matrix,
         perturbed.AddBytes(pair.source, pair.destination, targetTotal - assignedBytes);
     }
     return perturbed;
+}
+
+TrafficMatrix
+BuildPhaseShiftMatrix(const TrafficMatrix& matrix, uint32_t shift, bool wrapAround)
+{
+    const uint32_t podCount = matrix.GetPodCount();
+    if (podCount == 0)
+    {
+        return matrix;
+    }
+
+    std::vector<WeightedPair> shiftedPairs;
+    for (uint32_t source = 0; source < podCount; ++source)
+    {
+        for (uint32_t destination = 0; destination < podCount; ++destination)
+        {
+            if (source == destination)
+            {
+                continue;
+            }
+            const uint64_t bytes = matrix.GetBytes(source, destination);
+            if (bytes == 0)
+            {
+                continue;
+            }
+
+            uint32_t shiftedSource = source + shift;
+            uint32_t shiftedDestination = destination + shift;
+            if (wrapAround)
+            {
+                shiftedSource %= podCount;
+                shiftedDestination %= podCount;
+            }
+            else if (shiftedSource >= podCount || shiftedDestination >= podCount)
+            {
+                continue;
+            }
+
+            if (shiftedSource != shiftedDestination)
+            {
+                shiftedPairs.push_back(
+                    {shiftedSource, shiftedDestination, static_cast<double>(bytes)});
+            }
+        }
+    }
+    return BuildMatrixFromWeightedPairs(podCount, shiftedPairs, matrix.GetTotalBytes());
+}
+
+TrafficMatrix
+BuildCommunityRotationMatrix(const TrafficMatrix& matrix, const std::string& pattern)
+{
+    if (matrix.GetPodCount() != 8)
+    {
+        throw std::runtime_error("SMTRA community rotation requires 8 pods");
+    }
+    if (pattern != "cross" && pattern != "adjacent")
+    {
+        throw std::runtime_error("unsupported communityRotationPattern: " + pattern);
+    }
+
+    std::vector<uint32_t> localMap;
+    if (pattern == "cross")
+    {
+        // Within each 4-pod community, rotate tensor pairs 0-1,2-3 into 0-2,1-3.
+        localMap = {0, 2, 1, 3};
+    }
+    else
+    {
+        localMap = {1, 2, 3, 0};
+    }
+
+    std::vector<WeightedPair> rotatedPairs;
+    for (const auto& pair : CollectWeightedPairs(matrix))
+    {
+        const uint32_t sourceCommunity = pair.source / 4;
+        const uint32_t destinationCommunity = pair.destination / 4;
+        if (sourceCommunity != destinationCommunity)
+        {
+            rotatedPairs.push_back(pair);
+            continue;
+        }
+
+        const uint32_t base = sourceCommunity * 4;
+        const uint32_t rotatedSource = base + localMap[pair.source - base];
+        const uint32_t rotatedDestination = base + localMap[pair.destination - base];
+        if (rotatedSource != rotatedDestination)
+        {
+            rotatedPairs.push_back({rotatedSource, rotatedDestination, pair.bytes});
+        }
+    }
+    return BuildMatrixFromWeightedPairs(matrix.GetPodCount(), rotatedPairs, matrix.GetTotalBytes());
+}
+
+TrafficMatrix
+CombineTrafficMatrices(const TrafficMatrix& a, const TrafficMatrix& b, double weightA)
+{
+    if (a.GetPodCount() != b.GetPodCount())
+    {
+        throw std::runtime_error("combined traffic matrices must have equal pod counts");
+    }
+    if (weightA < 0.0 || weightA > 1.0)
+    {
+        throw std::runtime_error("matrix combination weight must be in [0,1]");
+    }
+
+    const uint64_t targetTotal = a.GetTotalBytes();
+    const double totalA = static_cast<double>(a.GetTotalBytes());
+    const double totalB = static_cast<double>(b.GetTotalBytes());
+    if (targetTotal == 0 || totalA <= 0.0 || totalB <= 0.0)
+    {
+        return TrafficMatrix(a.GetPodCount());
+    }
+
+    std::vector<WeightedPair> pairs;
+    for (uint32_t source = 0; source < a.GetPodCount(); ++source)
+    {
+        for (uint32_t destination = 0; destination < a.GetPodCount(); ++destination)
+        {
+            if (source == destination)
+            {
+                continue;
+            }
+            const double normalizedA =
+                static_cast<double>(a.GetBytes(source, destination)) / totalA;
+            const double normalizedB =
+                static_cast<double>(b.GetBytes(source, destination)) / totalB;
+            const double combinedShare =
+                weightA * normalizedA + (1.0 - weightA) * normalizedB;
+            if (combinedShare > 0.0)
+            {
+                pairs.push_back({source, destination, combinedShare});
+            }
+        }
+    }
+    return BuildMatrixFromWeightedPairs(a.GetPodCount(), pairs, targetTotal);
 }
 
 std::vector<FlowSpec>
