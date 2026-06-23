@@ -137,6 +137,9 @@ main(int argc, char* argv[])
     std::string observeMixB = "tensor-community";
     double observeMixAWeight = 0.7;
     double testMixAWeight = 0.3;
+    double neighborWeight = 1.0;
+    double crossStageWeight = 0.25;
+    double backgroundWeight = 0.05;
     std::string strategy = "v8";
     double offeredLoad = 0.2;
     double workloadScale = 0.001;
@@ -184,7 +187,10 @@ main(int argc, char* argv[])
     cmd.AddValue("observeMixB", "Second traffic model for mixed-stage-switch", observeMixB);
     cmd.AddValue("observeMixAWeight", "Weight of observeMixA in mixed observe matrix", observeMixAWeight);
     cmd.AddValue("testMixAWeight", "Weight of observeMixA in mixed test matrix", testMixAWeight);
-    cmd.AddValue("strategy", "Routing strategy: e-only, static-ocs, traffic-greedy, v8", strategy);
+    cmd.AddValue("neighborWeight", "ai-neighbor-skew neighbor pair weight", neighborWeight);
+    cmd.AddValue("crossStageWeight", "ai-neighbor-skew cross-stage pair weight", crossStageWeight);
+    cmd.AddValue("backgroundWeight", "ai-neighbor-skew background pair weight", backgroundWeight);
+    cmd.AddValue("strategy", "Routing strategy: e-only, static-ocs, traffic-greedy, traffic-fair, v8", strategy);
     cmd.AddValue("offeredLoad", "Normalized server offered load", offeredLoad);
     cmd.AddValue("workloadScale", "Scale factor applied to offered bytes for NS-3 flow generation", workloadScale);
     cmd.AddValue("flowGenerationMode",
@@ -264,7 +270,10 @@ main(int argc, char* argv[])
                                             trafficStartTime,
                                             trafficStopTime,
                                             8,
-                                            config.GetServersPerTor());
+                                            config.GetServersPerTor(),
+                                            neighborWeight,
+                                            crossStageWeight,
+                                            backgroundWeight);
     };
 
     TrafficMatrix offeredObserveMatrix(8);
@@ -335,6 +344,12 @@ main(int argc, char* argv[])
     else if (strategy == "traffic-greedy")
     {
         deployedState = BuildTrafficGreedyBaselineState(observeMatrix, parameters);
+        decisions = pathInstaller.SelectShortestOcs(flows, deployedState, nodeIndex);
+        pathInstaller.Install(flows, decisions, nodeIndex);
+    }
+    else if (strategy == "traffic-fair")
+    {
+        deployedState = BuildTrafficFairBaselineState(observeMatrix, parameters);
         decisions = pathInstaller.SelectShortestOcs(flows, deployedState, nodeIndex);
         pathInstaller.Install(flows, decisions, nodeIndex);
     }
@@ -455,6 +470,9 @@ main(int argc, char* argv[])
               << ", observeMixB=" << observeMixB
               << ", observeMixAWeight=" << observeMixAWeight
               << ", testMixAWeight=" << testMixAWeight
+              << ", neighborWeight=" << neighborWeight
+              << ", crossStageWeight=" << crossStageWeight
+              << ", backgroundWeight=" << backgroundWeight
               << ", strategy=" << strategy
               << ", offeredLoad=" << offeredLoad
               << ", workloadScale=" << workloadScale

@@ -19,6 +19,9 @@ CSV_FIELDS = [
     "observeMixB",
     "observeMixAWeight",
     "testMixAWeight",
+    "neighborWeight",
+    "crossStageWeight",
+    "backgroundWeight",
     "strategy",
     "offeredLoad",
     "workloadScale",
@@ -64,6 +67,9 @@ NUMERIC_FIELDS = {
     "testPerturbationRatio",
     "observeMixAWeight",
     "testMixAWeight",
+    "neighborWeight",
+    "crossStageWeight",
+    "backgroundWeight",
     "installRatio",
     "completionRatio",
     "avgFctSeconds",
@@ -97,6 +103,19 @@ INTEGER_FIELDS = {
 
 SUMMARY_RE = re.compile(r"SMTRA experiment: (?P<body>.*)")
 
+OPTIONAL_FIELD_DEFAULTS = {
+    "phaseShift": "",
+    "phaseShiftWrap": "",
+    "communityRotationPattern": "",
+    "observeMixA": "",
+    "observeMixB": "",
+    "observeMixAWeight": "",
+    "testMixAWeight": "",
+    "neighborWeight": "",
+    "crossStageWeight": "",
+    "backgroundWeight": "",
+}
+
 
 def parse_value(key, value):
     if key in INTEGER_FIELDS:
@@ -123,6 +142,9 @@ def parse_log(log_file):
             raise ValueError(f"malformed summary item in {log_file}: {item}")
         key, value = item.split("=", 1)
         row[key] = parse_value(key, value)
+
+    for key, value in OPTIONAL_FIELD_DEFAULTS.items():
+        row.setdefault(key, value)
 
     runtime_file = log_file.with_suffix(".runtime")
     if runtime_file.exists():

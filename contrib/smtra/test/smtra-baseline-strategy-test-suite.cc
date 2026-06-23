@@ -125,6 +125,75 @@ class SmtraTrafficGreedyStrategyTestCase : public TestCase
     }
 };
 
+class SmtraTrafficFairStrategyTestCase : public TestCase
+{
+  public:
+    SmtraTrafficFairStrategyTestCase()
+        : TestCase("SMTRA traffic-fair baseline uses max-min normalized allocation")
+    {
+    }
+
+  private:
+    void DoRun() override
+    {
+        SmtraParameters parameters;
+        parameters.memsCount = 2;
+        parameters.podPortLimitB = 2;
+        parameters.circuitCapacityBps = 8000;
+        parameters.observerWindowSeconds = 1.0;
+
+        TrafficMatrix matrix(8);
+        matrix.SetBytes(0, 1, 5000);
+        matrix.SetBytes(1, 0, 5000);
+        matrix.SetBytes(2, 3, 500);
+        matrix.SetBytes(3, 2, 500);
+        const SmtraTopologyRouteState fair = BuildTrafficFairBaselineState(matrix, parameters);
+
+        NS_TEST_ASSERT_MSG_GT(fair.ocsPlane.GetActiveCircuitCount(),
+                              0,
+                              "traffic-fair did not create circuits");
+        NS_TEST_ASSERT_MSG_GT(fair.ocsPlane.GetActiveCircuitCount(0, 1),
+                              0,
+                              "highest demand pair should receive a circuit");
+        NS_TEST_ASSERT_MSG_GT(fair.ocsPlane.GetActiveCircuitCount(2, 3),
+                              0,
+                              "lower ratio pair should be served before over-allocating one pair");
+        NS_TEST_ASSERT_MSG_EQ(fair.allocations.empty(),
+                              true,
+                              "traffic-fair must not run V8 RAA allocations");
+        NS_TEST_ASSERT_MSG_EQ(fair.smd,
+                              0.0,
+                              "traffic-fair must not compute V8 SMD");
+        NS_TEST_ASSERT_MSG_EQ(CountMatchingViolations(fair.ocsPlane),
+                              0,
+                              "traffic-fair violates MEMS matching");
+        NS_TEST_ASSERT_MSG_EQ(MaxPodDegree(fair.ocsPlane, 8) <= parameters.podPortLimitB,
+                              true,
+                              "traffic-fair violates pod port limit");
+        NS_TEST_ASSERT_MSG_EQ(fair.ocsPlane.GetActiveCircuitCount() <=
+                                  parameters.memsCount * (matrix.GetPodCount() / 2),
+                              true,
+                              "traffic-fair exceeds MEMS matching capacity");
+
+        SmtraParameters constrained = parameters;
+        constrained.memsCount = 1;
+        constrained.podPortLimitB = 1;
+        TrafficMatrix tieMatrix(8);
+        tieMatrix.SetBytes(0, 1, 1000);
+        tieMatrix.SetBytes(1, 0, 1000);
+        tieMatrix.SetBytes(0, 2, 3000);
+        tieMatrix.SetBytes(2, 0, 3000);
+        const SmtraTopologyRouteState tieFair =
+            BuildTrafficFairBaselineState(tieMatrix, constrained);
+        NS_TEST_ASSERT_MSG_EQ(tieFair.ocsPlane.GetActiveCircuitCount(0, 2),
+                              1,
+                              "ratio tie should prefer larger demand");
+        NS_TEST_ASSERT_MSG_EQ(tieFair.ocsPlane.GetActiveCircuitCount(0, 1),
+                              0,
+                              "smaller demand pair should not win demand tie");
+    }
+};
+
 class SmtraStaticOcsStrategyTestSuite : public TestSuite
 {
   public:
@@ -145,5 +214,16 @@ class SmtraTrafficGreedyStrategyTestSuite : public TestSuite
     }
 };
 
+class SmtraTrafficFairStrategyTestSuite : public TestSuite
+{
+  public:
+    SmtraTrafficFairStrategyTestSuite()
+        : TestSuite("smtra-traffic-fair-strategy")
+    {
+        AddTestCase(new SmtraTrafficFairStrategyTestCase);
+    }
+};
+
 static SmtraStaticOcsStrategyTestSuite g_smtraStaticOcsStrategyTestSuite;
 static SmtraTrafficGreedyStrategyTestSuite g_smtraTrafficGreedyStrategyTestSuite;
+static SmtraTrafficFairStrategyTestSuite g_smtraTrafficFairStrategyTestSuite;

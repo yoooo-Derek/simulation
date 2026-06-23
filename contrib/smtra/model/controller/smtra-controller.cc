@@ -987,5 +987,114 @@ BuildTrafficGreedyBaselineState(const TrafficMatrix& observedT,
     return state;
 }
 
+SmtraTopologyRouteState
+BuildTrafficFairBaselineState(const TrafficMatrix& observedT,
+                              const SmtraParameters& parameters)
+{
+    const uint32_t podCount = observedT.GetPodCount();
+    SmtraTopologyRouteState state;
+    state.C = DenseMatrix(podCount);
+    state.R = DenseMatrix(podCount);
+    state.A = DenseMatrix(podCount);
+    state.ocsPlane = OcsPlane(podCount, parameters.memsCount, parameters.circuitCapacityBps);
+
+    struct FairDemand
+    {
+        uint32_t a = 0;
+        uint32_t b = 0;
+        double demandBytes = 0.0;
+        double allocatedBytes = 0.0;
+    };
+    std::vector<FairDemand> demands;
+    for (uint32_t i = 0; i < podCount; ++i)
+    {
+        for (uint32_t j = i + 1; j < podCount; ++j)
+        {
+            const double demand =
+                static_cast<double>(observedT.GetBytes(i, j) + observedT.GetBytes(j, i));
+            if (demand > 0.0)
+            {
+                demands.push_back({i, j, demand, 0.0});
+            }
+        }
+    }
+
+    const double circuitCapacityBytes = WindowCapacityBytes(parameters);
+    std::vector<uint32_t> podDegree(podCount, 0);
+    while (true)
+    {
+        uint32_t bestIndex = std::numeric_limits<uint32_t>::max();
+        uint32_t bestMemsId = std::numeric_limits<uint32_t>::max();
+        double bestRatio = std::numeric_limits<double>::infinity();
+        for (uint32_t index = 0; index < demands.size(); ++index)
+        {
+            const auto& demand = demands[index];
+            if (podDegree[demand.a] >= parameters.podPortLimitB ||
+                podDegree[demand.b] >= parameters.podPortLimitB)
+            {
+                continue;
+            }
+
+            uint32_t candidateMemsId = std::numeric_limits<uint32_t>::max();
+            for (uint32_t memsId = 0; memsId < parameters.memsCount; ++memsId)
+            {
+                if (state.ocsPlane.CanActivate(demand.a, demand.b, memsId))
+                {
+                    candidateMemsId = memsId;
+                    break;
+                }
+            }
+            if (candidateMemsId == std::numeric_limits<uint32_t>::max())
+            {
+                continue;
+            }
+
+            const double ratio = demand.allocatedBytes / demand.demandBytes;
+            bool better = false;
+            if (bestIndex == std::numeric_limits<uint32_t>::max() || ratio < bestRatio)
+            {
+                better = true;
+            }
+            else if (ratio == bestRatio)
+            {
+                const auto& best = demands[bestIndex];
+                if (demand.demandBytes > best.demandBytes)
+                {
+                    better = true;
+                }
+                else if (demand.demandBytes == best.demandBytes &&
+                         std::tie(demand.a, demand.b) < std::tie(best.a, best.b))
+                {
+                    better = true;
+                }
+            }
+
+            if (better)
+            {
+                bestIndex = index;
+                bestMemsId = candidateMemsId;
+                bestRatio = ratio;
+            }
+        }
+
+        if (bestIndex == std::numeric_limits<uint32_t>::max())
+        {
+            break;
+        }
+
+        auto& selected = demands[bestIndex];
+        if (!state.ocsPlane.Activate(selected.a, selected.b, bestMemsId))
+        {
+            break;
+        }
+        state.C.Set(selected.a, selected.b, state.C.Get(selected.a, selected.b) + 1.0);
+        state.C.Set(selected.b, selected.a, state.C.Get(selected.a, selected.b));
+        selected.allocatedBytes += circuitCapacityBytes;
+        podDegree[selected.a]++;
+        podDegree[selected.b]++;
+    }
+    return state;
+}
+
 } // namespace smtra
 } // namespace ns3

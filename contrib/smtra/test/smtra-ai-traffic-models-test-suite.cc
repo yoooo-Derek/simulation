@@ -41,6 +41,43 @@ class SmtraAiTrafficModelsTestCase : public TestCase
         NS_TEST_ASSERT_MSG_GT(tensor.GetBytes(0, 1), 0, "tensor community edge is missing");
         NS_TEST_ASSERT_MSG_EQ(tensor.GetBytes(1, 2), 0, "cross-community edge should be empty");
 
+        TrafficMatrix skew = BuildAiTrainingTrafficMatrix("ai-neighbor-skew",
+                                                          0.2,
+                                                          serverAccessBps,
+                                                          Seconds(0.0),
+                                                          Seconds(0.05),
+                                                          8,
+                                                          16);
+        NS_TEST_ASSERT_MSG_GT(skew.GetTotalBytes(), 0, "skew matrix should be non-empty");
+        NS_TEST_ASSERT_MSG_GT(skew.GetBytes(0, 1),
+                              skew.GetBytes(3, 4),
+                              "neighbor pair should be stronger than cross-stage pair");
+        NS_TEST_ASSERT_MSG_GT(skew.GetBytes(3, 4),
+                              skew.GetBytes(0, 2),
+                              "cross-stage pair should be stronger than background pair");
+        NS_TEST_ASSERT_MSG_GT(skew.GetBytes(0, 2), 0, "background pair should be active");
+        uint32_t activeSupport = 0;
+        for (uint32_t i = 0; i < 8; ++i)
+        {
+            for (uint32_t j = 0; j < 8; ++j)
+            {
+                if (i == j)
+                {
+                    continue;
+                }
+                NS_TEST_ASSERT_MSG_EQ(skew.GetBytes(i, j),
+                                      skew.GetBytes(j, i),
+                                      "skew matrix must be symmetric");
+                if (skew.GetBytes(i, j) > 0)
+                {
+                    activeSupport++;
+                }
+            }
+        }
+        NS_TEST_ASSERT_MSG_GT(activeSupport,
+                              16,
+                              "skew active support should exceed the main structure");
+
         TrafficMatrix tiny(8);
         tiny.SetBytes(0, 1, 100);
         FlowGenerationOptions fixedMessages;

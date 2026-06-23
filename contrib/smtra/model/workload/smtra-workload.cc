@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <random>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -258,7 +259,10 @@ BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
                              Time trafficStartTime,
                              Time trafficStopTime,
                              uint32_t podCount,
-                             uint32_t serversPerPod)
+                             uint32_t serversPerPod,
+                             double neighborWeight,
+                             double crossStageWeight,
+                             double backgroundWeight)
 {
     if (podCount != 8)
     {
@@ -267,6 +271,10 @@ BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
     if (offeredLoad < 0.0)
     {
         throw std::runtime_error("offeredLoad must be non-negative");
+    }
+    if (neighborWeight <= 0.0 || crossStageWeight <= 0.0 || backgroundWeight <= 0.0)
+    {
+        throw std::runtime_error("ai-neighbor-skew weights must be positive");
     }
     const double trafficDurationSeconds =
         (trafficStopTime - trafficStartTime).GetSeconds();
@@ -302,6 +310,38 @@ BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
             addBidirectional(pod, pod + 1, 1.0);
         }
     }
+    else if (trafficModel == "ai-neighbor-skew")
+    {
+        const std::set<std::pair<uint32_t, uint32_t>> neighborPairs = {
+            {0, 1},
+            {1, 2},
+            {2, 3},
+            {4, 5},
+            {5, 6},
+            {6, 7},
+        };
+        const std::set<std::pair<uint32_t, uint32_t>> crossStagePairs = {
+            {3, 4},
+            {0, 7},
+        };
+        for (uint32_t i = 0; i < podCount; ++i)
+        {
+            for (uint32_t j = i + 1; j < podCount; ++j)
+            {
+                const auto pair = std::make_pair(i, j);
+                double weight = backgroundWeight;
+                if (neighborPairs.find(pair) != neighborPairs.end())
+                {
+                    weight = neighborWeight;
+                }
+                else if (crossStagePairs.find(pair) != crossStagePairs.end())
+                {
+                    weight = crossStageWeight;
+                }
+                addBidirectional(i, j, weight);
+            }
+        }
+    }
     else
     {
         throw std::runtime_error("unsupported SMTRA AI traffic model: " + trafficModel);
@@ -325,32 +365,53 @@ BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
         offeredLoad * serverCount * static_cast<double>(serverAccessBps) *
         trafficDurationSeconds / 8.0;
 
-    TrafficMatrix matrix(podCount);
-    uint64_t assignedBytes = 0;
-    uint32_t lastSource = 0;
-    uint32_t lastDestination = 0;
-    bool hasLast = false;
-    for (uint32_t source = 0; source < podCount; ++source)
+    struct UndirectedWeight
     {
-        for (uint32_t destination = 0; destination < podCount; ++destination)
+        uint32_t a = 0;
+        uint32_t b = 0;
+        double weight = 0.0;
+    };
+    std::vector<UndirectedWeight> undirectedWeights;
+    for (uint32_t i = 0; i < podCount; ++i)
+    {
+        for (uint32_t j = i + 1; j < podCount; ++j)
         {
-            if (source == destination || weights[source][destination] <= 0.0)
+            const double weight = weights[i][j] + weights[j][i];
+            if (weight > 0.0)
             {
-                continue;
+                undirectedWeights.push_back({i, j, weight});
             }
-            const double exactBytes = totalOfferedBytes * weights[source][destination] / weightTotal;
-            const uint64_t bytes = static_cast<uint64_t>(std::floor(exactBytes));
-            matrix.SetBytes(source, destination, bytes);
-            assignedBytes += bytes;
-            lastSource = source;
-            lastDestination = destination;
-            hasLast = true;
         }
     }
+    const double undirectedWeightTotal = weightTotal;
     const uint64_t roundedTotal = static_cast<uint64_t>(std::llround(totalOfferedBytes));
+    TrafficMatrix matrix(podCount);
+    uint64_t assignedBytes = 0;
+    uint32_t lastA = 0;
+    uint32_t lastB = 0;
+    bool hasLast = false;
+    for (const auto& pair : undirectedWeights)
+    {
+        uint64_t pairBytes = static_cast<uint64_t>(
+            std::floor(totalOfferedBytes * pair.weight / undirectedWeightTotal));
+        if (pairBytes % 2 != 0)
+        {
+            pairBytes--;
+        }
+        const uint64_t directedBytes = pairBytes / 2;
+        matrix.SetBytes(pair.a, pair.b, directedBytes);
+        matrix.SetBytes(pair.b, pair.a, directedBytes);
+        assignedBytes += pairBytes;
+        lastA = pair.a;
+        lastB = pair.b;
+        hasLast = true;
+    }
     if (hasLast && roundedTotal > assignedBytes)
     {
-        matrix.AddBytes(lastSource, lastDestination, roundedTotal - assignedBytes);
+        const uint64_t remainder = roundedTotal - assignedBytes;
+        const uint64_t symmetricRemainder = remainder - (remainder % 2);
+        matrix.AddBytes(lastA, lastB, symmetricRemainder / 2);
+        matrix.AddBytes(lastB, lastA, symmetricRemainder / 2);
     }
     return matrix;
 }

@@ -78,7 +78,10 @@ TrafficMatrix BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
                                            Time trafficStartTime,
                                            Time trafficStopTime,
                                            uint32_t podCount = 8,
-                                           uint32_t serversPerPod = 16);
+                                           uint32_t serversPerPod = 16,
+                                           double neighborWeight = 1.0,
+                                           double crossStageWeight = 0.25,
+                                           double backgroundWeight = 0.05);
 TrafficMatrix ScaleTrafficMatrix(const TrafficMatrix& matrix, double scale);
 TrafficMatrix BuildScalePairsPerturbedMatrix(const TrafficMatrix& matrix,
                                              double perturbationRatio,
