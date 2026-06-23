@@ -260,9 +260,7 @@ BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
                              Time trafficStopTime,
                              uint32_t podCount,
                              uint32_t serversPerPod,
-                             double neighborWeight,
-                             double crossStageWeight,
-                             double backgroundWeight)
+                             const AiTrafficModelOptions& options)
 {
     if (podCount != 8)
     {
@@ -272,9 +270,12 @@ BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
     {
         throw std::runtime_error("offeredLoad must be non-negative");
     }
-    if (neighborWeight <= 0.0 || crossStageWeight <= 0.0 || backgroundWeight <= 0.0)
+    if (options.neighborWeight <= 0.0 || options.crossStageWeight <= 0.0 ||
+        options.backgroundWeight <= 0.0 || options.decoyBeta <= 0.0 ||
+        options.structuralBonus <= 0.0 || options.decoyHighActivity <= 0.0 ||
+        options.decoyLowActivity <= 0.0)
     {
-        throw std::runtime_error("ai-neighbor-skew weights must be positive");
+        throw std::runtime_error("SMTRA AI traffic model weights must be positive");
     }
     const double trafficDurationSeconds =
         (trafficStopTime - trafficStartTime).GetSeconds();
@@ -329,14 +330,46 @@ BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
             for (uint32_t j = i + 1; j < podCount; ++j)
             {
                 const auto pair = std::make_pair(i, j);
-                double weight = backgroundWeight;
+                double weight = options.backgroundWeight;
                 if (neighborPairs.find(pair) != neighborPairs.end())
                 {
-                    weight = neighborWeight;
+                    weight = options.neighborWeight;
                 }
                 else if (crossStagePairs.find(pair) != crossStagePairs.end())
                 {
-                    weight = crossStageWeight;
+                    weight = options.crossStageWeight;
+                }
+                addBidirectional(i, j, weight);
+            }
+        }
+    }
+    else if (trafficModel == "ai-structural-decoy")
+    {
+        const std::set<std::pair<uint32_t, uint32_t>> structuralPairs = {
+            {0, 1},
+            {0, 6},
+            {1, 2},
+            {2, 3},
+            {3, 4},
+            {4, 5},
+            {5, 6},
+            {6, 7},
+        };
+        const std::set<uint32_t> highActivityPods = {0, 2, 5, 7};
+        std::vector<double> activity(podCount, options.decoyLowActivity);
+        for (uint32_t pod : highActivityPods)
+        {
+            activity[pod] = options.decoyHighActivity;
+        }
+
+        for (uint32_t i = 0; i < podCount; ++i)
+        {
+            for (uint32_t j = i + 1; j < podCount; ++j)
+            {
+                double weight = options.decoyBeta * activity[i] * activity[j];
+                if (structuralPairs.find({i, j}) != structuralPairs.end())
+                {
+                    weight += options.structuralBonus;
                 }
                 addBidirectional(i, j, weight);
             }

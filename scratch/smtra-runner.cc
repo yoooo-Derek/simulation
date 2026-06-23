@@ -7,13 +7,18 @@
 #include "ns3/smtra-path-installer.h"
 #include "ns3/smtra-workload.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 using namespace ns3;
@@ -100,6 +105,102 @@ BuildPathTypeCountsString(const std::map<std::string, uint32_t>& counts)
     return out.str();
 }
 
+std::string
+FormatPairs(const std::vector<std::pair<uint32_t, uint32_t>>& pairs)
+{
+    std::ostringstream out;
+    for (uint32_t index = 0; index < pairs.size(); ++index)
+    {
+        if (index > 0)
+        {
+            out << "|";
+        }
+        out << pairs[index].first << "-" << pairs[index].second;
+    }
+    return out.str();
+}
+
+std::vector<std::pair<uint32_t, uint32_t>>
+BuildTopPairsFromScores(const std::vector<std::tuple<uint32_t, uint32_t, double>>& scores,
+                        uint32_t k)
+{
+    std::vector<std::tuple<uint32_t, uint32_t, double>> sorted = scores;
+    std::sort(sorted.begin(), sorted.end(), [](const auto& left, const auto& right) {
+        if (std::get<2>(left) != std::get<2>(right))
+        {
+            return std::get<2>(left) > std::get<2>(right);
+        }
+        return std::tie(std::get<0>(left), std::get<1>(left)) <
+               std::tie(std::get<0>(right), std::get<1>(right));
+    });
+    std::vector<std::pair<uint32_t, uint32_t>> pairs;
+    for (const auto& score : sorted)
+    {
+        if (std::get<2>(score) <= 0.0 || pairs.size() >= k)
+        {
+            break;
+        }
+        pairs.emplace_back(std::get<0>(score), std::get<1>(score));
+    }
+    return pairs;
+}
+
+std::vector<std::pair<uint32_t, uint32_t>>
+BuildTopRawPairs(const TrafficMatrix& matrix, uint32_t k)
+{
+    std::vector<std::tuple<uint32_t, uint32_t, double>> scores;
+    for (uint32_t i = 0; i < matrix.GetPodCount(); ++i)
+    {
+        for (uint32_t j = i + 1; j < matrix.GetPodCount(); ++j)
+        {
+            scores.emplace_back(i, j, static_cast<double>(matrix.GetBytes(i, j) +
+                                                          matrix.GetBytes(j, i)));
+        }
+    }
+    return BuildTopPairsFromScores(scores, k);
+}
+
+std::vector<std::pair<uint32_t, uint32_t>>
+BuildTopMatrixPairs(const DenseMatrix& matrix, uint32_t k)
+{
+    std::vector<std::tuple<uint32_t, uint32_t, double>> scores;
+    for (uint32_t i = 0; i < matrix.GetSize(); ++i)
+    {
+        for (uint32_t j = i + 1; j < matrix.GetSize(); ++j)
+        {
+            scores.emplace_back(i, j, matrix.Get(i, j));
+        }
+    }
+    return BuildTopPairsFromScores(scores, k);
+}
+
+uint32_t
+CountPairOverlap(const std::vector<std::pair<uint32_t, uint32_t>>& left,
+                 const std::vector<std::pair<uint32_t, uint32_t>>& right)
+{
+    std::set<std::pair<uint32_t, uint32_t>> leftSet(left.begin(), left.end());
+    uint32_t overlap = 0;
+    for (const auto& pair : right)
+    {
+        if (leftSet.find(pair) != leftSet.end())
+        {
+            overlap++;
+        }
+    }
+    return overlap;
+}
+
+std::vector<std::pair<uint32_t, uint32_t>>
+BuildActiveOcsEdges(const OcsPlane& plane)
+{
+    std::set<std::pair<uint32_t, uint32_t>> edgeSet;
+    for (const auto& circuit : plane.GetActiveCircuits())
+    {
+        edgeSet.insert(OcsPlane::NormalizePair(circuit.podA, circuit.podB));
+    }
+    return {edgeSet.begin(), edgeSet.end()};
+}
+
 uint64_t
 ComputeMatrixAbsoluteDifference(const TrafficMatrix& left, const TrafficMatrix& right)
 {
@@ -140,6 +241,10 @@ main(int argc, char* argv[])
     double neighborWeight = 1.0;
     double crossStageWeight = 0.25;
     double backgroundWeight = 0.05;
+    double decoyBeta = 0.08;
+    double structuralBonus = 1.0;
+    double decoyHighActivity = 5.0;
+    double decoyLowActivity = 1.0;
     std::string strategy = "v8";
     double offeredLoad = 0.2;
     double workloadScale = 0.001;
@@ -190,6 +295,10 @@ main(int argc, char* argv[])
     cmd.AddValue("neighborWeight", "ai-neighbor-skew neighbor pair weight", neighborWeight);
     cmd.AddValue("crossStageWeight", "ai-neighbor-skew cross-stage pair weight", crossStageWeight);
     cmd.AddValue("backgroundWeight", "ai-neighbor-skew background pair weight", backgroundWeight);
+    cmd.AddValue("decoyBeta", "ai-structural-decoy degree-corrected decoy beta", decoyBeta);
+    cmd.AddValue("structuralBonus", "ai-structural-decoy structural pair bonus", structuralBonus);
+    cmd.AddValue("decoyHighActivity", "ai-structural-decoy high pod activity", decoyHighActivity);
+    cmd.AddValue("decoyLowActivity", "ai-structural-decoy low pod activity", decoyLowActivity);
     cmd.AddValue("strategy",
                  "Routing strategy: e-only, static-ocs, traffic-greedy, traffic-fair, v8, v8-shortest",
                  strategy);
@@ -266,6 +375,14 @@ main(int argc, char* argv[])
                               : DragonflyPlusOcsTopologyBuilder().Build(config, topologyOptions);
 
     auto buildOfferedMatrix = [&](const std::string& model) {
+        AiTrafficModelOptions trafficOptions;
+        trafficOptions.neighborWeight = neighborWeight;
+        trafficOptions.crossStageWeight = crossStageWeight;
+        trafficOptions.backgroundWeight = backgroundWeight;
+        trafficOptions.decoyBeta = decoyBeta;
+        trafficOptions.structuralBonus = structuralBonus;
+        trafficOptions.decoyHighActivity = decoyHighActivity;
+        trafficOptions.decoyLowActivity = decoyLowActivity;
         return BuildAiTrainingTrafficMatrix(model,
                                             offeredLoad,
                                             serverAccessBps,
@@ -273,9 +390,7 @@ main(int argc, char* argv[])
                                             trafficStopTime,
                                             8,
                                             config.GetServersPerTor(),
-                                            neighborWeight,
-                                            crossStageWeight,
-                                            backgroundWeight);
+                                            trafficOptions);
     };
 
     TrafficMatrix offeredObserveMatrix(8);
@@ -329,6 +444,30 @@ main(int argc, char* argv[])
     parameters.memsCount = memsCount;
     parameters.circuitCapacityBps = resolvedCircuitCapacityBps;
     parameters.observerWindowSeconds = (trafficStopTime - trafficStartTime).GetSeconds();
+
+    const SmtraStructuralState diagnosticStructural =
+        SmtraController().BuildStructuralState(observeMatrix, parameters);
+    const uint32_t diagnosticTopK = std::min<uint32_t>(8, observeMatrix.GetPodCount() *
+                                                               (observeMatrix.GetPodCount() - 1) /
+                                                               2);
+    const std::vector<std::pair<uint32_t, uint32_t>> topRawPairs =
+        BuildTopRawPairs(observeMatrix, diagnosticTopK);
+    const std::vector<std::pair<uint32_t, uint32_t>> topSPairs =
+        BuildTopMatrixPairs(diagnosticStructural.S, diagnosticTopK);
+    const std::vector<std::pair<uint32_t, uint32_t>> topPsiPairs =
+        BuildTopMatrixPairs(diagnosticStructural.Psi, diagnosticTopK);
+    const uint32_t rawPsiTopKOverlap = CountPairOverlap(topRawPairs, topPsiPairs);
+    const uint32_t rawSTopKOverlap = CountPairOverlap(topRawPairs, topSPairs);
+    if (observeTrafficModel == "ai-structural-decoy" &&
+        (topRawPairs == topSPairs || topRawPairs == topPsiPairs || rawPsiTopKOverlap > 4))
+    {
+        std::ostringstream error;
+        error << "ai-structural-decoy failed structural conflict check: topRawPairs="
+              << FormatPairs(topRawPairs) << " topSPairs=" << FormatPairs(topSPairs)
+              << " topPsiPairs=" << FormatPairs(topPsiPairs)
+              << " rawPsiTopKOverlap=" << rawPsiTopKOverlap;
+        throw std::runtime_error(error.str());
+    }
 
     SmtraPathInstaller pathInstaller;
     SmtraTopologyRouteState deployedState;
@@ -450,6 +589,16 @@ main(int argc, char* argv[])
                                        ? 0.0
                                        : static_cast<double>(totalPathHopCount) /
                                              static_cast<double>(installableFlows);
+    const auto activeOcsEdges = BuildActiveOcsEdges(deployedState.ocsPlane);
+    const uint32_t edgeOverlapWithTopRaw = CountPairOverlap(activeOcsEdges, topRawPairs);
+    const uint32_t edgeOverlapWithTopPsi = CountPairOverlap(activeOcsEdges, topPsiPairs);
+    const std::string activeOcsEdgesText = FormatPairs(activeOcsEdges);
+    const std::string trafficFairEdgesText =
+        strategy == "traffic-fair" ? activeOcsEdgesText : "";
+    const std::string trafficFairSelectionOrderText =
+        strategy == "traffic-fair" ? FormatPairs(deployedState.selectionOrder) : "";
+    const std::string v8EdgesText =
+        (strategy == "v8" || strategy == "v8-shortest") ? activeOcsEdgesText : "";
 
     auto completedCallbacks = std::make_shared<uint32_t>(0);
     auto completionCallback = [completedCallbacks, installableFlows](uint32_t) {
@@ -489,6 +638,10 @@ main(int argc, char* argv[])
               << ", neighborWeight=" << neighborWeight
               << ", crossStageWeight=" << crossStageWeight
               << ", backgroundWeight=" << backgroundWeight
+              << ", decoyBeta=" << decoyBeta
+              << ", structuralBonus=" << structuralBonus
+              << ", decoyHighActivity=" << decoyHighActivity
+              << ", decoyLowActivity=" << decoyLowActivity
               << ", strategy=" << strategy
               << ", offeredLoad=" << offeredLoad
               << ", workloadScale=" << workloadScale
@@ -509,6 +662,17 @@ main(int argc, char* argv[])
               << ", installRatio=" << installRatio
               << ", ocsCoverageOk=" << (ocsCoverageOk ? "true" : "false")
               << ", pathTypeCounts=" << BuildPathTypeCountsString(pathTypeCounts)
+              << ", topRawPairs=" << FormatPairs(topRawPairs)
+              << ", topSPairs=" << FormatPairs(topSPairs)
+              << ", topPsiPairs=" << FormatPairs(topPsiPairs)
+              << ", rawPsiTopKOverlap=" << rawPsiTopKOverlap
+              << ", rawSTopKOverlap=" << rawSTopKOverlap
+              << ", activeOcsEdges=" << activeOcsEdgesText
+              << ", trafficFairEdges=" << trafficFairEdgesText
+              << ", trafficFairSelectionOrder=" << trafficFairSelectionOrderText
+              << ", v8Edges=" << v8EdgesText
+              << ", edgeOverlapWithTopRaw=" << edgeOverlapWithTopRaw
+              << ", edgeOverlapWithTopPsi=" << edgeOverlapWithTopPsi
               << ", oneHopPathFlows=" << oneHopPathFlows
               << ", twoHopPathFlows=" << twoHopPathFlows
               << ", multiHopPathFlows=" << multiHopPathFlows

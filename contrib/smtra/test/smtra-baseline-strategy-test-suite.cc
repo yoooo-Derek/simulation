@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include <stdexcept>
 #include <vector>
 
 using namespace ns3;
@@ -136,6 +137,37 @@ class SmtraTrafficFairStrategyTestCase : public TestCase
   private:
     void DoRun() override
     {
+        const auto order = BuildRoundRobinPairOrder(8);
+        NS_TEST_ASSERT_MSG_EQ(order.size(), 28, "round-robin order must contain every K8 pair");
+        std::set<std::pair<uint32_t, uint32_t>> uniquePairs(order.begin(), order.end());
+        NS_TEST_ASSERT_MSG_EQ(uniquePairs.size(), order.size(), "round-robin order has duplicate pairs");
+        for (uint32_t round = 0; round < 7; ++round)
+        {
+            std::set<uint32_t> podsInRound;
+            for (uint32_t offset = 0; offset < 4; ++offset)
+            {
+                const auto pair = order[round * 4 + offset];
+                NS_TEST_ASSERT_MSG_EQ(podsInRound.insert(pair.first).second,
+                                      true,
+                                      "pod repeated in round-robin round");
+                NS_TEST_ASSERT_MSG_EQ(podsInRound.insert(pair.second).second,
+                                      true,
+                                      "pod repeated in round-robin round");
+            }
+        }
+        bool rejectedOddPodCount = false;
+        try
+        {
+            (void)BuildRoundRobinPairOrder(7);
+        }
+        catch (const std::runtime_error&)
+        {
+            rejectedOddPodCount = true;
+        }
+        NS_TEST_ASSERT_MSG_EQ(rejectedOddPodCount,
+                              true,
+                              "round-robin order must reject odd pod counts");
+
         SmtraParameters parameters;
         parameters.memsCount = 2;
         parameters.podPortLimitB = 2;
@@ -179,18 +211,34 @@ class SmtraTrafficFairStrategyTestCase : public TestCase
         constrained.memsCount = 1;
         constrained.podPortLimitB = 1;
         TrafficMatrix tieMatrix(8);
-        tieMatrix.SetBytes(0, 1, 1000);
-        tieMatrix.SetBytes(1, 0, 1000);
+        tieMatrix.SetBytes(0, 6, 1000);
+        tieMatrix.SetBytes(6, 0, 1000);
         tieMatrix.SetBytes(0, 2, 3000);
         tieMatrix.SetBytes(2, 0, 3000);
         const SmtraTopologyRouteState tieFair =
             BuildTrafficFairBaselineState(tieMatrix, constrained);
-        NS_TEST_ASSERT_MSG_EQ(tieFair.ocsPlane.GetActiveCircuitCount(0, 2),
+        NS_TEST_ASSERT_MSG_EQ(tieFair.ocsPlane.GetActiveCircuitCount(0, 6),
                               1,
-                              "ratio tie should prefer larger demand");
-        NS_TEST_ASSERT_MSG_EQ(tieFair.ocsPlane.GetActiveCircuitCount(0, 1),
+                              "strict fair should follow round-robin order instead of demand tie-break");
+        NS_TEST_ASSERT_MSG_EQ(tieFair.ocsPlane.GetActiveCircuitCount(0, 2),
                               0,
-                              "smaller demand pair should not win demand tie");
+                              "larger demand pair must not win the initial ratio tie");
+
+        TrafficMatrix skew = BuildAiTrainingTrafficMatrix("ai-neighbor-skew",
+                                                          0.2,
+                                                          320000000ULL,
+                                                          Seconds(0.001),
+                                                          Seconds(0.05),
+                                                          8,
+                                                          16);
+        const SmtraTopologyRouteState strictFair =
+            BuildTrafficFairBaselineState(skew, parameters);
+        NS_TEST_ASSERT_MSG_EQ(strictFair.ocsPlane.GetActiveCircuitCount(0, 1),
+                              0,
+                              "strict fair should differ from old demand-greedy on ai-neighbor-skew");
+        NS_TEST_ASSERT_MSG_EQ(strictFair.ocsPlane.GetActiveCircuitCount(0, 7),
+                              1,
+                              "strict fair should start from round-robin edge 0-7");
     }
 };
 

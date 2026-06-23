@@ -16,6 +16,10 @@ TEST_MIX_A_WEIGHT="0.3"
 NEIGHBOR_WEIGHT="1.0"
 CROSS_STAGE_WEIGHT="0.25"
 BACKGROUND_WEIGHT="0.05"
+DECOY_BETA="0.08"
+STRUCTURAL_BONUS="1.0"
+DECOY_HIGH_ACTIVITY="5.0"
+DECOY_LOW_ACTIVITY="1.0"
 FLOW_GENERATION_MODE="fixed-flows-per-pair"
 MESSAGE_SIZE_BYTES="16384"
 FLOWS_PER_ACTIVE_PAIR="16"
@@ -39,7 +43,8 @@ usage() {
 Usage: run-smtra-matrix.sh [options]
 
 Options:
-  --mode=pilot|full              Experiment matrix size. pilot runs 24 cases; full runs 60 cases.
+  --mode=pilot|full|ai-structural-decoy-strict-fair
+                                  Experiment matrix size or named experiment mode.
   --workloadScale=VALUE          Scale factor applied to offered bytes for NS-3 flow generation.
   --matrixMode=MODE              Matrix mode. Only observe-test is supported.
   --testPerturbationMode=MODE    none, scale-pairs, phase-shift, community-rotation, or mixed-stage-switch.
@@ -54,6 +59,10 @@ Options:
   --neighborWeight=VALUE         ai-neighbor-skew neighbor pair weight.
   --crossStageWeight=VALUE       ai-neighbor-skew cross-stage pair weight.
   --backgroundWeight=VALUE       ai-neighbor-skew background pair weight.
+  --decoyBeta=VALUE              ai-structural-decoy beta.
+  --structuralBonus=VALUE        ai-structural-decoy structural bonus.
+  --decoyHighActivity=VALUE      ai-structural-decoy high pod activity.
+  --decoyLowActivity=VALUE       ai-structural-decoy low pod activity.
   --trafficModels=a,b,c          Comma-separated observe/test traffic model list.
   --strategies=a,b               Comma-separated strategy list.
   --offeredLoads=0.2,0.5         Comma-separated offered load list.
@@ -118,6 +127,18 @@ for arg in "$@"; do
         --backgroundWeight=*)
             BACKGROUND_WEIGHT="${arg#*=}"
             ;;
+        --decoyBeta=*)
+            DECOY_BETA="${arg#*=}"
+            ;;
+        --structuralBonus=*)
+            STRUCTURAL_BONUS="${arg#*=}"
+            ;;
+        --decoyHighActivity=*)
+            DECOY_HIGH_ACTIVITY="${arg#*=}"
+            ;;
+        --decoyLowActivity=*)
+            DECOY_LOW_ACTIVITY="${arg#*=}"
+            ;;
         --trafficModels=*)
             TRAFFIC_MODELS_CSV="${arg#*=}"
             ;;
@@ -169,8 +190,8 @@ for arg in "$@"; do
     esac
 done
 
-if [[ "$MODE" != "pilot" && "$MODE" != "full" ]]; then
-    echo "--mode must be pilot or full" >&2
+if [[ "$MODE" != "pilot" && "$MODE" != "full" && "$MODE" != "ai-structural-decoy-strict-fair" ]]; then
+    echo "--mode must be pilot, full, or ai-structural-decoy-strict-fair" >&2
     exit 2
 fi
 
@@ -179,17 +200,39 @@ if [[ -z "$OUTPUT_DIR" ]]; then
     exit 2
 fi
 
-if [[ -n "$TRAFFIC_MODELS_CSV" ]]; then
+if [[ "$MODE" == "ai-structural-decoy-strict-fair" ]]; then
+    WORKLOAD_SCALE="0.5"
+    TEST_PERTURBATION_MODE="none"
+    FLOW_GENERATION_MODE="fixed-flows-per-pair"
+    MESSAGE_SIZE_BYTES="16384"
+    FLOWS_PER_ACTIVE_PAIR="16"
+    ELECTRICAL_DATA_RATE="320Mbps"
+    OCS_DATA_RATE="1Gbps"
+    MEMS_COUNT="2"
+    POD_PORT_LIMIT_B="2"
+    DECOY_BETA="0.08"
+    STRUCTURAL_BONUS="1.0"
+    DECOY_HIGH_ACTIVITY="5.0"
+    DECOY_LOW_ACTIVITY="1.0"
+fi
+
+if [[ "$MODE" == "ai-structural-decoy-strict-fair" ]]; then
+    TRAFFIC_MODELS=("ai-structural-decoy")
+elif [[ -n "$TRAFFIC_MODELS_CSV" ]]; then
     IFS=',' read -r -a TRAFFIC_MODELS <<<"$TRAFFIC_MODELS_CSV"
 else
     TRAFFIC_MODELS=("data-parallel" "tensor-community" "pipeline")
 fi
-if [[ -n "$STRATEGIES_CSV" ]]; then
+if [[ "$MODE" == "ai-structural-decoy-strict-fair" ]]; then
+    STRATEGIES=("traffic-fair" "v8-shortest")
+elif [[ -n "$STRATEGIES_CSV" ]]; then
     IFS=',' read -r -a STRATEGIES <<<"$STRATEGIES_CSV"
 else
     STRATEGIES=("e-only" "static-ocs" "traffic-greedy" "v8")
 fi
-if [[ -n "$OFFERED_LOADS_CSV" ]]; then
+if [[ "$MODE" == "ai-structural-decoy-strict-fair" ]]; then
+    OFFERED_LOADS=("0.1" "0.2" "0.4" "0.6" "0.8")
+elif [[ -n "$OFFERED_LOADS_CSV" ]]; then
     IFS=',' read -r -a OFFERED_LOADS <<<"$OFFERED_LOADS_CSV"
 elif [[ "$MODE" == "pilot" ]]; then
     OFFERED_LOADS=("0.2" "0.8")
@@ -205,7 +248,7 @@ for traffic_model in "${TRAFFIC_MODELS[@]}"; do
         for offered_load in "${OFFERED_LOADS[@]}"; do
             log_file="${OUTPUT_DIR}/${traffic_model}__${TEST_PERTURBATION_MODE}__${strategy}__load-${offered_load}__seed-${RANDOM_SEED}.log"
             runtime_file="${log_file%.log}.runtime"
-            runner_args="smtra-runner --matrixMode=${MATRIX_MODE} --observeTrafficModel=${traffic_model} --testTrafficModel=${traffic_model} --testPerturbationMode=${TEST_PERTURBATION_MODE} --testPerturbationRatio=${TEST_PERTURBATION_RATIO} --phaseShift=${PHASE_SHIFT} --phaseShiftWrap=${PHASE_SHIFT_WRAP} --communityRotationPattern=${COMMUNITY_ROTATION_PATTERN} --observeMixA=${OBSERVE_MIX_A} --observeMixB=${OBSERVE_MIX_B} --observeMixAWeight=${OBSERVE_MIX_A_WEIGHT} --testMixAWeight=${TEST_MIX_A_WEIGHT} --neighborWeight=${NEIGHBOR_WEIGHT} --crossStageWeight=${CROSS_STAGE_WEIGHT} --backgroundWeight=${BACKGROUND_WEIGHT} --strategy=${strategy} --offeredLoad=${offered_load} --workloadScale=${WORKLOAD_SCALE} --flowGenerationMode=${FLOW_GENERATION_MODE} --messageSizeBytes=${MESSAGE_SIZE_BYTES} --flowsPerActivePair=${FLOWS_PER_ACTIVE_PAIR} --randomSeed=${RANDOM_SEED} --electricalDataRate=${ELECTRICAL_DATA_RATE} --ocsDataRate=${OCS_DATA_RATE} --memsCount=${MEMS_COUNT} --podPortLimitB=${POD_PORT_LIMIT_B} --circuitCapacityBps=${CIRCUIT_CAPACITY_BPS} --trafficStartTime=${TRAFFIC_START_TIME} --trafficStopTime=${TRAFFIC_STOP_TIME} --simulationStopTime=${SIMULATION_STOP_TIME}"
+            runner_args="smtra-runner --matrixMode=${MATRIX_MODE} --observeTrafficModel=${traffic_model} --testTrafficModel=${traffic_model} --testPerturbationMode=${TEST_PERTURBATION_MODE} --testPerturbationRatio=${TEST_PERTURBATION_RATIO} --phaseShift=${PHASE_SHIFT} --phaseShiftWrap=${PHASE_SHIFT_WRAP} --communityRotationPattern=${COMMUNITY_ROTATION_PATTERN} --observeMixA=${OBSERVE_MIX_A} --observeMixB=${OBSERVE_MIX_B} --observeMixAWeight=${OBSERVE_MIX_A_WEIGHT} --testMixAWeight=${TEST_MIX_A_WEIGHT} --neighborWeight=${NEIGHBOR_WEIGHT} --crossStageWeight=${CROSS_STAGE_WEIGHT} --backgroundWeight=${BACKGROUND_WEIGHT} --decoyBeta=${DECOY_BETA} --structuralBonus=${STRUCTURAL_BONUS} --decoyHighActivity=${DECOY_HIGH_ACTIVITY} --decoyLowActivity=${DECOY_LOW_ACTIVITY} --strategy=${strategy} --offeredLoad=${offered_load} --workloadScale=${WORKLOAD_SCALE} --flowGenerationMode=${FLOW_GENERATION_MODE} --messageSizeBytes=${MESSAGE_SIZE_BYTES} --flowsPerActivePair=${FLOWS_PER_ACTIVE_PAIR} --randomSeed=${RANDOM_SEED} --electricalDataRate=${ELECTRICAL_DATA_RATE} --ocsDataRate=${OCS_DATA_RATE} --memsCount=${MEMS_COUNT} --podPortLimitB=${POD_PORT_LIMIT_B} --circuitCapacityBps=${CIRCUIT_CAPACITY_BPS} --trafficStartTime=${TRAFFIC_START_TIME} --trafficStopTime=${TRAFFIC_STOP_TIME} --simulationStopTime=${SIMULATION_STOP_TIME}"
             echo "RUN observeTrafficModel=${traffic_model} testTrafficModel=${traffic_model} strategy=${strategy} offeredLoad=${offered_load} log=${log_file}"
             run_start=$SECONDS
             ./ns3 run "$runner_args" >"$log_file" 2>&1

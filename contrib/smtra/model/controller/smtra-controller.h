@@ -72,6 +72,7 @@ struct SmtraTopologyRouteState
     DenseMatrix Phi;
     OcsPlane ocsPlane;
     std::map<std::pair<uint32_t, uint32_t>, SmtraRouteAllocation> allocations;
+    std::vector<std::pair<uint32_t, uint32_t>> selectionOrder;
     double smc = 0.0;
     double smd = 0.0;
 };
@@ -111,6 +112,7 @@ SmtraTopologyRouteState BuildStaticOcsBaselineState(uint32_t podCount,
                                                     const SmtraParameters& parameters);
 SmtraTopologyRouteState BuildTrafficGreedyBaselineState(const TrafficMatrix& observedT,
                                                         const SmtraParameters& parameters);
+std::vector<std::pair<uint32_t, uint32_t>> BuildRoundRobinPairOrder(uint32_t podCount);
 SmtraTopologyRouteState BuildTrafficFairBaselineState(const TrafficMatrix& observedT,
                                                       const SmtraParameters& parameters);
 

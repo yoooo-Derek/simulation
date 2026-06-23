@@ -72,6 +72,17 @@ struct FlowGenerationOptions
     uint32_t flowsPerActivePair = 16;
 };
 
+struct AiTrafficModelOptions
+{
+    double neighborWeight = 1.0;
+    double crossStageWeight = 0.25;
+    double backgroundWeight = 0.05;
+    double decoyBeta = 0.08;
+    double structuralBonus = 1.0;
+    double decoyHighActivity = 5.0;
+    double decoyLowActivity = 1.0;
+};
+
 TrafficMatrix BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
                                            double offeredLoad,
                                            uint64_t serverAccessBps,
@@ -79,9 +90,8 @@ TrafficMatrix BuildAiTrainingTrafficMatrix(const std::string& trafficModel,
                                            Time trafficStopTime,
                                            uint32_t podCount = 8,
                                            uint32_t serversPerPod = 16,
-                                           double neighborWeight = 1.0,
-                                           double crossStageWeight = 0.25,
-                                           double backgroundWeight = 0.05);
+                                           const AiTrafficModelOptions& options =
+                                               AiTrafficModelOptions());
 TrafficMatrix ScaleTrafficMatrix(const TrafficMatrix& matrix, double scale);
 TrafficMatrix BuildScalePairsPerturbedMatrix(const TrafficMatrix& matrix,
                                              double perturbationRatio,

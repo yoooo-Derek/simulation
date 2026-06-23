@@ -1,8 +1,98 @@
+#include "ns3/smtra-controller.h"
 #include "ns3/smtra-workload.h"
 #include "ns3/test.h"
 
+#include <algorithm>
+#include <set>
+#include <tuple>
+#include <vector>
+
 using namespace ns3;
 using namespace ns3::smtra;
+
+namespace
+{
+
+std::vector<std::pair<uint32_t, uint32_t>>
+TopRawPairs(const TrafficMatrix& matrix, uint32_t k)
+{
+    std::vector<std::tuple<uint32_t, uint32_t, double>> scores;
+    for (uint32_t i = 0; i < matrix.GetPodCount(); ++i)
+    {
+        for (uint32_t j = i + 1; j < matrix.GetPodCount(); ++j)
+        {
+            scores.emplace_back(i, j, static_cast<double>(matrix.GetBytes(i, j) +
+                                                          matrix.GetBytes(j, i)));
+        }
+    }
+    std::sort(scores.begin(), scores.end(), [](const auto& left, const auto& right) {
+        if (std::get<2>(left) != std::get<2>(right))
+        {
+            return std::get<2>(left) > std::get<2>(right);
+        }
+        return std::tie(std::get<0>(left), std::get<1>(left)) <
+               std::tie(std::get<0>(right), std::get<1>(right));
+    });
+    std::vector<std::pair<uint32_t, uint32_t>> pairs;
+    for (const auto& score : scores)
+    {
+        if (pairs.size() >= k)
+        {
+            break;
+        }
+        pairs.emplace_back(std::get<0>(score), std::get<1>(score));
+    }
+    return pairs;
+}
+
+std::vector<std::pair<uint32_t, uint32_t>>
+TopMatrixPairs(const DenseMatrix& matrix, uint32_t k)
+{
+    std::vector<std::tuple<uint32_t, uint32_t, double>> scores;
+    for (uint32_t i = 0; i < matrix.GetSize(); ++i)
+    {
+        for (uint32_t j = i + 1; j < matrix.GetSize(); ++j)
+        {
+            scores.emplace_back(i, j, matrix.Get(i, j));
+        }
+    }
+    std::sort(scores.begin(), scores.end(), [](const auto& left, const auto& right) {
+        if (std::get<2>(left) != std::get<2>(right))
+        {
+            return std::get<2>(left) > std::get<2>(right);
+        }
+        return std::tie(std::get<0>(left), std::get<1>(left)) <
+               std::tie(std::get<0>(right), std::get<1>(right));
+    });
+    std::vector<std::pair<uint32_t, uint32_t>> pairs;
+    for (const auto& score : scores)
+    {
+        if (std::get<2>(score) <= 0.0 || pairs.size() >= k)
+        {
+            break;
+        }
+        pairs.emplace_back(std::get<0>(score), std::get<1>(score));
+    }
+    return pairs;
+}
+
+uint32_t
+Overlap(const std::vector<std::pair<uint32_t, uint32_t>>& left,
+        const std::vector<std::pair<uint32_t, uint32_t>>& right)
+{
+    std::set<std::pair<uint32_t, uint32_t>> leftSet(left.begin(), left.end());
+    uint32_t count = 0;
+    for (const auto& pair : right)
+    {
+        if (leftSet.find(pair) != leftSet.end())
+        {
+            count++;
+        }
+    }
+    return count;
+}
+
+} // namespace
 
 class SmtraAiTrafficModelsTestCase : public TestCase
 {
@@ -77,6 +167,46 @@ class SmtraAiTrafficModelsTestCase : public TestCase
         NS_TEST_ASSERT_MSG_GT(activeSupport,
                               16,
                               "skew active support should exceed the main structure");
+
+        TrafficMatrix decoy = BuildAiTrainingTrafficMatrix("ai-structural-decoy",
+                                                           0.2,
+                                                           serverAccessBps,
+                                                           Seconds(0.0),
+                                                           Seconds(0.05),
+                                                           8,
+                                                           16);
+        uint32_t decoyActiveSupport = 0;
+        for (uint32_t i = 0; i < 8; ++i)
+        {
+            for (uint32_t j = 0; j < 8; ++j)
+            {
+                if (i == j)
+                {
+                    continue;
+                }
+                NS_TEST_ASSERT_MSG_GT(decoy.GetBytes(i, j), 0, "decoy pair should be active");
+                NS_TEST_ASSERT_MSG_EQ(decoy.GetBytes(i, j),
+                                      decoy.GetBytes(j, i),
+                                      "decoy matrix must be symmetric");
+                decoyActiveSupport++;
+            }
+        }
+        NS_TEST_ASSERT_MSG_EQ(decoyActiveSupport,
+                              56,
+                              "decoy should activate every directed inter-pod pair");
+        SmtraParameters structuralParameters;
+        structuralParameters.eta = 1.0;
+        structuralParameters.alpha = 0.5;
+        const SmtraStructuralState decoyStructural =
+            SmtraController().BuildStructuralState(decoy, structuralParameters);
+        const auto topRaw = TopRawPairs(decoy, 8);
+        const auto topS = TopMatrixPairs(decoyStructural.S, 8);
+        const auto topPsi = TopMatrixPairs(decoyStructural.Psi, 8);
+    NS_TEST_ASSERT_MSG_EQ(topRaw != topS, true, "decoy raw top pairs should conflict with S");
+    NS_TEST_ASSERT_MSG_EQ(topRaw != topPsi, true, "decoy raw top pairs should conflict with Psi");
+        NS_TEST_ASSERT_MSG_EQ(Overlap(topRaw, topPsi) <= 4,
+                              true,
+                              "decoy raw/Psi top-K overlap should be at most 4");
 
         TrafficMatrix tiny(8);
         tiny.SetBytes(0, 1, 100);

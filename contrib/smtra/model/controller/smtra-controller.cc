@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <sstream>
+#include <stdexcept>
 #include <tuple>
 
 namespace ns3
@@ -987,6 +988,38 @@ BuildTrafficGreedyBaselineState(const TrafficMatrix& observedT,
     return state;
 }
 
+std::vector<std::pair<uint32_t, uint32_t>>
+BuildRoundRobinPairOrder(uint32_t podCount)
+{
+    if (podCount < 2 || podCount % 2 != 0)
+    {
+        throw std::runtime_error("round-robin pair order requires an even pod count");
+    }
+
+    std::vector<uint32_t> pods(podCount);
+    for (uint32_t pod = 0; pod < podCount; ++pod)
+    {
+        pods[pod] = pod;
+    }
+
+    std::vector<std::pair<uint32_t, uint32_t>> order;
+    order.reserve(podCount * (podCount - 1) / 2);
+    for (uint32_t round = 0; round < podCount - 1; ++round)
+    {
+        for (uint32_t index = 0; index < podCount / 2; ++index)
+        {
+            order.push_back(NormalizePair(pods[index], pods[podCount - 1 - index]));
+        }
+        const uint32_t moved = pods.back();
+        for (uint32_t index = podCount - 1; index > 1; --index)
+        {
+            pods[index] = pods[index - 1];
+        }
+        pods[1] = moved;
+    }
+    return order;
+}
+
 SmtraTopologyRouteState
 BuildTrafficFairBaselineState(const TrafficMatrix& observedT,
                               const SmtraParameters& parameters)
@@ -1004,7 +1037,16 @@ BuildTrafficFairBaselineState(const TrafficMatrix& observedT,
         uint32_t b = 0;
         double demandBytes = 0.0;
         double allocatedBytes = 0.0;
+        uint32_t orderIndex = 0;
     };
+    const std::vector<std::pair<uint32_t, uint32_t>> pairOrder =
+        BuildRoundRobinPairOrder(podCount);
+    std::map<std::pair<uint32_t, uint32_t>, uint32_t> orderIndexByPair;
+    for (uint32_t index = 0; index < pairOrder.size(); ++index)
+    {
+        orderIndexByPair[pairOrder[index]] = index;
+    }
+
     std::vector<FairDemand> demands;
     for (uint32_t i = 0; i < podCount; ++i)
     {
@@ -1014,21 +1056,36 @@ BuildTrafficFairBaselineState(const TrafficMatrix& observedT,
                 static_cast<double>(observedT.GetBytes(i, j) + observedT.GetBytes(j, i));
             if (demand > 0.0)
             {
-                demands.push_back({i, j, demand, 0.0});
+                const auto orderMatch = orderIndexByPair.find({i, j});
+                if (orderMatch == orderIndexByPair.end())
+                {
+                    throw std::runtime_error("traffic-fair pair missing from round-robin order");
+                }
+                demands.push_back({i, j, demand, 0.0, orderMatch->second});
             }
         }
     }
 
     const double circuitCapacityBytes = WindowCapacityBytes(parameters);
     std::vector<uint32_t> podDegree(podCount, 0);
+    uint32_t cursor = 0;
+    constexpr double kFairEpsilon = 1e-12;
     while (true)
     {
-        uint32_t bestIndex = std::numeric_limits<uint32_t>::max();
-        uint32_t bestMemsId = std::numeric_limits<uint32_t>::max();
-        double bestRatio = std::numeric_limits<double>::infinity();
+        double minRatio = std::numeric_limits<double>::infinity();
+        struct Candidate
+        {
+            uint32_t demandIndex = 0;
+            uint32_t memsId = 0;
+        };
+        std::vector<Candidate> candidates;
         for (uint32_t index = 0; index < demands.size(); ++index)
         {
             const auto& demand = demands[index];
+            if (demand.allocatedBytes + kFairEpsilon >= demand.demandBytes)
+            {
+                continue;
+            }
             if (podDegree[demand.a] >= parameters.podPortLimitB ||
                 podDegree[demand.b] >= parameters.podPortLimitB)
             {
@@ -1050,36 +1107,36 @@ BuildTrafficFairBaselineState(const TrafficMatrix& observedT,
             }
 
             const double ratio = demand.allocatedBytes / demand.demandBytes;
-            bool better = false;
-            if (bestIndex == std::numeric_limits<uint32_t>::max() || ratio < bestRatio)
+            if (ratio + kFairEpsilon < minRatio)
             {
-                better = true;
+                minRatio = ratio;
+                candidates.clear();
             }
-            else if (ratio == bestRatio)
+            if (std::abs(ratio - minRatio) <= kFairEpsilon)
             {
-                const auto& best = demands[bestIndex];
-                if (demand.demandBytes > best.demandBytes)
-                {
-                    better = true;
-                }
-                else if (demand.demandBytes == best.demandBytes &&
-                         std::tie(demand.a, demand.b) < std::tie(best.a, best.b))
-                {
-                    better = true;
-                }
-            }
-
-            if (better)
-            {
-                bestIndex = index;
-                bestMemsId = candidateMemsId;
-                bestRatio = ratio;
+                candidates.push_back({index, candidateMemsId});
             }
         }
 
-        if (bestIndex == std::numeric_limits<uint32_t>::max())
+        if (candidates.empty())
         {
             break;
+        }
+
+        uint32_t bestIndex = std::numeric_limits<uint32_t>::max();
+        uint32_t bestMemsId = std::numeric_limits<uint32_t>::max();
+        uint32_t bestDistance = std::numeric_limits<uint32_t>::max();
+        for (const auto& candidate : candidates)
+        {
+            const uint32_t orderIndex = demands[candidate.demandIndex].orderIndex;
+            const uint32_t distance =
+                orderIndex >= cursor ? orderIndex - cursor : pairOrder.size() - cursor + orderIndex;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = candidate.demandIndex;
+                bestMemsId = candidate.memsId;
+            }
         }
 
         auto& selected = demands[bestIndex];
@@ -1089,9 +1146,11 @@ BuildTrafficFairBaselineState(const TrafficMatrix& observedT,
         }
         state.C.Set(selected.a, selected.b, state.C.Get(selected.a, selected.b) + 1.0);
         state.C.Set(selected.b, selected.a, state.C.Get(selected.a, selected.b));
+        state.selectionOrder.emplace_back(selected.a, selected.b);
         selected.allocatedBytes += circuitCapacityBytes;
         podDegree[selected.a]++;
         podDegree[selected.b]++;
+        cursor = (selected.orderIndex + 1) % static_cast<uint32_t>(pairOrder.size());
     }
     return state;
 }
