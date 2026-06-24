@@ -218,7 +218,7 @@ fi
 
 if [[ "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
     WORKLOAD_SCALE="0.35"
-    SIMULATION_STOP_TIME="0.8"
+    SIMULATION_STOP_TIME="1.0"
 fi
 
 if [[ "$MODE" == "ai-structural-decoy-strict-fair" || "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
@@ -239,7 +239,7 @@ else
 fi
 if [[ "$MODE" == "ai-structural-decoy-strict-fair" || "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
     if [[ "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
-        OFFERED_LOADS=("0.5" "0.6" "0.7" "0.8")
+        OFFERED_LOADS=("0.6" "0.7" "0.8")
     else
         OFFERED_LOADS=("0.1" "0.2" "0.4" "0.6" "0.8")
     fi
