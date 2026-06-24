@@ -301,7 +301,7 @@ main(int argc, char* argv[])
     cmd.AddValue("decoyLowActivity", "ai-structural-decoy low pod activity", decoyLowActivity);
     cmd.AddValue(
         "strategy",
-        "Routing strategy: e-only, static-ocs, traffic-greedy, traffic-fair, v8, v8-shortest, v8-carrier",
+        "Routing strategy: e-only, static-ocs, traffic-greedy, traffic-fair, v8, v8-shortest",
         strategy);
     cmd.AddValue("offeredLoad", "Normalized server offered load", offeredLoad);
     cmd.AddValue("workloadScale", "Scale factor applied to offered bytes for NS-3 flow generation", workloadScale);
@@ -524,21 +524,6 @@ main(int argc, char* argv[])
         decisions = pathInstaller.SelectShortestOcs(flows, deployedState, nodeIndex);
         pathInstaller.Install(flows, decisions, nodeIndex);
     }
-    else if (strategy == "v8-carrier")
-    {
-        SmtraTopologyRouteState empty;
-        empty.C = DenseMatrix(config.GetNumTors());
-        empty.R = DenseMatrix(config.GetNumTors());
-        empty.A = DenseMatrix(config.GetNumTors());
-        empty.ocsPlane = OcsPlane(config.GetNumTors(),
-                                  parameters.memsCount,
-                                  parameters.circuitCapacityBps);
-        const SmtraControlResult smtra =
-            SmtraController().RunCarrierAware(observeMatrix, empty, parameters);
-        deployedState = smtra.deployedState;
-        decisions = pathInstaller.SelectShortestOcs(flows, deployedState, nodeIndex);
-        pathInstaller.Install(flows, decisions, nodeIndex);
-    }
     else
     {
         throw std::runtime_error("unsupported SMTRA strategy: " + strategy);
@@ -615,12 +600,7 @@ main(int argc, char* argv[])
     const std::string trafficFairSelectionOrderText =
         strategy == "traffic-fair" ? FormatPairs(deployedState.selectionOrder) : "";
     const std::string v8EdgesText =
-        (strategy == "v8" || strategy == "v8-shortest" || strategy == "v8-carrier")
-            ? activeOcsEdgesText
-            : "";
-    const CarrierMetrics carrierMetrics =
-        SmtraController().ComputeCarrierMetrics(observeMatrix, deployedState.ocsPlane);
-
+        (strategy == "v8" || strategy == "v8-shortest") ? activeOcsEdgesText : "";
     auto completedCallbacks = std::make_shared<uint32_t>(0);
     auto completionCallback = [completedCallbacks, installableFlows](uint32_t) {
         (*completedCallbacks)++;
@@ -694,14 +674,6 @@ main(int argc, char* argv[])
               << ", v8Edges=" << v8EdgesText
               << ", edgeOverlapWithTopRaw=" << edgeOverlapWithTopRaw
               << ", edgeOverlapWithTopPsi=" << edgeOverlapWithTopPsi
-              << ", carrierPositivePairCount=" << carrierMetrics.positivePairCount
-              << ", carrierReachablePairCount=" << carrierMetrics.reachablePairCount
-              << ", carrierUnreachableBytes=" << carrierMetrics.unreachableBytes
-              << ", carrierUnreachablePairs=" << carrierMetrics.unreachablePairs
-              << ", carrierWeightedByteHop=" << carrierMetrics.weightedByteHop
-              << ", carrierWeightedAvgHop=" << carrierMetrics.weightedAvgHop
-              << ", carrierMaxHop=" << carrierMetrics.maxHop
-              << ", carrierGraphDiameter=" << carrierMetrics.graphDiameter
               << ", oneHopPathFlows=" << oneHopPathFlows
               << ", twoHopPathFlows=" << twoHopPathFlows
               << ", multiHopPathFlows=" << multiHopPathFlows

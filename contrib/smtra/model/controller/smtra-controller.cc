@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
-#include <queue>
 #include <sstream>
 #include <stdexcept>
 #include <tuple>
@@ -87,121 +86,6 @@ ComputeTotalPathLoad(const SmtraTopologyRouteState& state)
         total += entry.second.occupiedBytes * static_cast<double>(entry.second.links.size());
     }
     return total;
-}
-
-std::vector<std::vector<uint32_t>>
-BuildOcsAdjacency(const OcsPlane& plane)
-{
-    std::vector<std::vector<uint32_t>> adjacency(plane.GetPodCount());
-    for (const auto& circuit : plane.GetActiveCircuits())
-    {
-        adjacency[circuit.podA].push_back(circuit.podB);
-        adjacency[circuit.podB].push_back(circuit.podA);
-    }
-    for (auto& neighbors : adjacency)
-    {
-        std::sort(neighbors.begin(), neighbors.end());
-        neighbors.erase(std::unique(neighbors.begin(), neighbors.end()), neighbors.end());
-    }
-    return adjacency;
-}
-
-uint32_t
-ShortestOcsHop(const std::vector<std::vector<uint32_t>>& adjacency, uint32_t source, uint32_t target)
-{
-    if (source == target)
-    {
-        return 0;
-    }
-    std::vector<uint32_t> distance(adjacency.size(), std::numeric_limits<uint32_t>::max());
-    std::queue<uint32_t> queue;
-    distance[source] = 0;
-    queue.push(source);
-    while (!queue.empty())
-    {
-        const uint32_t current = queue.front();
-        queue.pop();
-        for (const uint32_t next : adjacency[current])
-        {
-            if (distance[next] != std::numeric_limits<uint32_t>::max())
-            {
-                continue;
-            }
-            distance[next] = distance[current] + 1;
-            if (next == target)
-            {
-                return distance[next];
-            }
-            queue.push(next);
-        }
-    }
-    return std::numeric_limits<uint32_t>::max();
-}
-
-bool
-IsBetterCarrierMetrics(const CarrierMetrics& candidate,
-                       const CarrierMetrics& best,
-                       double eps)
-{
-    if (candidate.unreachableBytes + eps < best.unreachableBytes)
-    {
-        return true;
-    }
-    if (candidate.unreachableBytes > best.unreachableBytes + eps)
-    {
-        return false;
-    }
-    if (candidate.unreachablePairs < best.unreachablePairs)
-    {
-        return true;
-    }
-    if (candidate.unreachablePairs > best.unreachablePairs)
-    {
-        return false;
-    }
-    if (candidate.weightedAvgHop + eps < best.weightedAvgHop)
-    {
-        return true;
-    }
-    if (candidate.weightedAvgHop > best.weightedAvgHop + eps)
-    {
-        return false;
-    }
-    if (candidate.maxHop < best.maxHop)
-    {
-        return true;
-    }
-    if (candidate.maxHop > best.maxHop)
-    {
-        return false;
-    }
-    return candidate.graphDiameter < best.graphDiameter;
-}
-
-struct CarrierTopologyCandidate
-{
-    uint32_t memsId = 0;
-    uint32_t podA = 0;
-    uint32_t podB = 0;
-    SmtraTopologyRouteState state;
-    CarrierMetrics metrics;
-};
-
-bool
-IsBetterCarrierCandidate(const CarrierTopologyCandidate& candidate,
-                         const CarrierTopologyCandidate& best,
-                         double eps)
-{
-    if (IsBetterCarrierMetrics(candidate.metrics, best.metrics, eps))
-    {
-        return true;
-    }
-    if (IsBetterCarrierMetrics(best.metrics, candidate.metrics, eps))
-    {
-        return false;
-    }
-    return std::tie(candidate.memsId, candidate.podA, candidate.podB) <
-           std::tie(best.memsId, best.podA, best.podB);
 }
 
 struct TaaTopologyCandidate
@@ -897,6 +781,12 @@ SmtraController::RunTaa(const SmtraStructuralState& structural,
     std::vector<uint32_t> podDegree(size, 0);
     while (true)
     {
+        if (std::all_of(podDegree.begin(),
+                        podDegree.end(),
+                        [&](uint32_t degree) { return degree >= parameters.podPortLimitB; }))
+        {
+            break;
+        }
         constexpr double kParetoEpsilon = 1e-12;
         std::vector<TaaTopologyCandidate> candidates;
         for (uint32_t memsId = 0; memsId < parameters.memsCount; ++memsId)
@@ -919,10 +809,6 @@ SmtraController::RunTaa(const SmtraStructuralState& structural,
                     trialPlane.Activate(i, j, memsId);
                     SmtraTopologyRouteState trial = RunRaa(trialC, trialPlane, structural, parameters);
                     const double improvement = current.smd - trial.smd;
-                    if (improvement <= kParetoEpsilon)
-                    {
-                        continue;
-                    }
                     candidates.push_back({memsId, i, j, trial, improvement, ComputeTotalPathLoad(trial)});
                 }
             }
@@ -968,136 +854,6 @@ SmtraController::RunTaa(const SmtraStructuralState& structural,
     return current;
 }
 
-CarrierMetrics
-SmtraController::ComputeCarrierMetrics(const TrafficMatrix& observedT,
-                                       const OcsPlane& ocsPlane) const
-{
-    CarrierMetrics metrics;
-    const uint32_t size = observedT.GetPodCount();
-    const auto adjacency = BuildOcsAdjacency(ocsPlane);
-    double reachableBytes = 0.0;
-
-    for (uint32_t i = 0; i < size; ++i)
-    {
-        for (uint32_t j = i + 1; j < size; ++j)
-        {
-            const double demand = static_cast<double>(observedT.GetBytes(i, j) +
-                                                      observedT.GetBytes(j, i));
-            if (demand <= 0.0)
-            {
-                continue;
-            }
-            metrics.positivePairCount++;
-            const uint32_t hop = ShortestOcsHop(adjacency, i, j);
-            if (hop == std::numeric_limits<uint32_t>::max())
-            {
-                metrics.unreachableBytes += demand;
-                metrics.unreachablePairs++;
-                continue;
-            }
-            metrics.reachablePairCount++;
-            reachableBytes += demand;
-            metrics.weightedByteHop += demand * static_cast<double>(hop);
-            metrics.maxHop = std::max(metrics.maxHop, hop);
-        }
-    }
-    metrics.weightedAvgHop = reachableBytes == 0.0 ? 0.0 : metrics.weightedByteHop / reachableBytes;
-
-    for (uint32_t i = 0; i < size; ++i)
-    {
-        for (uint32_t j = i + 1; j < size; ++j)
-        {
-            const uint32_t hop = ShortestOcsHop(adjacency, i, j);
-            if (hop != std::numeric_limits<uint32_t>::max())
-            {
-                metrics.graphDiameter = std::max(metrics.graphDiameter, hop);
-            }
-        }
-    }
-    return metrics;
-}
-
-SmtraTopologyRouteState
-SmtraController::RunTaaCarrierAware(const SmtraStructuralState& structural,
-                                    const TrafficMatrix& observedT,
-                                    const SmtraParameters& parameters) const
-{
-    constexpr double kCarrierEpsilon = 1e-12;
-    SmtraTopologyRouteState current = RunTaa(structural, parameters);
-    const uint32_t size = structural.Psi.GetSize();
-
-    std::vector<uint32_t> podDegree(size, 0);
-    for (const auto& circuit : current.ocsPlane.GetActiveCircuits())
-    {
-        podDegree[circuit.podA]++;
-        podDegree[circuit.podB]++;
-    }
-
-    while (true)
-    {
-        const CarrierMetrics currentMetrics = ComputeCarrierMetrics(observedT, current.ocsPlane);
-        std::vector<CarrierTopologyCandidate> candidates;
-        for (uint32_t memsId = 0; memsId < parameters.memsCount; ++memsId)
-        {
-            for (uint32_t i = 0; i < size; ++i)
-            {
-                for (uint32_t j = i + 1; j < size; ++j)
-                {
-                    if (podDegree[i] >= parameters.podPortLimitB ||
-                        podDegree[j] >= parameters.podPortLimitB ||
-                        !current.ocsPlane.CanActivate(i, j, memsId))
-                    {
-                        continue;
-                    }
-
-                    DenseMatrix trialC = current.C;
-                    trialC.Set(i, j, trialC.Get(i, j) + 1.0);
-                    trialC.Set(j, i, trialC.Get(i, j));
-                    OcsPlane trialPlane = current.ocsPlane;
-                    trialPlane.Activate(i, j, memsId);
-                    SmtraTopologyRouteState trial =
-                        RunRaa(trialC, trialPlane, structural, parameters);
-                    if (trial.smd > current.smd + kCarrierEpsilon)
-                    {
-                        continue;
-                    }
-
-                    CarrierMetrics trialMetrics = ComputeCarrierMetrics(observedT, trial.ocsPlane);
-                    if (!IsBetterCarrierMetrics(trialMetrics, currentMetrics, kCarrierEpsilon))
-                    {
-                        continue;
-                    }
-                    candidates.push_back({memsId, i, j, trial, trialMetrics});
-                }
-            }
-        }
-
-        if (candidates.empty())
-        {
-            break;
-        }
-
-        CarrierTopologyCandidate best;
-        best.metrics.unreachableBytes = std::numeric_limits<double>::infinity();
-        best.metrics.unreachablePairs = std::numeric_limits<uint32_t>::max();
-        best.metrics.weightedAvgHop = std::numeric_limits<double>::infinity();
-        best.metrics.maxHop = std::numeric_limits<uint32_t>::max();
-        best.metrics.graphDiameter = std::numeric_limits<uint32_t>::max();
-        for (const auto& candidate : candidates)
-        {
-            if (IsBetterCarrierCandidate(candidate, best, kCarrierEpsilon))
-            {
-                best = candidate;
-            }
-        }
-
-        current = best.state;
-        podDegree[best.podA]++;
-        podDegree[best.podB]++;
-    }
-    return current;
-}
-
 SmtraControlResult
 SmtraController::Run(const TrafficMatrix& observedT,
                      const SmtraTopologyRouteState& currentState,
@@ -1115,28 +871,6 @@ SmtraController::Run(const TrafficMatrix& observedT,
         return result;
     }
     result.deployedState = RunTaa(result.structural, parameters);
-    result.smdAfter = result.deployedState.smd;
-    result.updated = true;
-    return result;
-}
-
-SmtraControlResult
-SmtraController::RunCarrierAware(const TrafficMatrix& observedT,
-                                 const SmtraTopologyRouteState& currentState,
-                                 const SmtraParameters& parameters) const
-{
-    SmtraControlResult result;
-    result.structural = BuildStructuralState(observedT, parameters);
-    result.previousState = currentState;
-    result.smdBefore = ComputeSmd(result.previousState, result.structural, parameters);
-    if (result.smdBefore <= parameters.theta)
-    {
-        result.deployedState = result.previousState;
-        result.smdAfter = result.smdBefore;
-        result.updated = false;
-        return result;
-    }
-    result.deployedState = RunTaaCarrierAware(result.structural, observedT, parameters);
     result.smdAfter = result.deployedState.smd;
     result.updated = true;
     return result;

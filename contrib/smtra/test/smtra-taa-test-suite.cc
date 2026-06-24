@@ -9,7 +9,7 @@ class SmtraTaaTestCase : public TestCase
 {
   public:
     SmtraTaaTestCase()
-        : TestCase("SMTRA TAA respects ports, MEMS matching, and improves SMD")
+        : TestCase("SMTRA TAA saturates feasible pod ports and respects MEMS matching")
     {
     }
 
@@ -40,10 +40,26 @@ class SmtraTaaTestCase : public TestCase
         controller.ComputeSmd(empty, structural, parameters);
 
         const SmtraTopologyRouteState allocated = controller.RunTaa(structural, parameters);
-        NS_TEST_ASSERT_MSG_GT(allocated.ocsPlane.GetActiveCircuitCount(),
-                              0,
-                              "TAA selected no circuits");
-        NS_TEST_ASSERT_MSG_EQ(allocated.smd <= empty.smd, true, "TAA did not improve SMD");
+        const uint32_t expectedCircuits =
+            structural.Psi.GetSize() * parameters.podPortLimitB / 2;
+        NS_TEST_ASSERT_MSG_EQ(allocated.ocsPlane.GetActiveCircuitCount(),
+                              expectedCircuits,
+                              "TAA did not use the feasible pod port budget");
+        std::vector<uint32_t> podDegree(structural.Psi.GetSize(), 0);
+        for (const auto& circuit : allocated.ocsPlane.GetActiveCircuits())
+        {
+            podDegree[circuit.podA]++;
+            podDegree[circuit.podB]++;
+        }
+        for (uint32_t degree : podDegree)
+        {
+            NS_TEST_ASSERT_MSG_EQ(degree,
+                                  parameters.podPortLimitB,
+                                  "TAA left a feasible pod port unused");
+        }
+        NS_TEST_ASSERT_MSG_EQ(allocated.smd <= empty.smd + parameters.epsilon,
+                              true,
+                              "saturated TAA topology is worse than the empty topology");
 
         SmtraControlResult result;
         result.structural = structural;
