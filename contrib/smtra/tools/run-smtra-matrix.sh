@@ -217,7 +217,7 @@ if [[ "$MODE" == "ai-structural-decoy-strict-fair" || "$MODE" == "ai-structural-
 fi
 
 if [[ "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
-    WORKLOAD_SCALE="0.2"
+    WORKLOAD_SCALE="0.4"
 fi
 
 if [[ "$MODE" == "ai-structural-decoy-strict-fair" || "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
