@@ -90,6 +90,20 @@ CollectWeightedPairs(const TrafficMatrix& matrix)
     return pairs;
 }
 
+double
+PairStartPhase(uint32_t source, uint32_t destination, uint32_t randomSeed)
+{
+    uint64_t value = (static_cast<uint64_t>(randomSeed) << 32) |
+                     (static_cast<uint64_t>(source) << 16) | destination;
+    value += 0x9e3779b97f4a7c15ULL;
+    value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
+    value ^= value >> 31;
+    constexpr uint64_t kPhaseResolution = 1000000000ULL;
+    return (static_cast<double>(value % kPhaseResolution) + 0.5) /
+           static_cast<double>(kPhaseResolution);
+}
+
 } // namespace
 
 TrafficMatrix::TrafficMatrix(uint32_t podCount)
@@ -751,6 +765,7 @@ BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
                                                            static_cast<double>(
                                                                options.messageSizeBytes)))
                                            : options.flowsPerActivePair;
+            const double pairPhase = PairStartPhase(source, destination, options.randomSeed);
             for (uint64_t split = 0; split < flowCount; ++split)
             {
                 uint64_t flowSize = 0;
@@ -771,7 +786,7 @@ BuildSmtraFlowsFromMatrix(const TrafficMatrix& matrix,
                     continue;
                 }
                 const double fraction =
-                    static_cast<double>(split) / static_cast<double>(flowCount);
+                    (static_cast<double>(split) + pairPhase) / static_cast<double>(flowCount);
                 const Time startTime = trafficStartTime + Seconds(duration.GetSeconds() * fraction);
                 const uint32_t splitIndex = static_cast<uint32_t>(split);
                 const uint32_t sourceServer = (flowId + source + splitIndex) % serversPerPod;

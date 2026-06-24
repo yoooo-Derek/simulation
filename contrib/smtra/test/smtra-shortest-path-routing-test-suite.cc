@@ -42,6 +42,12 @@ class SmtraShortestPathRoutingTestCase : public TestCase
         NS_TEST_ASSERT_MSG_EQ(decision.torPath[2], 3, "path destination mismatch");
         NS_TEST_ASSERT_MSG_EQ(decision.memsPath[0], 0, "first MEMS mismatch");
         NS_TEST_ASSERT_MSG_EQ(decision.memsPath[1], 1, "second MEMS mismatch");
+        NS_TEST_ASSERT_MSG_EQ(decision.returnTorPath.size(), 3, "return path hop count mismatch");
+        NS_TEST_ASSERT_MSG_EQ(decision.returnTorPath.front(), 3, "return path source mismatch");
+        NS_TEST_ASSERT_MSG_EQ(decision.returnTorPath.back(), 0, "return path destination mismatch");
+        NS_TEST_ASSERT_MSG_EQ(decision.sourceAddress,
+                              nodeIndex.GetOcsServerIpv4Address(0, 0),
+                              "OCS source alias mismatch");
         Simulator::Destroy();
     }
 };

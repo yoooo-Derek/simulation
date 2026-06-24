@@ -70,6 +70,7 @@ struct FlowGenerationOptions
     std::string mode = "fixed-flows-per-pair";
     uint64_t messageSizeBytes = 16384;
     uint32_t flowsPerActivePair = 16;
+    uint32_t randomSeed = 1;
 };
 
 struct AiTrafficModelOptions

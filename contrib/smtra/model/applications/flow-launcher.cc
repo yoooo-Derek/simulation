@@ -1,5 +1,6 @@
 #include "flow-launcher.h"
 
+#include "ns3/address.h"
 #include "ns3/bulk-send-helper.h"
 #include "ns3/inet-socket-address.h"
 #include "ns3/packet-sink-helper.h"
@@ -156,6 +157,11 @@ FlowLauncher::Install(const std::vector<FlowSpec>& flows,
 
         BulkSendHelper sourceHelper("ns3::TcpSocketFactory",
                                     InetSocketAddress(decision.destinationAddress, port));
+        if (decision.admittedToOcs)
+        {
+            sourceHelper.SetAttribute("Local",
+                                      AddressValue(InetSocketAddress(decision.sourceAddress, 0)));
+        }
         sourceHelper.SetAttribute("MaxBytes", UintegerValue(flow.GetSizeBytes()));
         ApplicationContainer sourceApps = sourceHelper.Install(source);
         sourceApps.Start(DelayUntil(flow.GetStartTime()));

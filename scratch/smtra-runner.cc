@@ -428,6 +428,7 @@ main(int argc, char* argv[])
     flowOptions.mode = flowGenerationMode;
     flowOptions.messageSizeBytes = messageSizeBytes;
     flowOptions.flowsPerActivePair = flowsPerActivePair;
+    flowOptions.randomSeed = randomSeed;
     std::vector<FlowSpec> flows = BuildSmtraFlowsFromMatrix(testMatrix,
                                                             testTrafficModel,
                                                             config.GetServersPerTor(),

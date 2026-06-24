@@ -229,6 +229,7 @@ class SmtraAiTrafficModelsTestCase : public TestCase
         FlowGenerationOptions fixedCount;
         fixedCount.mode = "fixed-flows-per-pair";
         fixedCount.flowsPerActivePair = 4;
+        fixedCount.randomSeed = 7;
         std::vector<FlowSpec> pairFlows = BuildSmtraFlowsFromMatrix(tiny,
                                                                     "data-parallel",
                                                                     16,
@@ -243,6 +244,31 @@ class SmtraAiTrafficModelsTestCase : public TestCase
             generatedBytes += flow.GetSizeBytes();
         }
         NS_TEST_ASSERT_MSG_EQ(generatedBytes, 100, "fixed pair bytes mismatch");
+
+        TrafficMatrix staggered(8);
+        staggered.SetBytes(0, 1, 100);
+        staggered.SetBytes(0, 2, 100);
+        const auto staggeredFlows = BuildSmtraFlowsFromMatrix(staggered,
+                                                              "data-parallel",
+                                                              16,
+                                                              fixedCount,
+                                                              Seconds(0.001),
+                                                              Seconds(0.05),
+                                                              serverAccessBps);
+        NS_TEST_ASSERT_MSG_EQ(staggeredFlows.size(), 8, "staggered flow count mismatch");
+        NS_TEST_ASSERT_MSG_NE(staggeredFlows[0].GetStartTime(),
+                              staggeredFlows[4].GetStartTime(),
+                              "active pairs must not start in synchronized waves");
+        const auto repeatedStaggeredFlows = BuildSmtraFlowsFromMatrix(staggered,
+                                                                      "data-parallel",
+                                                                      16,
+                                                                      fixedCount,
+                                                                      Seconds(0.001),
+                                                                      Seconds(0.05),
+                                                                      serverAccessBps);
+        NS_TEST_ASSERT_MSG_EQ(staggeredFlows[0].GetStartTime(),
+                              repeatedStaggeredFlows[0].GetStartTime(),
+                              "pair staggering must be deterministic for a seed");
 
         TrafficMatrix perturbBase(8);
         perturbBase.SetBytes(0, 1, 1000);

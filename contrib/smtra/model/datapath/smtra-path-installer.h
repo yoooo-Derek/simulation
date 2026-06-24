@@ -19,12 +19,15 @@ struct FlowPathDecision
 {
     uint32_t flowId = 0;
     std::string pathType = "unserved";
+    Ipv4Address sourceAddress;
     Ipv4Address destinationAddress;
     bool admittedToOcs = false;
     bool installable = false;
     std::string reason;
     std::vector<uint32_t> torPath;
     std::vector<uint32_t> memsPath;
+    std::vector<uint32_t> returnTorPath;
+    std::vector<uint32_t> returnMemsPath;
     uint32_t sourceTor = 0;
     uint32_t destinationTor = 0;
 };

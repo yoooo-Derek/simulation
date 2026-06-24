@@ -109,16 +109,13 @@ FindShortestActiveOcsPath(const OcsPlane& plane, uint32_t source, uint32_t desti
 
     std::vector<uint32_t> parent(podCount, std::numeric_limits<uint32_t>::max());
     std::queue<uint32_t> frontier;
-    parent[source] = source;
-    frontier.push(source);
+    // A destination-rooted tree gives shared intermediate nodes one stable next hop.
+    parent[destination] = destination;
+    frontier.push(destination);
     while (!frontier.empty())
     {
         const uint32_t node = frontier.front();
         frontier.pop();
-        if (node == destination)
-        {
-            break;
-        }
         for (uint32_t neighbor : adjacency[node])
         {
             if (parent[neighbor] != std::numeric_limits<uint32_t>::max())
@@ -129,18 +126,36 @@ FindShortestActiveOcsPath(const OcsPlane& plane, uint32_t source, uint32_t desti
             frontier.push(neighbor);
         }
     }
-    if (parent[destination] == std::numeric_limits<uint32_t>::max())
+    if (parent[source] == std::numeric_limits<uint32_t>::max())
     {
         return {};
     }
     std::vector<uint32_t> path;
-    for (uint32_t node = destination; node != source; node = parent[node])
+    for (uint32_t node = source; node != destination; node = parent[node])
     {
         path.push_back(node);
     }
-    path.push_back(source);
-    std::reverse(path.begin(), path.end());
+    path.push_back(destination);
     return path;
+}
+
+bool
+PopulateMemsPath(const SmtraTopologyRouteState& state,
+                 const std::vector<uint32_t>& torPath,
+                 std::vector<uint32_t>& memsPath)
+{
+    memsPath.clear();
+    for (uint32_t index = 1; index < torPath.size(); ++index)
+    {
+        const uint32_t memsId = PickMemsForPair(state, torPath[index - 1], torPath[index]);
+        if (memsId == std::numeric_limits<uint32_t>::max())
+        {
+            memsPath.clear();
+            return false;
+        }
+        memsPath.push_back(memsId);
+    }
+    return true;
 }
 
 } // namespace
@@ -168,6 +183,8 @@ SmtraPathInstaller::Select(const FlowSpec& flow,
     decision.flowId = flow.GetFlowId();
     decision.sourceTor = flow.GetSourceTorId();
     decision.destinationTor = flow.GetDestinationTorId();
+    decision.sourceAddress =
+        nodeIndex.GetOcsServerIpv4Address(flow.GetSourceTorId(), flow.GetSourceServerId());
     decision.destinationAddress =
         nodeIndex.GetOcsServerIpv4Address(flow.GetDestinationTorId(),
                                           flow.GetDestinationServerId());
@@ -230,6 +247,10 @@ SmtraPathInstaller::Select(const FlowSpec& flow,
     decision.admittedToOcs = true;
     decision.installable = true;
     decision.reason = "smtra-route";
+    decision.returnTorPath = decision.torPath;
+    decision.returnMemsPath = decision.memsPath;
+    std::reverse(decision.returnTorPath.begin(), decision.returnTorPath.end());
+    std::reverse(decision.returnMemsPath.begin(), decision.returnMemsPath.end());
     return decision;
 }
 
@@ -253,6 +274,8 @@ SmtraPathInstaller::SelectElectricalOnly(const FlowSpec& flow, const NodeIndex& 
     decision.flowId = flow.GetFlowId();
     decision.sourceTor = flow.GetSourceTorId();
     decision.destinationTor = flow.GetDestinationTorId();
+    decision.sourceAddress =
+        nodeIndex.GetServerIpv4Address(flow.GetSourceTorId(), flow.GetSourceServerId());
     decision.destinationAddress =
         nodeIndex.GetServerIpv4Address(flow.GetDestinationTorId(),
                                        flow.GetDestinationServerId());
@@ -293,6 +316,8 @@ SmtraPathInstaller::SelectShortestOcs(const FlowSpec& flow,
     decision.flowId = flow.GetFlowId();
     decision.sourceTor = flow.GetSourceTorId();
     decision.destinationTor = flow.GetDestinationTorId();
+    decision.sourceAddress =
+        nodeIndex.GetOcsServerIpv4Address(flow.GetSourceTorId(), flow.GetSourceServerId());
     decision.destinationAddress =
         nodeIndex.GetOcsServerIpv4Address(flow.GetDestinationTorId(),
                                           flow.GetDestinationServerId());
@@ -317,16 +342,24 @@ SmtraPathInstaller::SelectShortestOcs(const FlowSpec& flow,
         return decision;
     }
     decision.torPath = path;
-    for (uint32_t index = 1; index < path.size(); ++index)
+    if (!PopulateMemsPath(state, decision.torPath, decision.memsPath))
     {
-        const uint32_t memsId = PickMemsForPair(state, path[index - 1], path[index]);
-        if (memsId == std::numeric_limits<uint32_t>::max())
-        {
-            decision.reason = "missing-shortest-path-circuit";
-            decision.torPath.clear();
-            return decision;
-        }
-        decision.memsPath.push_back(memsId);
+        decision.reason = "missing-shortest-path-circuit";
+        decision.torPath.clear();
+        return decision;
+    }
+    decision.returnTorPath =
+        FindShortestActiveOcsPath(state.ocsPlane,
+                                  flow.GetDestinationTorId(),
+                                  flow.GetSourceTorId());
+    if (decision.returnTorPath.empty() ||
+        !PopulateMemsPath(state, decision.returnTorPath, decision.returnMemsPath))
+    {
+        decision.reason = "missing-shortest-return-path-circuit";
+        decision.torPath.clear();
+        decision.memsPath.clear();
+        decision.returnTorPath.clear();
+        return decision;
     }
     decision.pathType = path.size() == 2 ? "ocs-shortest-direct" : "ocs-shortest-multihop";
     decision.admittedToOcs = true;
@@ -345,80 +378,106 @@ SmtraPathInstaller::Install(const FlowSpec& flow,
         return;
     }
     if (decision.flowId != flow.GetFlowId() || decision.torPath.size() < 2 ||
-        decision.memsPath.size() != decision.torPath.size() - 1)
+        decision.memsPath.size() != decision.torPath.size() - 1 ||
+        decision.returnTorPath.size() < 2 ||
+        decision.returnMemsPath.size() != decision.returnTorPath.size() - 1)
     {
         throw std::runtime_error("SMTRA flow path decision does not match FlowSpec");
     }
 
     Ipv4StaticRoutingHelper staticRoutingHelper;
-    const auto sourceServerLink =
-        nodeIndex.GetServerLinkInfo(flow.GetSourceTorId(), flow.GetSourceServerId());
-    const auto destinationServerLink =
-        nodeIndex.GetServerLinkInfo(flow.GetDestinationTorId(), flow.GetDestinationServerId());
-    const Ipv4Address destinationAddress = decision.destinationAddress;
-    const uint32_t sourceLeafId = nodeIndex.GetServerLeafId(flow.GetSourceServerId());
-    const uint32_t destinationLeafId = nodeIndex.GetServerLeafId(flow.GetDestinationServerId());
+    auto installDirection = [&](uint32_t sourceTor,
+                                uint32_t sourceServer,
+                                uint32_t destinationTor,
+                                uint32_t destinationServer,
+                                Ipv4Address destinationAddress,
+                                const std::vector<uint32_t>& torPath,
+                                const std::vector<uint32_t>& memsPath) {
+        FlowPathDecision directionalDecision = decision;
+        directionalDecision.torPath = torPath;
+        directionalDecision.memsPath = memsPath;
+        const auto sourceServerLink = nodeIndex.GetServerLinkInfo(sourceTor, sourceServer);
+        const auto destinationServerLink =
+            nodeIndex.GetServerLinkInfo(destinationTor, destinationServer);
+        const uint32_t sourceLeafId = nodeIndex.GetServerLeafId(sourceServer);
+        const uint32_t destinationLeafId = nodeIndex.GetServerLeafId(destinationServer);
 
-    Ptr<Ipv4StaticRouting> sourceServerRouting = staticRoutingHelper.GetStaticRouting(
-        nodeIndex.GetServer(flow.GetSourceTorId(), flow.GetSourceServerId())->GetObject<Ipv4>());
-    sourceServerRouting->AddHostRouteTo(destinationAddress,
-                                        sourceServerLink.torAddress,
-                                        sourceServerLink.serverInterfaceIndex);
+        Ptr<Ipv4StaticRouting> sourceServerRouting = staticRoutingHelper.GetStaticRouting(
+            nodeIndex.GetServer(sourceTor, sourceServer)->GetObject<Ipv4>());
+        sourceServerRouting->AddHostRouteTo(destinationAddress,
+                                            sourceServerLink.torAddress,
+                                            sourceServerLink.serverInterfaceIndex);
 
-    const auto firstLink = GetCircuitForHop(decision, nodeIndex, 1);
-    const uint32_t sourceSpineId = GetSpineIdForEndpoint(flow.GetSourceTorId(), firstLink);
-    const auto sourceLeafSpine =
-        nodeIndex.GetLeafSpineLink(flow.GetSourceTorId(), sourceLeafId, sourceSpineId);
-    Ptr<Ipv4StaticRouting> sourceLeafRouting = staticRoutingHelper.GetStaticRouting(
-        nodeIndex.GetLeaf(flow.GetSourceTorId(), sourceLeafId)->GetObject<Ipv4>());
-    sourceLeafRouting->AddHostRouteTo(destinationAddress,
-                                      sourceLeafSpine.spineAddress,
-                                      sourceLeafSpine.leafInterfaceIndex);
+        const auto firstLink = GetCircuitForHop(directionalDecision, nodeIndex, 1);
+        const uint32_t sourceSpineId = GetSpineIdForEndpoint(sourceTor, firstLink);
+        const auto sourceLeafSpine =
+            nodeIndex.GetLeafSpineLink(sourceTor, sourceLeafId, sourceSpineId);
+        Ptr<Ipv4StaticRouting> sourceLeafRouting = staticRoutingHelper.GetStaticRouting(
+            nodeIndex.GetLeaf(sourceTor, sourceLeafId)->GetObject<Ipv4>());
+        sourceLeafRouting->AddHostRouteTo(destinationAddress,
+                                          sourceLeafSpine.spineAddress,
+                                          sourceLeafSpine.leafInterfaceIndex);
 
-    for (uint32_t hopIndex = 1; hopIndex < decision.torPath.size(); ++hopIndex)
-    {
-        const uint32_t currentTor = decision.torPath[hopIndex - 1];
-        const uint32_t nextTor = decision.torPath[hopIndex];
-        const auto link = GetCircuitForHop(decision, nodeIndex, hopIndex);
-        const uint32_t currentSpineId = GetSpineIdForEndpoint(currentTor, link);
-        Ptr<Ipv4StaticRouting> currentSpineRouting = staticRoutingHelper.GetStaticRouting(
-            nodeIndex.GetGroupSpine(currentTor, currentSpineId)->GetObject<Ipv4>());
-        currentSpineRouting->AddHostRouteTo(destinationAddress,
-                                           nextTor == link.torA ? link.torAAddress
-                                                               : link.torBAddress,
-                                           nextTor == link.torA ? link.torBInterfaceIndex
-                                                               : link.torAInterfaceIndex);
-        if (hopIndex + 1 < decision.torPath.size())
+        for (uint32_t hopIndex = 1; hopIndex < torPath.size(); ++hopIndex)
         {
-            const uint32_t intermediateTor = nextTor;
-            const auto nextLink = GetCircuitForHop(decision, nodeIndex, hopIndex + 1);
-            const uint32_t ingressSpineId = GetSpineIdForEndpoint(intermediateTor, link);
-            const uint32_t egressSpineId = GetSpineIdForEndpoint(intermediateTor, nextLink);
-            InstallIntermediateForwarding(staticRoutingHelper,
-                                          nodeIndex,
-                                          destinationAddress,
-                                          intermediateTor,
-                                          ingressSpineId,
-                                          egressSpineId);
+            const uint32_t currentTor = torPath[hopIndex - 1];
+            const uint32_t nextTor = torPath[hopIndex];
+            const auto link = GetCircuitForHop(directionalDecision, nodeIndex, hopIndex);
+            const uint32_t currentSpineId = GetSpineIdForEndpoint(currentTor, link);
+            Ptr<Ipv4StaticRouting> currentSpineRouting = staticRoutingHelper.GetStaticRouting(
+                nodeIndex.GetGroupSpine(currentTor, currentSpineId)->GetObject<Ipv4>());
+            currentSpineRouting->AddHostRouteTo(destinationAddress,
+                                               nextTor == link.torA ? link.torAAddress
+                                                                   : link.torBAddress,
+                                               nextTor == link.torA ? link.torBInterfaceIndex
+                                                                   : link.torAInterfaceIndex);
+            if (hopIndex + 1 < torPath.size())
+            {
+                const uint32_t intermediateTor = nextTor;
+                const auto nextLink =
+                    GetCircuitForHop(directionalDecision, nodeIndex, hopIndex + 1);
+                const uint32_t ingressSpineId = GetSpineIdForEndpoint(intermediateTor, link);
+                const uint32_t egressSpineId = GetSpineIdForEndpoint(intermediateTor, nextLink);
+                InstallIntermediateForwarding(staticRoutingHelper,
+                                              nodeIndex,
+                                              destinationAddress,
+                                              intermediateTor,
+                                              ingressSpineId,
+                                              egressSpineId);
+            }
         }
-    }
 
-    const auto lastLink = GetCircuitForHop(decision, nodeIndex, decision.torPath.size() - 1);
-    const uint32_t destinationSpineId = GetSpineIdForEndpoint(flow.GetDestinationTorId(), lastLink);
-    const auto destinationLeafSpine =
-        nodeIndex.GetLeafSpineLink(flow.GetDestinationTorId(),
-                                   destinationLeafId,
-                                   destinationSpineId);
-    Ptr<Ipv4StaticRouting> destinationSpineRouting = staticRoutingHelper.GetStaticRouting(
-        nodeIndex.GetGroupSpine(flow.GetDestinationTorId(), destinationSpineId)->GetObject<Ipv4>());
-    destinationSpineRouting->AddHostRouteTo(destinationAddress,
-                                           destinationLeafSpine.leafAddress,
-                                           destinationLeafSpine.spineInterfaceIndex);
-    Ptr<Ipv4StaticRouting> destinationLeafRouting = staticRoutingHelper.GetStaticRouting(
-        nodeIndex.GetLeaf(flow.GetDestinationTorId(), destinationLeafId)->GetObject<Ipv4>());
-    destinationLeafRouting->AddHostRouteTo(destinationAddress,
-                                          destinationServerLink.serverAddress,
-                                          destinationServerLink.torInterfaceIndex);
+        const auto lastLink =
+            GetCircuitForHop(directionalDecision, nodeIndex, torPath.size() - 1);
+        const uint32_t destinationSpineId = GetSpineIdForEndpoint(destinationTor, lastLink);
+        const auto destinationLeafSpine =
+            nodeIndex.GetLeafSpineLink(destinationTor, destinationLeafId, destinationSpineId);
+        Ptr<Ipv4StaticRouting> destinationSpineRouting = staticRoutingHelper.GetStaticRouting(
+            nodeIndex.GetGroupSpine(destinationTor, destinationSpineId)->GetObject<Ipv4>());
+        destinationSpineRouting->AddHostRouteTo(destinationAddress,
+                                               destinationLeafSpine.leafAddress,
+                                               destinationLeafSpine.spineInterfaceIndex);
+        Ptr<Ipv4StaticRouting> destinationLeafRouting = staticRoutingHelper.GetStaticRouting(
+            nodeIndex.GetLeaf(destinationTor, destinationLeafId)->GetObject<Ipv4>());
+        destinationLeafRouting->AddHostRouteTo(destinationAddress,
+                                              destinationServerLink.serverAddress,
+                                              destinationServerLink.torInterfaceIndex);
+    };
+
+    installDirection(flow.GetSourceTorId(),
+                     flow.GetSourceServerId(),
+                     flow.GetDestinationTorId(),
+                     flow.GetDestinationServerId(),
+                     decision.destinationAddress,
+                     decision.torPath,
+                     decision.memsPath);
+    installDirection(flow.GetDestinationTorId(),
+                     flow.GetDestinationServerId(),
+                     flow.GetSourceTorId(),
+                     flow.GetSourceServerId(),
+                     decision.sourceAddress,
+                     decision.returnTorPath,
+                     decision.returnMemsPath);
 }
 
 void
