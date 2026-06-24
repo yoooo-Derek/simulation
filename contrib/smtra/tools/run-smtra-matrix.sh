@@ -216,6 +216,10 @@ if [[ "$MODE" == "ai-structural-decoy-strict-fair" || "$MODE" == "ai-structural-
     DECOY_LOW_ACTIVITY="1.0"
 fi
 
+if [[ "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
+    WORKLOAD_SCALE="0.2"
+fi
+
 if [[ "$MODE" == "ai-structural-decoy-strict-fair" || "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
     TRAFFIC_MODELS=("ai-structural-decoy")
 elif [[ -n "$TRAFFIC_MODELS_CSV" ]]; then

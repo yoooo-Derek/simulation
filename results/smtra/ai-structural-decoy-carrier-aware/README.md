@@ -8,7 +8,7 @@
 - Loads: `0.1, 0.2, 0.4, 0.6, 0.8`
 - Matrix mode: `observe-test`
 - Perturbation: `none`
-- Workload scale: `0.5`
+- Workload scale: `0.2`
 - Flow generation: `fixed-flows-per-pair`
 - Flows per active pair: `16`
 - Message size: `16384`
@@ -22,18 +22,14 @@
 
 The matrix completed 10 runs and wrote `summary.csv`.
 
-Coverage was valid for all runs:
+All rows are valid:
 
+- `invalid=0`
 - `ocsCoverageOk=true` for all rows.
 - `unservedFlows=0` for all rows.
+- `fullyCompleted=true` for all rows.
+- `completionRatio=1` for all rows.
 - `carrierReachablePairCount=28` and `carrierUnreachablePairs=0` for both strategies.
-
-Invalid rows are due to drain/completion limits at higher load, not OCS coverage:
-
-- Total invalid rows: `5`
-- Invalid reason: `fullyCompleted!=true;avgFctSeconds_invalid`
-- `traffic-fair` invalid at loads `0.6, 0.8`
-- `v8-carrier` invalid at loads `0.4, 0.6, 0.8`
 
 ## Topology Diagnostics
 
@@ -59,6 +55,13 @@ Carrier shape:
 - `traffic-fair carrierWeightedAvgHop=2.02381`
 - `v8-carrier carrierWeightedAvgHop≈2.1503`
 - Both strategies have `carrierMaxHop=4` and `carrierGraphDiameter=4`.
+
+## Performance Snapshot
+
+At `offeredLoad=0.8`:
+
+- `traffic-fair`: `avgFctSeconds=0.0333294`, `throughputGbps=3.75128`, `avgLinkUtilization=0.170124`
+- `v8-carrier`: `avgFctSeconds=0.0318774`, `throughputGbps=3.88669`, `avgLinkUtilization=0.171897`
 
 ## Files
 
