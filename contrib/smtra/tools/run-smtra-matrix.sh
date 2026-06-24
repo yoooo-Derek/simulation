@@ -217,7 +217,8 @@ if [[ "$MODE" == "ai-structural-decoy-strict-fair" || "$MODE" == "ai-structural-
 fi
 
 if [[ "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
-    WORKLOAD_SCALE="0.3"
+    WORKLOAD_SCALE="0.35"
+    SIMULATION_STOP_TIME="0.6"
 fi
 
 if [[ "$MODE" == "ai-structural-decoy-strict-fair" || "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
@@ -237,7 +238,11 @@ else
     STRATEGIES=("e-only" "static-ocs" "traffic-greedy" "v8")
 fi
 if [[ "$MODE" == "ai-structural-decoy-strict-fair" || "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
-    OFFERED_LOADS=("0.1" "0.2" "0.4" "0.6" "0.8")
+    if [[ "$MODE" == "ai-structural-decoy-carrier-aware" ]]; then
+        OFFERED_LOADS=("0.4" "0.6" "0.8")
+    else
+        OFFERED_LOADS=("0.1" "0.2" "0.4" "0.6" "0.8")
+    fi
 elif [[ -n "$OFFERED_LOADS_CSV" ]]; then
     IFS=',' read -r -a OFFERED_LOADS <<<"$OFFERED_LOADS_CSV"
 elif [[ "$MODE" == "pilot" ]]; then
