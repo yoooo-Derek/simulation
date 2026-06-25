@@ -8,11 +8,14 @@
 #include "ns3/smtra-workload.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <limits>
 #include <map>
 #include <memory>
+#include <queue>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -221,6 +224,571 @@ ComputeMatrixAbsoluteDifference(const TrafficMatrix& left, const TrafficMatrix& 
     return total;
 }
 
+double
+GetMaxPsi(const DenseMatrix& psi)
+{
+    double maxPsi = 0.0;
+    for (uint32_t i = 0; i < psi.GetSize(); ++i)
+    {
+        for (uint32_t j = i + 1; j < psi.GetSize(); ++j)
+        {
+            maxPsi = std::max(maxPsi, psi.Get(i, j));
+        }
+    }
+    return maxPsi;
+}
+
+double
+GetNormalizedPsi(const DenseMatrix& psi, uint32_t a, uint32_t b, double maxPsi, double epsilon)
+{
+    if (a == b || maxPsi <= 0.0)
+    {
+        return 0.0;
+    }
+    const auto pair = OcsPlane::NormalizePair(a, b);
+    return psi.Get(pair.first, pair.second) / (maxPsi + epsilon);
+}
+
+struct StructuralMismatchDiagnostics
+{
+    std::string mean = "NA";
+    std::string p95 = "NA";
+    std::string max = "NA";
+    std::string strongMean = "NA";
+    std::string backgroundMean = "NA";
+};
+
+struct StaticPathDiagnostics
+{
+    std::string pathSignatureCountMax = "NA";
+    std::string pathSignatureCountP95 = "NA";
+    std::string pathSignatureCountMean = "NA";
+    std::string uniquePathSignatureCount = "NA";
+    std::string ocsEdgeFlowCountMean = "NA";
+    std::string ocsEdgeFlowCountMax = "NA";
+    std::string ocsEdgeFlowCountP95 = "NA";
+    std::string ocsEdgeFlowCountStd = "NA";
+    std::string ocsEdgeStrongFlowCountMean = "NA";
+    std::string ocsEdgeStrongFlowCountMax = "NA";
+    std::string ocsEdgeBackgroundFlowCountMean = "NA";
+    std::string ocsEdgeBackgroundFlowCountMax = "NA";
+    std::string changedPathFlowCount = "NA";
+    std::string changedPathFlowRatio = "NA";
+    std::string changedStrongPathFlowCount = "NA";
+    std::string changedBackgroundPathFlowCount = "NA";
+    std::string edgeFlowImbalanceDeltaVsShortest = "NA";
+    std::string pathConcentrationDeltaVsShortest = "NA";
+    std::string equalShortestPathCountMean = "NA";
+    std::string equalShortestPathCountMax = "NA";
+    std::string equalShortestPathPairCount = "NA";
+    std::string flowsWithMultipleShortestPaths = "NA";
+    std::string flowsWithMultipleShortestPathsRatio = "NA";
+};
+
+std::string
+FormatOptionalDouble(bool available, double value)
+{
+    if (!available || std::isnan(value) || std::isinf(value))
+    {
+        return "NA";
+    }
+    std::ostringstream out;
+    out << value;
+    return out.str();
+}
+
+double
+Mean(const std::vector<double>& values)
+{
+    if (values.empty())
+    {
+        return 0.0;
+    }
+    double total = 0.0;
+    for (double value : values)
+    {
+        total += value;
+    }
+    return total / static_cast<double>(values.size());
+}
+
+double
+StdDev(const std::vector<double>& values)
+{
+    if (values.empty())
+    {
+        return 0.0;
+    }
+    const double mean = Mean(values);
+    double total = 0.0;
+    for (double value : values)
+    {
+        const double diff = value - mean;
+        total += diff * diff;
+    }
+    return std::sqrt(total / static_cast<double>(values.size()));
+}
+
+double
+Percentile(std::vector<double> values, double p)
+{
+    if (values.empty())
+    {
+        return 0.0;
+    }
+    std::sort(values.begin(), values.end());
+    const double rank = p * static_cast<double>(values.size() - 1);
+    const auto lower = static_cast<uint32_t>(std::floor(rank));
+    const auto upper = static_cast<uint32_t>(std::ceil(rank));
+    if (lower == upper)
+    {
+        return values[lower];
+    }
+    const double fraction = rank - static_cast<double>(lower);
+    return values[lower] * (1.0 - fraction) + values[upper] * fraction;
+}
+
+std::string
+FormatOptionalInteger(bool available, uint64_t value)
+{
+    if (!available)
+    {
+        return "NA";
+    }
+    return std::to_string(value);
+}
+
+std::string
+BuildPathSignature(const std::vector<uint32_t>& path)
+{
+    std::ostringstream out;
+    for (uint32_t index = 0; index < path.size(); ++index)
+    {
+        if (index > 0)
+        {
+            out << "-";
+        }
+        out << path[index];
+    }
+    return out.str();
+}
+
+std::string
+BuildIncompleteFlowDetailsString(const FlowLaunchResult& launch)
+{
+    std::ostringstream out;
+    bool first = true;
+    for (const auto& source : launch.metricSources)
+    {
+        if (source.tracking->completed)
+        {
+            continue;
+        }
+        if (!first)
+        {
+            out << "|";
+        }
+        out << "flow" << source.flow.GetFlowId()
+            << ":src" << source.flow.GetSourceTorId() << "." << source.flow.GetSourceServerId()
+            << ":dst" << source.flow.GetDestinationTorId() << "."
+            << source.flow.GetDestinationServerId()
+            << ":rx" << source.tracking->receivedBytes
+            << ":expected" << source.flow.GetSizeBytes()
+            << ":pathType" << source.path.pathType
+            << ":path" << BuildPathSignature(source.path.torPath);
+        first = false;
+    }
+    return out.str();
+}
+
+std::vector<std::vector<uint32_t>>
+BuildAdjacency(const OcsPlane& plane)
+{
+    std::vector<std::vector<uint32_t>> adjacency(plane.GetPodCount());
+    for (const auto& circuit : plane.GetActiveCircuits())
+    {
+        adjacency[circuit.podA].push_back(circuit.podB);
+        adjacency[circuit.podB].push_back(circuit.podA);
+    }
+    for (auto& neighbors : adjacency)
+    {
+        std::sort(neighbors.begin(), neighbors.end());
+        neighbors.erase(std::unique(neighbors.begin(), neighbors.end()), neighbors.end());
+    }
+    return adjacency;
+}
+
+std::vector<uint32_t>
+BuildHopDistances(const std::vector<std::vector<uint32_t>>& adjacency, uint32_t source)
+{
+    const uint32_t unreachable = std::numeric_limits<uint32_t>::max();
+    std::vector<uint32_t> distances(adjacency.size(), unreachable);
+    std::queue<uint32_t> frontier;
+    distances[source] = 0;
+    frontier.push(source);
+    while (!frontier.empty())
+    {
+        const uint32_t node = frontier.front();
+        frontier.pop();
+        for (uint32_t neighbor : adjacency[node])
+        {
+            if (distances[neighbor] != unreachable)
+            {
+                continue;
+            }
+            distances[neighbor] = distances[node] + 1;
+            frontier.push(neighbor);
+        }
+    }
+    return distances;
+}
+
+uint64_t
+CountEqualShortestPaths(const OcsPlane& plane, uint32_t source, uint32_t destination)
+{
+    const uint32_t unreachable = std::numeric_limits<uint32_t>::max();
+    const auto adjacency = BuildAdjacency(plane);
+    if (source >= adjacency.size() || destination >= adjacency.size())
+    {
+        return 0;
+    }
+    const auto sourceDistances = BuildHopDistances(adjacency, source);
+    const auto destinationDistances = BuildHopDistances(adjacency, destination);
+    const uint32_t shortestDistance = sourceDistances[destination];
+    if (shortestDistance == unreachable)
+    {
+        return 0;
+    }
+
+    uint64_t count = 0;
+    std::vector<uint32_t> current{source};
+    std::function<void(uint32_t)> visit = [&](uint32_t node) {
+        if (node == destination)
+        {
+            count++;
+            return;
+        }
+        for (uint32_t neighbor : adjacency[node])
+        {
+            if (sourceDistances[neighbor] == unreachable ||
+                destinationDistances[neighbor] == unreachable ||
+                sourceDistances[neighbor] != sourceDistances[node] + 1 ||
+                sourceDistances[neighbor] + destinationDistances[neighbor] != shortestDistance)
+            {
+                continue;
+            }
+            current.push_back(neighbor);
+            visit(neighbor);
+            current.pop_back();
+        }
+    };
+    visit(source);
+    return count;
+}
+
+std::vector<double>
+BuildPathSignatureCounts(const std::vector<FlowPathDecision>& decisions)
+{
+    std::map<std::string, uint32_t> counts;
+    for (const auto& decision : decisions)
+    {
+        if (!decision.installable || decision.torPath.empty())
+        {
+            continue;
+        }
+        counts[BuildPathSignature(decision.torPath)]++;
+    }
+    std::vector<double> values;
+    values.reserve(counts.size());
+    for (const auto& [signature, count] : counts)
+    {
+        values.push_back(static_cast<double>(count));
+    }
+    return values;
+}
+
+std::map<std::pair<uint32_t, uint32_t>, double>
+BuildEdgeFlowCounts(const std::vector<FlowPathDecision>& decisions,
+                    const SmtraStructuralState& structural,
+                    const std::vector<std::pair<uint32_t, uint32_t>>& activeOcsEdges,
+                    double epsilon,
+                    const std::string& flowClass)
+{
+    std::map<std::pair<uint32_t, uint32_t>, double> counts;
+    for (const auto& edge : activeOcsEdges)
+    {
+        counts[edge] = 0.0;
+    }
+    for (const auto& decision : decisions)
+    {
+        if (!decision.installable || decision.torPath.size() < 2)
+        {
+            continue;
+        }
+        const auto demandPair = OcsPlane::NormalizePair(decision.sourceTor, decision.destinationTor);
+        const bool strong = structural.Psi.Get(demandPair.first, demandPair.second) > epsilon;
+        if ((flowClass == "strong" && !strong) || (flowClass == "background" && strong))
+        {
+            continue;
+        }
+        for (uint32_t index = 1; index < decision.torPath.size(); ++index)
+        {
+            const auto edge = OcsPlane::NormalizePair(decision.torPath[index - 1],
+                                                     decision.torPath[index]);
+            auto match = counts.find(edge);
+            if (match != counts.end())
+            {
+                match->second += 1.0;
+            }
+        }
+    }
+    return counts;
+}
+
+std::vector<double>
+MapValues(const std::map<std::pair<uint32_t, uint32_t>, double>& values)
+{
+    std::vector<double> result;
+    result.reserve(values.size());
+    for (const auto& [key, value] : values)
+    {
+        result.push_back(value);
+    }
+    return result;
+}
+
+double
+ImbalanceMaxOverMean(const std::vector<double>& values)
+{
+    if (values.empty())
+    {
+        return 0.0;
+    }
+    const double mean = Mean(values);
+    if (mean <= 0.0)
+    {
+        return 0.0;
+    }
+    return *std::max_element(values.begin(), values.end()) / mean;
+}
+
+StructuralMismatchDiagnostics
+BuildStructuralMismatchDiagnostics(const std::vector<FlowPathDecision>& decisions,
+                                   const SmtraStructuralState& structural,
+                                   double epsilon)
+{
+    StructuralMismatchDiagnostics diagnostics;
+    const double maxPsi = GetMaxPsi(structural.Psi);
+    std::vector<double> all;
+    std::vector<double> strong;
+    std::vector<double> background;
+    for (const auto& decision : decisions)
+    {
+        if (!decision.installable || decision.torPath.size() < 2)
+        {
+            continue;
+        }
+        const auto demandPair = OcsPlane::NormalizePair(decision.sourceTor, decision.destinationTor);
+        const double demandPsi = structural.Psi.Get(demandPair.first, demandPair.second);
+        const double demandZ =
+            GetNormalizedPsi(structural.Psi, decision.sourceTor, decision.destinationTor, maxPsi, epsilon);
+        double mismatch = 0.0;
+        for (uint32_t index = 1; index < decision.torPath.size(); ++index)
+        {
+            const double edgeZ = GetNormalizedPsi(structural.Psi,
+                                                 decision.torPath[index - 1],
+                                                 decision.torPath[index],
+                                                 maxPsi,
+                                                 epsilon);
+            mismatch += std::abs(demandZ - edgeZ);
+        }
+        all.push_back(mismatch);
+        if (demandPsi > 0.0)
+        {
+            strong.push_back(mismatch);
+        }
+        else
+        {
+            background.push_back(mismatch);
+        }
+    }
+    diagnostics.mean = FormatOptionalDouble(!all.empty(), Mean(all));
+    diagnostics.p95 = FormatOptionalDouble(!all.empty(), Percentile(all, 0.95));
+    diagnostics.max =
+        FormatOptionalDouble(!all.empty(), *std::max_element(all.begin(), all.end()));
+    diagnostics.strongMean = FormatOptionalDouble(!strong.empty(), Mean(strong));
+    diagnostics.backgroundMean = FormatOptionalDouble(!background.empty(), Mean(background));
+    return diagnostics;
+}
+
+StaticPathDiagnostics
+BuildStaticPathDiagnostics(const std::vector<FlowPathDecision>& decisions,
+                           const std::vector<FlowPathDecision>& shortestDecisions,
+                           const SmtraTopologyRouteState& state,
+                           const SmtraStructuralState& structural,
+                           double epsilon)
+{
+    StaticPathDiagnostics diagnostics;
+    const auto activeOcsEdges = BuildActiveOcsEdges(state.ocsPlane);
+    const auto pathCounts = BuildPathSignatureCounts(decisions);
+    const auto shortestPathCounts = BuildPathSignatureCounts(shortestDecisions);
+    diagnostics.pathSignatureCountMax =
+        FormatOptionalDouble(!pathCounts.empty(), pathCounts.empty() ? 0.0 : *std::max_element(pathCounts.begin(), pathCounts.end()));
+    diagnostics.pathSignatureCountP95 =
+        FormatOptionalDouble(!pathCounts.empty(), Percentile(pathCounts, 0.95));
+    diagnostics.pathSignatureCountMean =
+        FormatOptionalDouble(!pathCounts.empty(), Mean(pathCounts));
+    diagnostics.uniquePathSignatureCount =
+        FormatOptionalInteger(!pathCounts.empty(), pathCounts.size());
+
+    const auto edgeCounts = BuildEdgeFlowCounts(decisions, structural, activeOcsEdges, epsilon, "all");
+    const auto edgeStrongCounts =
+        BuildEdgeFlowCounts(decisions, structural, activeOcsEdges, epsilon, "strong");
+    const auto edgeBackgroundCounts =
+        BuildEdgeFlowCounts(decisions, structural, activeOcsEdges, epsilon, "background");
+    const auto shortestEdgeCounts =
+        BuildEdgeFlowCounts(shortestDecisions, structural, activeOcsEdges, epsilon, "all");
+    const auto edgeValues = MapValues(edgeCounts);
+    const auto edgeStrongValues = MapValues(edgeStrongCounts);
+    const auto edgeBackgroundValues = MapValues(edgeBackgroundCounts);
+    const auto shortestEdgeValues = MapValues(shortestEdgeCounts);
+    diagnostics.ocsEdgeFlowCountMean =
+        FormatOptionalDouble(!edgeValues.empty(), Mean(edgeValues));
+    diagnostics.ocsEdgeFlowCountMax =
+        FormatOptionalDouble(!edgeValues.empty(), edgeValues.empty() ? 0.0 : *std::max_element(edgeValues.begin(), edgeValues.end()));
+    diagnostics.ocsEdgeFlowCountP95 =
+        FormatOptionalDouble(!edgeValues.empty(), Percentile(edgeValues, 0.95));
+    diagnostics.ocsEdgeFlowCountStd =
+        FormatOptionalDouble(!edgeValues.empty(), StdDev(edgeValues));
+    diagnostics.ocsEdgeStrongFlowCountMean =
+        FormatOptionalDouble(!edgeStrongValues.empty(), Mean(edgeStrongValues));
+    diagnostics.ocsEdgeStrongFlowCountMax =
+        FormatOptionalDouble(!edgeStrongValues.empty(), edgeStrongValues.empty() ? 0.0 : *std::max_element(edgeStrongValues.begin(), edgeStrongValues.end()));
+    diagnostics.ocsEdgeBackgroundFlowCountMean =
+        FormatOptionalDouble(!edgeBackgroundValues.empty(), Mean(edgeBackgroundValues));
+    diagnostics.ocsEdgeBackgroundFlowCountMax =
+        FormatOptionalDouble(!edgeBackgroundValues.empty(), edgeBackgroundValues.empty() ? 0.0 : *std::max_element(edgeBackgroundValues.begin(), edgeBackgroundValues.end()));
+
+    uint32_t comparable = 0;
+    uint32_t changed = 0;
+    uint32_t changedStrong = 0;
+    uint32_t changedBackground = 0;
+    const uint32_t count = std::min<uint32_t>(decisions.size(), shortestDecisions.size());
+    for (uint32_t index = 0; index < count; ++index)
+    {
+        const auto& decision = decisions[index];
+        const auto& shortestDecision = shortestDecisions[index];
+        if (!decision.installable || !shortestDecision.installable)
+        {
+            continue;
+        }
+        comparable++;
+        if (decision.torPath == shortestDecision.torPath)
+        {
+            continue;
+        }
+        changed++;
+        const auto demandPair = OcsPlane::NormalizePair(decision.sourceTor, decision.destinationTor);
+        if (structural.Psi.Get(demandPair.first, demandPair.second) > epsilon)
+        {
+            changedStrong++;
+        }
+        else
+        {
+            changedBackground++;
+        }
+    }
+    diagnostics.changedPathFlowCount = FormatOptionalInteger(comparable > 0, changed);
+    diagnostics.changedPathFlowRatio =
+        FormatOptionalDouble(comparable > 0,
+                             comparable == 0 ? 0.0
+                                             : static_cast<double>(changed) /
+                                                   static_cast<double>(comparable));
+    diagnostics.changedStrongPathFlowCount = FormatOptionalInteger(comparable > 0, changedStrong);
+    diagnostics.changedBackgroundPathFlowCount =
+        FormatOptionalInteger(comparable > 0, changedBackground);
+
+    diagnostics.edgeFlowImbalanceDeltaVsShortest =
+        FormatOptionalDouble(!edgeValues.empty() && !shortestEdgeValues.empty(),
+                             ImbalanceMaxOverMean(edgeValues) -
+                                 ImbalanceMaxOverMean(shortestEdgeValues));
+    diagnostics.pathConcentrationDeltaVsShortest =
+        FormatOptionalDouble(!pathCounts.empty() && !shortestPathCounts.empty(),
+                             ImbalanceMaxOverMean(pathCounts) -
+                                 ImbalanceMaxOverMean(shortestPathCounts));
+
+    std::map<std::pair<uint32_t, uint32_t>, uint64_t> pairPathCounts;
+    uint32_t flowPairs = 0;
+    uint32_t flowsWithMultiple = 0;
+    for (const auto& decision : decisions)
+    {
+        if (!decision.installable || decision.sourceTor == decision.destinationTor)
+        {
+            continue;
+        }
+        const auto pair = OcsPlane::NormalizePair(decision.sourceTor, decision.destinationTor);
+        if (pairPathCounts.find(pair) == pairPathCounts.end())
+        {
+            pairPathCounts[pair] = CountEqualShortestPaths(state.ocsPlane, pair.first, pair.second);
+        }
+        flowPairs++;
+        if (pairPathCounts[pair] > 1)
+        {
+            flowsWithMultiple++;
+        }
+    }
+    std::vector<double> equalPathCounts;
+    uint32_t pairCountWithMultiple = 0;
+    for (const auto& [pair, pathCount] : pairPathCounts)
+    {
+        equalPathCounts.push_back(static_cast<double>(pathCount));
+        if (pathCount > 1)
+        {
+            pairCountWithMultiple++;
+        }
+    }
+    diagnostics.equalShortestPathCountMean =
+        FormatOptionalDouble(!equalPathCounts.empty(), Mean(equalPathCounts));
+    diagnostics.equalShortestPathCountMax =
+        FormatOptionalDouble(!equalPathCounts.empty(),
+                             equalPathCounts.empty()
+                                 ? 0.0
+                                 : *std::max_element(equalPathCounts.begin(),
+                                                    equalPathCounts.end()));
+    diagnostics.equalShortestPathPairCount =
+        FormatOptionalInteger(!equalPathCounts.empty(), pairCountWithMultiple);
+    diagnostics.flowsWithMultipleShortestPaths =
+        FormatOptionalInteger(flowPairs > 0, flowsWithMultiple);
+    diagnostics.flowsWithMultipleShortestPathsRatio =
+        FormatOptionalDouble(flowPairs > 0,
+                             flowPairs == 0 ? 0.0
+                                            : static_cast<double>(flowsWithMultiple) /
+                                                  static_cast<double>(flowPairs));
+    return diagnostics;
+}
+
+SmtraStructuralShortestMode
+ParseStructuralShortestMode(const std::string& mode)
+{
+    if (mode == "match-only")
+    {
+        return SmtraStructuralShortestMode::MatchOnly;
+    }
+    if (mode == "match-split")
+    {
+        return SmtraStructuralShortestMode::MatchSplit;
+    }
+    if (mode == "strong-match-background-shortest")
+    {
+        return SmtraStructuralShortestMode::StrongMatchBackgroundShortest;
+    }
+    if (mode == "strong-topk-background-shortest")
+    {
+        return SmtraStructuralShortestMode::StrongTopKBackgroundShortest;
+    }
+    throw std::runtime_error("unsupported structShortestMode: " + mode);
+}
+
 } // namespace
 
 int
@@ -268,6 +836,7 @@ main(int argc, char* argv[])
     uint32_t podPortLimitB = 2;
     uint32_t memsCount = 2;
     uint64_t circuitCapacityBps = kDefaultCircuitCapacityBps;
+    std::string structShortestMode = "strong-topk-background-shortest";
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("matrixMode", "Matrix mode: observe-test", matrixMode);
@@ -301,7 +870,7 @@ main(int argc, char* argv[])
     cmd.AddValue("decoyLowActivity", "ai-structural-decoy low pod activity", decoyLowActivity);
     cmd.AddValue(
         "strategy",
-        "Routing strategy: e-only, static-ocs, traffic-greedy, traffic-fair, v8, v8-shortest",
+        "Routing strategy: e-only, static-ocs, traffic-greedy, traffic-fair, v8, v8-shortest, v8-struct-shortest, v8-structural-shortest, strong-topk-background-shortest",
         strategy);
     cmd.AddValue("offeredLoad", "Normalized server offered load", offeredLoad);
     cmd.AddValue("workloadScale", "Scale factor applied to offered bytes for NS-3 flow generation", workloadScale);
@@ -326,6 +895,9 @@ main(int argc, char* argv[])
     cmd.AddValue("podPortLimitB", "Maximum active optical ports per pod", podPortLimitB);
     cmd.AddValue("memsCount", "Number of MEMS planes", memsCount);
     cmd.AddValue("circuitCapacityBps", "Single MEMS circuit capacity in bps", circuitCapacityBps);
+    cmd.AddValue("structShortestMode",
+                 "v8-structural-shortest mode: match-only, match-split, strong-match-background-shortest, or strong-topk-background-shortest",
+                 structShortestMode);
     cmd.Parse(argc, argv);
 
     if (matrixMode != "observe-test")
@@ -350,6 +922,8 @@ main(int argc, char* argv[])
     const uint64_t serverAccessBps = DataRate(electricalDataRate).GetBitRate();
     const uint64_t resolvedCircuitCapacityBps =
         circuitCapacityBps == 0 ? DataRate(ocsDataRate).GetBitRate() : circuitCapacityBps;
+    const SmtraStructuralShortestMode parsedStructShortestMode =
+        ParseStructuralShortestMode(structShortestMode);
 
     SimulationConfig config;
     config.SetNumTors(8);
@@ -447,8 +1021,9 @@ main(int argc, char* argv[])
     parameters.circuitCapacityBps = resolvedCircuitCapacityBps;
     parameters.observerWindowSeconds = (trafficStopTime - trafficStartTime).GetSeconds();
 
+    SmtraController controller;
     const SmtraStructuralState diagnosticStructural =
-        SmtraController().BuildStructuralState(observeMatrix, parameters);
+        controller.BuildStructuralState(observeMatrix, parameters);
     const uint32_t diagnosticTopK = std::min<uint32_t>(8, observeMatrix.GetPodCount() *
                                                                (observeMatrix.GetPodCount() - 1) /
                                                                2);
@@ -505,23 +1080,30 @@ main(int argc, char* argv[])
         empty.ocsPlane = OcsPlane(config.GetNumTors(),
                                   parameters.memsCount,
                                   parameters.circuitCapacityBps);
-        const SmtraControlResult smtra = SmtraController().Run(observeMatrix, empty, parameters);
+        const SmtraControlResult smtra = controller.Run(observeMatrix, empty, parameters);
         deployedState = smtra.deployedState;
         decisions = pathInstaller.Select(flows, deployedState, nodeIndex);
         pathInstaller.Install(flows, decisions, nodeIndex);
     }
     else if (strategy == "v8-shortest")
     {
-        SmtraTopologyRouteState empty;
-        empty.C = DenseMatrix(config.GetNumTors());
-        empty.R = DenseMatrix(config.GetNumTors());
-        empty.A = DenseMatrix(config.GetNumTors());
-        empty.ocsPlane = OcsPlane(config.GetNumTors(),
-                                  parameters.memsCount,
-                                  parameters.circuitCapacityBps);
-        const SmtraControlResult smtra = SmtraController().Run(observeMatrix, empty, parameters);
-        deployedState = smtra.deployedState;
+        deployedState = controller.RunTopologyOnlyTaa(diagnosticStructural, parameters);
         decisions = pathInstaller.SelectShortestOcs(flows, deployedState, nodeIndex);
+        pathInstaller.Install(flows, decisions, nodeIndex);
+    }
+    else if (strategy == "v8-struct-shortest" || strategy == "v8-structural-shortest" ||
+             strategy == "strong-topk-background-shortest")
+    {
+        deployedState = controller.RunTopologyOnlyTaa(diagnosticStructural, parameters);
+        const SmtraStructuralShortestMode effectiveMode =
+            strategy == "strong-topk-background-shortest"
+                ? SmtraStructuralShortestMode::StrongTopKBackgroundShortest
+                : parsedStructShortestMode;
+        decisions = pathInstaller.SelectStructuralShortestOcs(flows,
+                                                              deployedState,
+                                                              diagnosticStructural,
+                                                              nodeIndex,
+                                                              effectiveMode);
         pathInstaller.Install(flows, decisions, nodeIndex);
     }
     else
@@ -529,17 +1111,30 @@ main(int argc, char* argv[])
         throw std::runtime_error("unsupported SMTRA strategy: " + strategy);
     }
 
+    std::vector<FlowPathDecision> shortestDiagnosticDecisions;
+    if (strategy != "e-only" && !deployedState.ocsPlane.GetActiveCircuits().empty())
+    {
+        shortestDiagnosticDecisions = pathInstaller.SelectShortestOcs(flows, deployedState, nodeIndex);
+    }
+
     LinkUtilizationMonitor linkMonitor;
+    LinkUtilizationMonitor electricalLinkMonitor;
+    LinkUtilizationMonitor ocsLinkMonitor;
     AddPodElectricalDevices(nodeIndex, linkMonitor);
+    AddPodElectricalDevices(nodeIndex, electricalLinkMonitor);
     if (strategy == "e-only")
     {
         AddInterPodElectricalDevices(nodeIndex, linkMonitor);
+        AddInterPodElectricalDevices(nodeIndex, electricalLinkMonitor);
     }
     else
     {
         AddActiveOcsDevices(nodeIndex, deployedState, linkMonitor);
+        AddActiveOcsDevices(nodeIndex, deployedState, ocsLinkMonitor);
     }
     linkMonitor.Enable(trafficStartTime, trafficStopTime);
+    electricalLinkMonitor.Enable(trafficStartTime, trafficStopTime);
+    ocsLinkMonitor.Enable(trafficStartTime, trafficStopTime);
 
     uint32_t installableFlows = 0;
     for (const auto& decision : decisions)
@@ -560,6 +1155,8 @@ main(int argc, char* argv[])
     uint32_t oneHopPathFlows = 0;
     uint32_t twoHopPathFlows = 0;
     uint32_t multiHopPathFlows = 0;
+    uint32_t opticalDirectFlows = 0;
+    uint32_t nonOpticalFlows = 0;
     uint32_t maxPathHopCount = 0;
     uint64_t totalPathHopCount = 0;
     for (const auto& decision : decisions)
@@ -568,6 +1165,16 @@ main(int argc, char* argv[])
         if (!decision.installable)
         {
             continue;
+        }
+        if (decision.pathType == "ocs-shortest-direct" ||
+            decision.pathType == "ocs-struct-shortest-direct" ||
+            decision.pathType == "smtra-direct")
+        {
+            opticalDirectFlows++;
+        }
+        if (!decision.admittedToOcs)
+        {
+            nonOpticalFlows++;
         }
         const uint32_t hopCount = decision.torPath.empty()
                                       ? 0
@@ -591,6 +1198,14 @@ main(int argc, char* argv[])
                                        ? 0.0
                                        : static_cast<double>(totalPathHopCount) /
                                              static_cast<double>(installableFlows);
+    const double opticalDirectRatio = installableFlows == 0
+                                          ? 0.0
+                                          : static_cast<double>(opticalDirectFlows) /
+                                                static_cast<double>(installableFlows);
+    const double nonOpticalTrafficRatio = installableFlows == 0
+                                              ? 0.0
+                                              : static_cast<double>(nonOpticalFlows) /
+                                                    static_cast<double>(installableFlows);
     const auto activeOcsEdges = BuildActiveOcsEdges(deployedState.ocsPlane);
     const uint32_t edgeOverlapWithTopRaw = CountPairOverlap(activeOcsEdges, topRawPairs);
     const uint32_t edgeOverlapWithTopPsi = CountPairOverlap(activeOcsEdges, topPsiPairs);
@@ -600,7 +1215,43 @@ main(int argc, char* argv[])
     const std::string trafficFairSelectionOrderText =
         strategy == "traffic-fair" ? FormatPairs(deployedState.selectionOrder) : "";
     const std::string v8EdgesText =
-        (strategy == "v8" || strategy == "v8-shortest") ? activeOcsEdgesText : "";
+        (strategy == "v8" || strategy == "v8-shortest" || strategy == "v8-struct-shortest" ||
+         strategy == "v8-structural-shortest" || strategy == "strong-topk-background-shortest")
+            ? activeOcsEdgesText
+            : "";
+    const bool hasOpticalTopology = strategy != "e-only";
+    SmtraTopologyDiagnostics topologyDiagnostics;
+    if (hasOpticalTopology)
+    {
+        topologyDiagnostics = controller.ComputeTopologyDiagnostics(deployedState,
+                                                                   diagnosticStructural,
+                                                                   parameters,
+                                                                   diagnosticTopK);
+    }
+    const std::string opticalConnectionCountText =
+        hasOpticalTopology ? std::to_string(topologyDiagnostics.opticalConnectionCount) : "NA";
+    const std::string podPortUseMeanText =
+        FormatOptionalDouble(hasOpticalTopology, topologyDiagnostics.podPortUseMean);
+    const std::string podPortUseMaxText =
+        hasOpticalTopology ? std::to_string(topologyDiagnostics.podPortUseMax) : "NA";
+    const std::string podPortUseMinText =
+        hasOpticalTopology ? std::to_string(topologyDiagnostics.podPortUseMin) : "NA";
+    const std::string topKCoveredPairCountText =
+        hasOpticalTopology ? std::to_string(topologyDiagnostics.topKCoveredPairCount) : "NA";
+    const std::string topCoverageText =
+        FormatOptionalDouble(hasOpticalTopology, topologyDiagnostics.topCoverage);
+    const std::string smdTopText =
+        FormatOptionalDouble(hasOpticalTopology, topologyDiagnostics.smdTop);
+    const std::string directStructuralWeightRatioText =
+        FormatOptionalDouble(hasOpticalTopology, topologyDiagnostics.directStructuralWeightRatio);
+    const StructuralMismatchDiagnostics structuralMismatch =
+        BuildStructuralMismatchDiagnostics(decisions, diagnosticStructural, parameters.epsilon);
+    const StaticPathDiagnostics staticPathDiagnostics =
+        BuildStaticPathDiagnostics(decisions,
+                                   shortestDiagnosticDecisions,
+                                   deployedState,
+                                   diagnosticStructural,
+                                   parameters.epsilon);
     auto completedCallbacks = std::make_shared<uint32_t>(0);
     auto completionCallback = [completedCallbacks, installableFlows](uint32_t) {
         (*completedCallbacks)++;
@@ -623,6 +1274,23 @@ main(int argc, char* argv[])
 
     const SmtraPerformanceMetrics performance =
         BuildSmtraPerformanceMetrics(launch, linkMonitor, trafficStartTime, trafficStopTime);
+    const double ocsLinkUtilization =
+        ocsLinkMonitor.GetAverageUtilization(trafficStartTime, trafficStopTime);
+    const double electricalLinkUtilization =
+        electricalLinkMonitor.GetAverageUtilization(trafficStartTime, trafficStopTime);
+    const double p90LinkUtilization =
+        linkMonitor.GetPercentileUtilization(0.90, trafficStartTime, trafficStopTime);
+    const double p95LinkUtilization =
+        linkMonitor.GetPercentileUtilization(0.95, trafficStartTime, trafficStopTime);
+    const double p90OcsLinkUtilization =
+        ocsLinkMonitor.GetPercentileUtilization(0.90, trafficStartTime, trafficStopTime);
+    const double p95OcsLinkUtilization =
+        ocsLinkMonitor.GetPercentileUtilization(0.95, trafficStartTime, trafficStopTime);
+    const double p90ElectricalLinkUtilization =
+        electricalLinkMonitor.GetPercentileUtilization(0.90, trafficStartTime, trafficStopTime);
+    const double p95ElectricalLinkUtilization =
+        electricalLinkMonitor.GetPercentileUtilization(0.95, trafficStartTime, trafficStopTime);
+    const std::string incompleteFlowDetails = BuildIncompleteFlowDetailsString(launch);
 
     std::cout << "SMTRA experiment: matrixMode=" << matrixMode
               << ", observeTrafficModel=" << observeTrafficModel
@@ -644,6 +1312,7 @@ main(int argc, char* argv[])
               << ", decoyHighActivity=" << decoyHighActivity
               << ", decoyLowActivity=" << decoyLowActivity
               << ", strategy=" << strategy
+              << ", structShortestMode=" << structShortestMode
               << ", offeredLoad=" << offeredLoad
               << ", workloadScale=" << workloadScale
               << ", flowGenerationMode=" << flowGenerationMode
@@ -674,19 +1343,83 @@ main(int argc, char* argv[])
               << ", v8Edges=" << v8EdgesText
               << ", edgeOverlapWithTopRaw=" << edgeOverlapWithTopRaw
               << ", edgeOverlapWithTopPsi=" << edgeOverlapWithTopPsi
+              << ", opticalConnectionCount=" << opticalConnectionCountText
+              << ", podPortUseMean=" << podPortUseMeanText
+              << ", podPortUseMax=" << podPortUseMaxText
+              << ", podPortUseMin=" << podPortUseMinText
+              << ", topKCoveredPairCount=" << topKCoveredPairCountText
+              << ", topCoverage=" << topCoverageText
+              << ", smdTop=" << smdTopText
+              << ", directStructuralWeightRatio="
+              << directStructuralWeightRatioText
               << ", oneHopPathFlows=" << oneHopPathFlows
               << ", twoHopPathFlows=" << twoHopPathFlows
               << ", multiHopPathFlows=" << multiHopPathFlows
+              << ", opticalDirectFlows=" << opticalDirectFlows
+              << ", nonOpticalFlows=" << nonOpticalFlows
+              << ", opticalDirectRatio=" << opticalDirectRatio
+              << ", nonOpticalTrafficRatio=" << nonOpticalTrafficRatio
+              << ", structuralMismatchMean=" << structuralMismatch.mean
+              << ", structuralMismatchP95=" << structuralMismatch.p95
+              << ", structuralMismatchMax=" << structuralMismatch.max
+              << ", strongFlowMismatchMean=" << structuralMismatch.strongMean
+              << ", backgroundFlowMismatchMean=" << structuralMismatch.backgroundMean
+              << ", pathSignatureCountMax=" << staticPathDiagnostics.pathSignatureCountMax
+              << ", pathSignatureCountP95=" << staticPathDiagnostics.pathSignatureCountP95
+              << ", pathSignatureCountMean=" << staticPathDiagnostics.pathSignatureCountMean
+              << ", uniquePathSignatureCount=" << staticPathDiagnostics.uniquePathSignatureCount
+              << ", ocsEdgeFlowCountMean=" << staticPathDiagnostics.ocsEdgeFlowCountMean
+              << ", ocsEdgeFlowCountMax=" << staticPathDiagnostics.ocsEdgeFlowCountMax
+              << ", ocsEdgeFlowCountP95=" << staticPathDiagnostics.ocsEdgeFlowCountP95
+              << ", ocsEdgeFlowCountStd=" << staticPathDiagnostics.ocsEdgeFlowCountStd
+              << ", ocsEdgeStrongFlowCountMean="
+              << staticPathDiagnostics.ocsEdgeStrongFlowCountMean
+              << ", ocsEdgeStrongFlowCountMax="
+              << staticPathDiagnostics.ocsEdgeStrongFlowCountMax
+              << ", ocsEdgeBackgroundFlowCountMean="
+              << staticPathDiagnostics.ocsEdgeBackgroundFlowCountMean
+              << ", ocsEdgeBackgroundFlowCountMax="
+              << staticPathDiagnostics.ocsEdgeBackgroundFlowCountMax
+              << ", changedPathFlowCount=" << staticPathDiagnostics.changedPathFlowCount
+              << ", changedPathFlowRatio=" << staticPathDiagnostics.changedPathFlowRatio
+              << ", changedStrongPathFlowCount="
+              << staticPathDiagnostics.changedStrongPathFlowCount
+              << ", changedBackgroundPathFlowCount="
+              << staticPathDiagnostics.changedBackgroundPathFlowCount
+              << ", edgeFlowImbalanceDeltaVsShortest="
+              << staticPathDiagnostics.edgeFlowImbalanceDeltaVsShortest
+              << ", pathConcentrationDeltaVsShortest="
+              << staticPathDiagnostics.pathConcentrationDeltaVsShortest
+              << ", equalShortestPathCountMean="
+              << staticPathDiagnostics.equalShortestPathCountMean
+              << ", equalShortestPathCountMax=" << staticPathDiagnostics.equalShortestPathCountMax
+              << ", equalShortestPathPairCount="
+              << staticPathDiagnostics.equalShortestPathPairCount
+              << ", flowsWithMultipleShortestPaths="
+              << staticPathDiagnostics.flowsWithMultipleShortestPaths
+              << ", flowsWithMultipleShortestPathsRatio="
+              << staticPathDiagnostics.flowsWithMultipleShortestPathsRatio
               << ", avgPathHopCount=" << avgPathHopCount
               << ", maxPathHopCount=" << maxPathHopCount
               << ", installedFlows=" << performance.installedFlows
               << ", completedFlows=" << performance.completedFlows
               << ", incompleteFlows=" << performance.incompleteFlows
+              << ", incompleteFlowDetails=" << incompleteFlowDetails
               << ", completionRatio=" << performance.completionRatio
               << ", fullyCompleted=" << (performance.fullyCompleted ? "true" : "false")
               << ", avgFctSeconds=" << performance.avgFctSeconds
+              << ", p90FctSeconds=" << performance.p90FctSeconds
+              << ", p95FctSeconds=" << performance.p95FctSeconds
               << ", throughputGbps=" << performance.throughputGbps
-              << ", avgLinkUtilization=" << performance.avgLinkUtilization << std::endl;
+              << ", avgLinkUtilization=" << performance.avgLinkUtilization
+              << ", ocsLinkUtilization=" << ocsLinkUtilization
+              << ", electricalLinkUtilization=" << electricalLinkUtilization
+              << ", p90LinkUtilization=" << p90LinkUtilization
+              << ", p95LinkUtilization=" << p95LinkUtilization
+              << ", p90OcsLinkUtilization=" << p90OcsLinkUtilization
+              << ", p95OcsLinkUtilization=" << p95OcsLinkUtilization
+              << ", p90ElectricalLinkUtilization=" << p90ElectricalLinkUtilization
+              << ", p95ElectricalLinkUtilization=" << p95ElectricalLinkUtilization << std::endl;
 
     Simulator::Destroy();
     return 0;
