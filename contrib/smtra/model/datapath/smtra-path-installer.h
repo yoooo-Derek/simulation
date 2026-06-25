@@ -32,6 +32,14 @@ struct FlowPathDecision
     uint32_t destinationTor = 0;
 };
 
+enum class SmtraStructuralShortestMode
+{
+    MatchOnly,
+    MatchSplit,
+    StrongMatchBackgroundShortest,
+    StrongTopKBackgroundShortest,
+};
+
 class SmtraPathInstaller
 {
   public:
@@ -51,6 +59,21 @@ class SmtraPathInstaller
     FlowPathDecision SelectShortestOcs(const FlowSpec& flow,
                                        const SmtraTopologyRouteState& state,
                                        const NodeIndex& nodeIndex) const;
+    std::vector<FlowPathDecision> SelectStructuralShortestOcs(
+        const std::vector<FlowSpec>& flows,
+        const SmtraTopologyRouteState& state,
+        const SmtraStructuralState& structural,
+        const NodeIndex& nodeIndex,
+        SmtraStructuralShortestMode mode = SmtraStructuralShortestMode::StrongTopKBackgroundShortest,
+        uint32_t topK = 2) const;
+    FlowPathDecision SelectStructuralShortestOcs(const FlowSpec& flow,
+                                                 const SmtraTopologyRouteState& state,
+                                                 const SmtraStructuralState& structural,
+                                                 const NodeIndex& nodeIndex,
+                                                 SmtraStructuralShortestMode mode =
+                                                     SmtraStructuralShortestMode::
+                                                         StrongTopKBackgroundShortest,
+                                                 uint32_t topK = 2) const;
 
     void Install(const FlowSpec& flow,
                  const FlowPathDecision& decision,

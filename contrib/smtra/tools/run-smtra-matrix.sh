@@ -30,6 +30,7 @@ OCS_DATA_RATE="10Gbps"
 MEMS_COUNT="2"
 POD_PORT_LIMIT_B="2"
 CIRCUIT_CAPACITY_BPS="0"
+STRUCT_SHORTEST_MODE="strong-topk-background-shortest"
 TRAFFIC_MODELS_CSV=""
 STRATEGIES_CSV=""
 OFFERED_LOADS_CSV=""
@@ -75,6 +76,10 @@ Options:
   --memsCount=COUNT              Control-layer MEMS count.
   --podPortLimitB=COUNT          Per-pod active optical port limit.
   --circuitCapacityBps=BPS       Circuit capacity in bps. 0 follows --ocsDataRate.
+  --structShortestMode=MODE      v8-structural-shortest mode.
+  --trafficStartTime=SECONDS     Traffic start time in seconds.
+  --trafficStopTime=SECONDS      Traffic injection stop time in seconds.
+  --simulationStopTime=SECONDS   Simulation stop time in seconds.
   --outputDir=DIR                Directory where per-run stdout logs are written.
   -h, --help                     Show this help.
 EOF
@@ -175,6 +180,18 @@ for arg in "$@"; do
         --circuitCapacityBps=*)
             CIRCUIT_CAPACITY_BPS="${arg#*=}"
             ;;
+        --structShortestMode=*)
+            STRUCT_SHORTEST_MODE="${arg#*=}"
+            ;;
+        --trafficStartTime=*)
+            TRAFFIC_START_TIME="${arg#*=}"
+            ;;
+        --trafficStopTime=*)
+            TRAFFIC_STOP_TIME="${arg#*=}"
+            ;;
+        --simulationStopTime=*)
+            SIMULATION_STOP_TIME="${arg#*=}"
+            ;;
         --outputDir=*)
             OUTPUT_DIR="${arg#*=}"
             ;;
@@ -259,7 +276,7 @@ for traffic_model in "${TRAFFIC_MODELS[@]}"; do
         for offered_load in "${OFFERED_LOADS[@]}"; do
             log_file="${OUTPUT_DIR}/${traffic_model}__${TEST_PERTURBATION_MODE}__${strategy}__load-${offered_load}__seed-${RANDOM_SEED}.log"
             runtime_file="${log_file%.log}.runtime"
-            runner_args="smtra-runner --matrixMode=${MATRIX_MODE} --observeTrafficModel=${traffic_model} --testTrafficModel=${traffic_model} --testPerturbationMode=${TEST_PERTURBATION_MODE} --testPerturbationRatio=${TEST_PERTURBATION_RATIO} --phaseShift=${PHASE_SHIFT} --phaseShiftWrap=${PHASE_SHIFT_WRAP} --communityRotationPattern=${COMMUNITY_ROTATION_PATTERN} --observeMixA=${OBSERVE_MIX_A} --observeMixB=${OBSERVE_MIX_B} --observeMixAWeight=${OBSERVE_MIX_A_WEIGHT} --testMixAWeight=${TEST_MIX_A_WEIGHT} --neighborWeight=${NEIGHBOR_WEIGHT} --crossStageWeight=${CROSS_STAGE_WEIGHT} --backgroundWeight=${BACKGROUND_WEIGHT} --decoyBeta=${DECOY_BETA} --structuralBonus=${STRUCTURAL_BONUS} --decoyHighActivity=${DECOY_HIGH_ACTIVITY} --decoyLowActivity=${DECOY_LOW_ACTIVITY} --strategy=${strategy} --offeredLoad=${offered_load} --workloadScale=${WORKLOAD_SCALE} --flowGenerationMode=${FLOW_GENERATION_MODE} --messageSizeBytes=${MESSAGE_SIZE_BYTES} --flowsPerActivePair=${FLOWS_PER_ACTIVE_PAIR} --randomSeed=${RANDOM_SEED} --electricalDataRate=${ELECTRICAL_DATA_RATE} --ocsDataRate=${OCS_DATA_RATE} --memsCount=${MEMS_COUNT} --podPortLimitB=${POD_PORT_LIMIT_B} --circuitCapacityBps=${CIRCUIT_CAPACITY_BPS} --trafficStartTime=${TRAFFIC_START_TIME} --trafficStopTime=${TRAFFIC_STOP_TIME} --simulationStopTime=${SIMULATION_STOP_TIME}"
+            runner_args="smtra-runner --matrixMode=${MATRIX_MODE} --observeTrafficModel=${traffic_model} --testTrafficModel=${traffic_model} --testPerturbationMode=${TEST_PERTURBATION_MODE} --testPerturbationRatio=${TEST_PERTURBATION_RATIO} --phaseShift=${PHASE_SHIFT} --phaseShiftWrap=${PHASE_SHIFT_WRAP} --communityRotationPattern=${COMMUNITY_ROTATION_PATTERN} --observeMixA=${OBSERVE_MIX_A} --observeMixB=${OBSERVE_MIX_B} --observeMixAWeight=${OBSERVE_MIX_A_WEIGHT} --testMixAWeight=${TEST_MIX_A_WEIGHT} --neighborWeight=${NEIGHBOR_WEIGHT} --crossStageWeight=${CROSS_STAGE_WEIGHT} --backgroundWeight=${BACKGROUND_WEIGHT} --decoyBeta=${DECOY_BETA} --structuralBonus=${STRUCTURAL_BONUS} --decoyHighActivity=${DECOY_HIGH_ACTIVITY} --decoyLowActivity=${DECOY_LOW_ACTIVITY} --strategy=${strategy} --offeredLoad=${offered_load} --workloadScale=${WORKLOAD_SCALE} --flowGenerationMode=${FLOW_GENERATION_MODE} --messageSizeBytes=${MESSAGE_SIZE_BYTES} --flowsPerActivePair=${FLOWS_PER_ACTIVE_PAIR} --randomSeed=${RANDOM_SEED} --electricalDataRate=${ELECTRICAL_DATA_RATE} --ocsDataRate=${OCS_DATA_RATE} --memsCount=${MEMS_COUNT} --podPortLimitB=${POD_PORT_LIMIT_B} --circuitCapacityBps=${CIRCUIT_CAPACITY_BPS} --structShortestMode=${STRUCT_SHORTEST_MODE} --trafficStartTime=${TRAFFIC_START_TIME} --trafficStopTime=${TRAFFIC_STOP_TIME} --simulationStopTime=${SIMULATION_STOP_TIME}"
             echo "RUN observeTrafficModel=${traffic_model} testTrafficModel=${traffic_model} strategy=${strategy} offeredLoad=${offered_load} log=${log_file}"
             run_start=$SECONDS
             ./ns3 run "$runner_args" >"$log_file" 2>&1

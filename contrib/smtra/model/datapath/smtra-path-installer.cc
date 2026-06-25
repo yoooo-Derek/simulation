@@ -5,9 +5,12 @@
 #include "ns3/ipv4.h"
 
 #include <algorithm>
+#include <cmath>
+#include <functional>
 #include <limits>
 #include <queue>
 #include <stdexcept>
+#include <tuple>
 
 namespace ns3
 {
@@ -137,6 +140,252 @@ FindShortestActiveOcsPath(const OcsPlane& plane, uint32_t source, uint32_t desti
     }
     path.push_back(destination);
     return path;
+}
+
+double
+GetMaxStructuralWeight(const DenseMatrix& psi)
+{
+    double maxPsi = 0.0;
+    for (uint32_t i = 0; i < psi.GetSize(); ++i)
+    {
+        for (uint32_t j = i + 1; j < psi.GetSize(); ++j)
+        {
+            maxPsi = std::max(maxPsi, psi.Get(i, j));
+        }
+    }
+    return maxPsi;
+}
+
+double
+GetNormalizedStructuralWeight(const DenseMatrix& psi,
+                              uint32_t a,
+                              uint32_t b,
+                              double maxPsi,
+                              double epsilon)
+{
+    if (a == b || maxPsi <= 0.0)
+    {
+        return 0.0;
+    }
+    const auto pair = OcsPlane::NormalizePair(a, b);
+    return psi.Get(pair.first, pair.second) / (maxPsi + epsilon);
+}
+
+double
+ComputeStructuralMismatch(const std::vector<uint32_t>& path,
+                          const SmtraStructuralState& structural,
+                          double targetWeight,
+                          double maxPsi)
+{
+    double mismatch = 0.0;
+    constexpr double kEpsilon = 1e-12;
+    for (uint32_t index = 1; index < path.size(); ++index)
+    {
+        const double edgeWeight = GetNormalizedStructuralWeight(structural.Psi,
+                                                               path[index - 1],
+                                                               path[index],
+                                                               maxPsi,
+                                                               kEpsilon);
+        mismatch += std::abs(targetWeight - edgeWeight);
+    }
+    return mismatch;
+}
+
+std::vector<std::vector<uint32_t>>
+BuildActiveOcsAdjacency(const OcsPlane& plane)
+{
+    const uint32_t podCount = plane.GetPodCount();
+    std::vector<std::vector<uint32_t>> adjacency(podCount);
+    for (const auto& circuit : plane.GetActiveCircuits())
+    {
+        adjacency[circuit.podA].push_back(circuit.podB);
+        adjacency[circuit.podB].push_back(circuit.podA);
+    }
+    for (auto& neighbors : adjacency)
+    {
+        std::sort(neighbors.begin(), neighbors.end());
+        neighbors.erase(std::unique(neighbors.begin(), neighbors.end()), neighbors.end());
+    }
+    return adjacency;
+}
+
+std::vector<uint32_t>
+ComputeHopDistances(const std::vector<std::vector<uint32_t>>& adjacency, uint32_t source)
+{
+    const uint32_t unreachable = std::numeric_limits<uint32_t>::max();
+    std::vector<uint32_t> distances(adjacency.size(), unreachable);
+    std::queue<uint32_t> frontier;
+    distances[source] = 0;
+    frontier.push(source);
+    while (!frontier.empty())
+    {
+        const uint32_t node = frontier.front();
+        frontier.pop();
+        for (uint32_t neighbor : adjacency[node])
+        {
+            if (distances[neighbor] != unreachable)
+            {
+                continue;
+            }
+            distances[neighbor] = distances[node] + 1;
+            frontier.push(neighbor);
+        }
+    }
+    return distances;
+}
+
+std::vector<std::vector<uint32_t>>
+FindEqualShortestActiveOcsPaths(const OcsPlane& plane, uint32_t source, uint32_t destination)
+{
+    const uint32_t unreachable = std::numeric_limits<uint32_t>::max();
+    const auto adjacency = BuildActiveOcsAdjacency(plane);
+    if (source >= adjacency.size() || destination >= adjacency.size())
+    {
+        return {};
+    }
+    const auto sourceDistances = ComputeHopDistances(adjacency, source);
+    const auto destinationDistances = ComputeHopDistances(adjacency, destination);
+    const uint32_t shortestDistance = sourceDistances[destination];
+    if (shortestDistance == unreachable)
+    {
+        return {};
+    }
+
+    std::vector<std::vector<uint32_t>> paths;
+    std::vector<uint32_t> current{source};
+    std::function<void(uint32_t)> visit = [&](uint32_t node) {
+        if (node == destination)
+        {
+            paths.push_back(current);
+            return;
+        }
+        for (uint32_t neighbor : adjacency[node])
+        {
+            if (sourceDistances[neighbor] == unreachable ||
+                destinationDistances[neighbor] == unreachable ||
+                sourceDistances[neighbor] != sourceDistances[node] + 1 ||
+                sourceDistances[neighbor] + destinationDistances[neighbor] != shortestDistance)
+            {
+                continue;
+            }
+            current.push_back(neighbor);
+            visit(neighbor);
+            current.pop_back();
+        }
+    };
+    visit(source);
+    std::sort(paths.begin(), paths.end());
+    return paths;
+}
+
+uint64_t
+FnvMix(uint64_t hash, uint64_t value)
+{
+    for (uint32_t index = 0; index < 8; ++index)
+    {
+        hash ^= (value >> (index * 8)) & 0xffU;
+        hash *= 1099511628211ULL;
+    }
+    return hash;
+}
+
+uint64_t
+StableFlowHash(const FlowSpec& flow)
+{
+    uint64_t hash = 1469598103934665603ULL;
+    hash = FnvMix(hash, flow.GetFlowId());
+    hash = FnvMix(hash, flow.GetSourceTorId());
+    hash = FnvMix(hash, flow.GetDestinationTorId());
+    hash = FnvMix(hash, flow.GetSourceServerId());
+    hash = FnvMix(hash, flow.GetDestinationServerId());
+    return hash;
+}
+
+std::vector<uint32_t>
+SelectStructuralShortestPath(const OcsPlane& plane,
+                             const SmtraStructuralState& structural,
+                             const FlowSpec& flow,
+                             SmtraStructuralShortestMode mode,
+                             uint32_t topK)
+{
+    constexpr double kEpsilon = 1e-12;
+    constexpr double kMismatchTolerance = 1e-9;
+    const uint32_t source = flow.GetSourceTorId();
+    const uint32_t destination = flow.GetDestinationTorId();
+    const auto demandPair = OcsPlane::NormalizePair(source, destination);
+    const double demandPsi = structural.Psi.Get(demandPair.first, demandPair.second);
+    const bool strongFlow = demandPsi > kEpsilon;
+
+    if ((mode == SmtraStructuralShortestMode::StrongMatchBackgroundShortest ||
+         mode == SmtraStructuralShortestMode::StrongTopKBackgroundShortest) &&
+        !strongFlow)
+    {
+        return FindShortestActiveOcsPath(plane, source, destination);
+    }
+
+    std::vector<std::vector<uint32_t>> paths =
+        FindEqualShortestActiveOcsPaths(plane, source, destination);
+    if (paths.empty())
+    {
+        return {};
+    }
+
+    const double maxPsi = GetMaxStructuralWeight(structural.Psi);
+    const double targetWeight =
+        GetNormalizedStructuralWeight(structural.Psi, source, destination, maxPsi, kEpsilon);
+    std::vector<std::pair<double, std::vector<uint32_t>>> ranked;
+    ranked.reserve(paths.size());
+    for (const auto& path : paths)
+    {
+        ranked.emplace_back(ComputeStructuralMismatch(path, structural, targetWeight, maxPsi), path);
+    }
+    std::sort(ranked.begin(), ranked.end(), [](const auto& left, const auto& right) {
+        if (std::abs(left.first - right.first) > kEpsilon)
+        {
+            return left.first < right.first;
+        }
+        return left.second < right.second;
+    });
+
+    if (mode == SmtraStructuralShortestMode::MatchOnly)
+    {
+        return ranked.front().second;
+    }
+
+    std::vector<std::vector<uint32_t>> candidates;
+    if (mode == SmtraStructuralShortestMode::StrongTopKBackgroundShortest)
+    {
+        const uint32_t candidateCount =
+            std::min<uint32_t>(std::max<uint32_t>(topK, 1), ranked.size());
+        for (uint32_t index = 0; index < candidateCount; ++index)
+        {
+            candidates.push_back(ranked[index].second);
+        }
+        if (candidateCount > 1)
+        {
+            // Keep top-k static splitting structure-biased: the best structural match receives
+            // two deterministic hash buckets, and the next-best path receives one.
+            candidates.push_back(ranked.front().second);
+        }
+    }
+    else
+    {
+        const double minMismatch = ranked.front().first;
+        for (const auto& rankedPath : ranked)
+        {
+            if (rankedPath.first > minMismatch + kMismatchTolerance)
+            {
+                break;
+            }
+            candidates.push_back(rankedPath.second);
+        }
+    }
+    if (candidates.empty())
+    {
+        return ranked.front().second;
+    }
+    std::sort(candidates.begin(), candidates.end());
+    return candidates[StableFlowHash(flow) % candidates.size()];
 }
 
 bool
@@ -365,6 +614,77 @@ SmtraPathInstaller::SelectShortestOcs(const FlowSpec& flow,
     decision.admittedToOcs = true;
     decision.installable = true;
     decision.reason = "ocs-shortest";
+    return decision;
+}
+
+std::vector<FlowPathDecision>
+SmtraPathInstaller::SelectStructuralShortestOcs(const std::vector<FlowSpec>& flows,
+                                                const SmtraTopologyRouteState& state,
+                                                const SmtraStructuralState& structural,
+                                                const NodeIndex& nodeIndex,
+                                                SmtraStructuralShortestMode mode,
+                                                uint32_t topK) const
+{
+    std::vector<FlowPathDecision> decisions;
+    decisions.reserve(flows.size());
+    for (const auto& flow : flows)
+    {
+        decisions.push_back(SelectStructuralShortestOcs(flow, state, structural, nodeIndex, mode, topK));
+    }
+    return decisions;
+}
+
+FlowPathDecision
+SmtraPathInstaller::SelectStructuralShortestOcs(const FlowSpec& flow,
+                                                const SmtraTopologyRouteState& state,
+                                                const SmtraStructuralState& structural,
+                                                const NodeIndex& nodeIndex,
+                                                SmtraStructuralShortestMode mode,
+                                                uint32_t topK) const
+{
+    FlowPathDecision decision;
+    decision.flowId = flow.GetFlowId();
+    decision.sourceTor = flow.GetSourceTorId();
+    decision.destinationTor = flow.GetDestinationTorId();
+    decision.sourceAddress =
+        nodeIndex.GetOcsServerIpv4Address(flow.GetSourceTorId(), flow.GetSourceServerId());
+    decision.destinationAddress =
+        nodeIndex.GetOcsServerIpv4Address(flow.GetDestinationTorId(),
+                                          flow.GetDestinationServerId());
+
+    if (flow.GetSourceTorId() == flow.GetDestinationTorId())
+    {
+        decision.pathType = "intra-pod-electrical";
+        decision.destinationAddress =
+            nodeIndex.GetServerIpv4Address(flow.GetDestinationTorId(),
+                                           flow.GetDestinationServerId());
+        decision.installable = true;
+        decision.reason = "same-pod";
+        decision.torPath = {flow.GetSourceTorId()};
+        return decision;
+    }
+
+    decision.torPath = SelectStructuralShortestPath(state.ocsPlane, structural, flow, mode, topK);
+    if (decision.torPath.empty())
+    {
+        decision.reason = "no-active-ocs-path";
+        return decision;
+    }
+    if (!PopulateMemsPath(state, decision.torPath, decision.memsPath))
+    {
+        decision.reason = "missing-structural-shortest-path-circuit";
+        decision.torPath.clear();
+        return decision;
+    }
+    decision.returnTorPath = decision.torPath;
+    decision.returnMemsPath = decision.memsPath;
+    std::reverse(decision.returnTorPath.begin(), decision.returnTorPath.end());
+    std::reverse(decision.returnMemsPath.begin(), decision.returnMemsPath.end());
+    decision.pathType =
+        decision.torPath.size() == 2 ? "ocs-struct-shortest-direct" : "ocs-struct-shortest-multihop";
+    decision.admittedToOcs = true;
+    decision.installable = true;
+    decision.reason = "ocs-struct-shortest";
     return decision;
 }
 

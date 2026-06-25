@@ -50,6 +50,9 @@ class LinkUtilizationMonitor
     void AddBidirectionalLink(Ptr<NetDevice> a, Ptr<NetDevice> b, uint64_t capacityBps);
     void Enable(Time measurementStartTime, Time measurementEndTime);
     double GetAverageUtilization(Time measurementStartTime, Time measurementEndTime) const;
+    double GetPercentileUtilization(double percentile,
+                                    Time measurementStartTime,
+                                    Time measurementEndTime) const;
     uint64_t GetTotalTxBytes() const;
     uint32_t GetDeviceCount() const;
 

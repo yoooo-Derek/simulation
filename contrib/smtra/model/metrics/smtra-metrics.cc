@@ -117,6 +117,40 @@ LinkUtilizationMonitor::GetAverageUtilization(Time measurementStartTime,
     return total / static_cast<double>(m_records.size());
 }
 
+double
+LinkUtilizationMonitor::GetPercentileUtilization(double percentile,
+                                                 Time measurementStartTime,
+                                                 Time measurementEndTime) const
+{
+    const double durationSeconds = (measurementEndTime - measurementStartTime).GetSeconds();
+    if (durationSeconds <= 0.0 || m_records.empty())
+    {
+        return 0.0;
+    }
+    std::vector<double> utilizations;
+    utilizations.reserve(m_records.size());
+    for (const auto& record : m_records)
+    {
+        utilizations.push_back(static_cast<double>(record->txBytes) * 8.0 /
+                               (static_cast<double>(record->capacityBps) * durationSeconds));
+    }
+    std::sort(utilizations.begin(), utilizations.end());
+    if (utilizations.empty())
+    {
+        return 0.0;
+    }
+    const double clamped = std::clamp(percentile, 0.0, 1.0);
+    const double rank = clamped * static_cast<double>(utilizations.size() - 1);
+    const auto lower = static_cast<uint32_t>(std::floor(rank));
+    const auto upper = static_cast<uint32_t>(std::ceil(rank));
+    if (lower == upper)
+    {
+        return utilizations[lower];
+    }
+    const double fraction = rank - static_cast<double>(lower);
+    return utilizations[lower] * (1.0 - fraction) + utilizations[upper] * fraction;
+}
+
 uint64_t
 LinkUtilizationMonitor::GetTotalTxBytes() const
 {
