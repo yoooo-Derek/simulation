@@ -60,6 +60,8 @@ class LinkUtilizationMonitor
 struct SmtraPerformanceMetrics
 {
     double avgFctSeconds = 0.0;
+    double p90FctSeconds = 0.0;
+    double p95FctSeconds = 0.0;
     double throughputGbps = 0.0;
     double avgLinkUtilization = 0.0;
     uint32_t installedFlows = 0;

@@ -1,6 +1,7 @@
 #include "smtra-metrics.h"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <set>
 
@@ -198,14 +199,17 @@ BuildSmtraPerformanceMetrics(const FlowLaunchResult& launch,
     metrics.installedFlows = launch.installedFlows;
     metrics.receivedBytes = launch.GetTotalReceivedBytes();
     double fctTotalSeconds = 0.0;
+    std::vector<double> fctSeconds;
     for (const auto& source : launch.metricSources)
     {
         metrics.measurementReceivedBytes += source.tracking->measurementReceivedBytes;
         if (source.tracking->completed && source.tracking->completionTime.has_value())
         {
             metrics.completedFlows++;
-            fctTotalSeconds +=
+            const double fct =
                 (*source.tracking->completionTime - source.flow.GetStartTime()).GetSeconds();
+            fctTotalSeconds += fct;
+            fctSeconds.push_back(fct);
         }
         else
         {
@@ -215,6 +219,24 @@ BuildSmtraPerformanceMetrics(const FlowLaunchResult& launch,
     if (metrics.completedFlows > 0)
     {
         metrics.avgFctSeconds = fctTotalSeconds / static_cast<double>(metrics.completedFlows);
+        std::sort(fctSeconds.begin(), fctSeconds.end());
+        const auto percentile = [&fctSeconds](double p) {
+            if (fctSeconds.empty())
+            {
+                return 0.0;
+            }
+            const double rank = p * static_cast<double>(fctSeconds.size() - 1);
+            const auto lower = static_cast<uint32_t>(std::floor(rank));
+            const auto upper = static_cast<uint32_t>(std::ceil(rank));
+            if (lower == upper)
+            {
+                return fctSeconds[lower];
+            }
+            const double fraction = rank - static_cast<double>(lower);
+            return fctSeconds[lower] * (1.0 - fraction) + fctSeconds[upper] * fraction;
+        };
+        metrics.p90FctSeconds = percentile(0.90);
+        metrics.p95FctSeconds = percentile(0.95);
     }
     if (metrics.installedFlows > 0)
     {
@@ -225,6 +247,8 @@ BuildSmtraPerformanceMetrics(const FlowLaunchResult& launch,
     if (!metrics.fullyCompleted)
     {
         metrics.avgFctSeconds = std::numeric_limits<double>::quiet_NaN();
+        metrics.p90FctSeconds = std::numeric_limits<double>::quiet_NaN();
+        metrics.p95FctSeconds = std::numeric_limits<double>::quiet_NaN();
     }
     const double measurementSeconds = (measurementEndTime - measurementStartTime).GetSeconds();
     if (measurementSeconds > 0.0)

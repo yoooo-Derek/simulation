@@ -58,9 +58,21 @@ CSV_FIELDS = [
     "v8Edges",
     "edgeOverlapWithTopRaw",
     "edgeOverlapWithTopPsi",
+    "opticalConnectionCount",
+    "podPortUseMean",
+    "podPortUseMax",
+    "podPortUseMin",
+    "topKCoveredPairCount",
+    "topCoverage",
+    "smdTop",
+    "directStructuralWeightRatio",
     "oneHopPathFlows",
     "twoHopPathFlows",
     "multiHopPathFlows",
+    "opticalDirectFlows",
+    "nonOpticalFlows",
+    "opticalDirectRatio",
+    "nonOpticalTrafficRatio",
     "avgPathHopCount",
     "maxPathHopCount",
     "installedFlows",
@@ -69,8 +81,12 @@ CSV_FIELDS = [
     "completionRatio",
     "fullyCompleted",
     "avgFctSeconds",
+    "p90FctSeconds",
+    "p95FctSeconds",
     "throughputGbps",
     "avgLinkUtilization",
+    "ocsLinkUtilization",
+    "electricalLinkUtilization",
     "logFile",
     "invalid",
     "invalidReason",
@@ -92,8 +108,18 @@ NUMERIC_FIELDS = {
     "installRatio",
     "completionRatio",
     "avgFctSeconds",
+    "p90FctSeconds",
+    "p95FctSeconds",
     "throughputGbps",
     "avgLinkUtilization",
+    "ocsLinkUtilization",
+    "electricalLinkUtilization",
+    "podPortUseMean",
+    "topCoverage",
+    "smdTop",
+    "directStructuralWeightRatio",
+    "opticalDirectRatio",
+    "nonOpticalTrafficRatio",
     "avgPathHopCount",
     "runtimeSeconds",
 }
@@ -115,9 +141,15 @@ INTEGER_FIELDS = {
     "rawSTopKOverlap",
     "edgeOverlapWithTopRaw",
     "edgeOverlapWithTopPsi",
+    "opticalConnectionCount",
+    "podPortUseMax",
+    "podPortUseMin",
+    "topKCoveredPairCount",
     "oneHopPathFlows",
     "twoHopPathFlows",
     "multiHopPathFlows",
+    "opticalDirectFlows",
+    "nonOpticalFlows",
     "maxPathHopCount",
     "installedFlows",
     "completedFlows",
@@ -152,16 +184,34 @@ OPTIONAL_FIELD_DEFAULTS = {
     "v8Edges": "",
     "edgeOverlapWithTopRaw": "",
     "edgeOverlapWithTopPsi": "",
+    "opticalConnectionCount": "NA",
+    "podPortUseMean": "NA",
+    "podPortUseMax": "NA",
+    "podPortUseMin": "NA",
+    "topKCoveredPairCount": "NA",
+    "topCoverage": "NA",
+    "smdTop": "NA",
+    "directStructuralWeightRatio": "NA",
+    "opticalDirectFlows": "NA",
+    "nonOpticalFlows": "NA",
+    "opticalDirectRatio": "NA",
+    "nonOpticalTrafficRatio": "NA",
+    "p90FctSeconds": "NA",
+    "p95FctSeconds": "NA",
+    "ocsLinkUtilization": "NA",
+    "electricalLinkUtilization": "NA",
 }
 
 
 def parse_value(key, value):
+    if value == "NA":
+        return value
     if key in INTEGER_FIELDS:
         return str(int(value))
     if key in NUMERIC_FIELDS:
         parsed = float(value)
         if math.isnan(parsed):
-            return "NaN"
+            return "NA"
         if math.isinf(parsed):
             return "inf" if parsed > 0 else "-inf"
         return f"{parsed:.12g}"
@@ -213,6 +263,51 @@ def parse_log(log_file):
     return row
 
 
+COMPARISON_COLUMNS = [
+    ("offered_load", "offeredLoad"),
+    ("strategy", "strategy"),
+    ("avg_fct", "avgFctSeconds"),
+    ("p90_fct", "p90FctSeconds"),
+    ("p95_fct", "p95FctSeconds"),
+    ("throughput", "throughputGbps"),
+    ("avg_link_util", "avgLinkUtilization"),
+    ("ocs_link_util", "ocsLinkUtilization"),
+    ("electrical_link_util", "electricalLinkUtilization"),
+    ("top_coverage", "topCoverage"),
+    ("smd_top", "smdTop"),
+    ("direct_structural_weight_ratio", "directStructuralWeightRatio"),
+    ("optical_direct_ratio", "opticalDirectRatio"),
+    ("avg_hop_count", "avgPathHopCount"),
+]
+
+
+def sort_key(row):
+    try:
+        offered = float(row["offeredLoad"])
+    except ValueError:
+        offered = math.inf
+    return (offered, row["strategy"])
+
+
+def print_comparison_table(rows):
+    table = []
+    headers = [header for header, _ in COMPARISON_COLUMNS]
+    table.append(headers)
+    for row in sorted(rows, key=sort_key):
+        table.append([row.get(field, "NA") or "NA" for _, field in COMPARISON_COLUMNS])
+
+    widths = [0] * len(headers)
+    for line in table:
+        for index, value in enumerate(line):
+            widths[index] = max(widths[index], len(value))
+
+    print("comparison:")
+    for line_index, line in enumerate(table):
+        print("  " + "  ".join(value.ljust(widths[index]) for index, value in enumerate(line)))
+        if line_index == 0:
+            print("  " + "  ".join("-" * widths[index] for index in range(len(widths))))
+
+
 def main():
     parser = argparse.ArgumentParser(description="Aggregate smtra-runner stdout logs into CSV.")
     parser.add_argument("log_dir", type=Path, help="Directory containing per-run .log files")
@@ -232,6 +327,7 @@ def main():
 
     invalid_count = sum(1 for row in rows if row["invalid"] == "true")
     print(f"rows={len(rows)} invalid={invalid_count} output={args.output}")
+    print_comparison_table(rows)
 
 
 if __name__ == "__main__":

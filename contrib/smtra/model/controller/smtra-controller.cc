@@ -98,6 +98,16 @@ struct TaaTopologyCandidate
     double totalPathLoad = std::numeric_limits<double>::infinity();
 };
 
+struct TopologyOnlyCandidate
+{
+    uint32_t memsId = 0;
+    uint32_t podA = 0;
+    uint32_t podB = 0;
+    double smdTop = std::numeric_limits<double>::infinity();
+    double improvement = -std::numeric_limits<double>::infinity();
+    double totalPathLoad = 0.0;
+};
+
 bool
 DominatesTaaCandidate(const TaaTopologyCandidate& a, const TaaTopologyCandidate& b, double eps)
 {
@@ -112,6 +122,31 @@ bool
 IsBetterTaaCandidate(const TaaTopologyCandidate& candidate,
                      const TaaTopologyCandidate& best,
                      double eps)
+{
+    if (candidate.improvement > best.improvement + eps)
+    {
+        return true;
+    }
+    if (candidate.improvement + eps < best.improvement)
+    {
+        return false;
+    }
+    if (candidate.totalPathLoad + eps < best.totalPathLoad)
+    {
+        return true;
+    }
+    if (candidate.totalPathLoad > best.totalPathLoad + eps)
+    {
+        return false;
+    }
+    return std::tie(candidate.memsId, candidate.podA, candidate.podB) <
+           std::tie(best.memsId, best.podA, best.podB);
+}
+
+bool
+IsBetterTopologyOnlyCandidate(const TopologyOnlyCandidate& candidate,
+                              const TopologyOnlyCandidate& best,
+                              double eps)
 {
     if (candidate.improvement > best.improvement + eps)
     {
@@ -419,6 +454,40 @@ WindowCapacityBytes(const SmtraParameters& parameters)
 {
     return static_cast<double>(parameters.circuitCapacityBps) *
            parameters.observerWindowSeconds / 8.0;
+}
+
+double
+ComputeTopologyOnlySmd(const DenseMatrix& C,
+                       const SmtraStructuralState& structural,
+                       const SmtraParameters& parameters)
+{
+    const double psiTotal = GetMatrixSumUpper(structural.Psi);
+    if (psiTotal <= 0.0)
+    {
+        return 0.0;
+    }
+
+    const double circuitBytes = WindowCapacityBytes(parameters);
+    double smc = 0.0;
+    for (uint32_t i = 0; i < structural.Psi.GetSize(); ++i)
+    {
+        for (uint32_t j = i + 1; j < structural.Psi.GetSize(); ++j)
+        {
+            const double psi = structural.Psi.Get(i, j);
+            if (psi <= 0.0)
+            {
+                continue;
+            }
+            const double lambda =
+                std::min(C.Get(i, j) * circuitBytes, structural.S.Get(i, j)) *
+                structural.Omega.Get(i, j);
+            if (lambda > 0.0)
+            {
+                smc += std::sqrt((psi / psiTotal) * (lambda / psiTotal));
+            }
+        }
+    }
+    return -std::log(smc + parameters.epsilon);
 }
 
 std::vector<std::pair<uint32_t, uint32_t>>
@@ -852,6 +921,173 @@ SmtraController::RunTaa(const SmtraStructuralState& structural,
         current = bestCandidate.state;
     }
     return current;
+}
+
+SmtraTopologyRouteState
+SmtraController::RunTopologyOnlyTaa(const SmtraStructuralState& structural,
+                                    const SmtraParameters& parameters) const
+{
+    const uint32_t size = structural.Psi.GetSize();
+    SmtraTopologyRouteState state;
+    state.C = DenseMatrix(size);
+    state.R = DenseMatrix(size);
+    state.A = DenseMatrix(size);
+    state.Gamma = DenseMatrix(size);
+    state.Phi = DenseMatrix(size);
+    state.ocsPlane = OcsPlane(size, parameters.memsCount, parameters.circuitCapacityBps);
+
+    std::vector<uint32_t> podDegree(size, 0);
+    double currentSmdTop = ComputeTopologyOnlySmd(state.C, structural, parameters);
+    constexpr double kTopologyEpsilon = 1e-12;
+    while (true)
+    {
+        if (std::all_of(podDegree.begin(),
+                        podDegree.end(),
+                        [&](uint32_t degree) { return degree >= parameters.podPortLimitB; }))
+        {
+            break;
+        }
+
+        std::vector<TopologyOnlyCandidate> candidates;
+        for (uint32_t memsId = 0; memsId < parameters.memsCount; ++memsId)
+        {
+            for (uint32_t i = 0; i < size; ++i)
+            {
+                for (uint32_t j = i + 1; j < size; ++j)
+                {
+                    if (podDegree[i] >= parameters.podPortLimitB ||
+                        podDegree[j] >= parameters.podPortLimitB ||
+                        !state.ocsPlane.CanActivate(i, j, memsId))
+                    {
+                        continue;
+                    }
+
+                    DenseMatrix trialC = state.C;
+                    trialC.Set(i, j, trialC.Get(i, j) + 1.0);
+                    trialC.Set(j, i, trialC.Get(i, j));
+                    const double trialSmdTop =
+                        ComputeTopologyOnlySmd(trialC, structural, parameters);
+                    candidates.push_back({memsId,
+                                          i,
+                                          j,
+                                          trialSmdTop,
+                                          currentSmdTop - trialSmdTop,
+                                          0.0});
+                }
+            }
+        }
+        if (candidates.empty())
+        {
+            break;
+        }
+
+        TopologyOnlyCandidate bestCandidate;
+        for (const auto& candidate : candidates)
+        {
+            if (IsBetterTopologyOnlyCandidate(candidate, bestCandidate, kTopologyEpsilon))
+            {
+                bestCandidate = candidate;
+            }
+        }
+        if (!state.ocsPlane.Activate(bestCandidate.podA, bestCandidate.podB, bestCandidate.memsId))
+        {
+            break;
+        }
+        state.C.Set(bestCandidate.podA,
+                    bestCandidate.podB,
+                    state.C.Get(bestCandidate.podA, bestCandidate.podB) + 1.0);
+        state.C.Set(bestCandidate.podB,
+                    bestCandidate.podA,
+                    state.C.Get(bestCandidate.podA, bestCandidate.podB));
+        state.selectionOrder.emplace_back(bestCandidate.podA, bestCandidate.podB);
+        podDegree[bestCandidate.podA]++;
+        podDegree[bestCandidate.podB]++;
+        currentSmdTop = bestCandidate.smdTop;
+    }
+    state.smd = currentSmdTop;
+    state.smc = std::exp(-currentSmdTop);
+    return state;
+}
+
+SmtraTopologyDiagnostics
+SmtraController::ComputeTopologyDiagnostics(const SmtraTopologyRouteState& state,
+                                            const SmtraStructuralState& structural,
+                                            const SmtraParameters& parameters,
+                                            uint32_t topK) const
+{
+    SmtraTopologyDiagnostics diagnostics;
+    diagnostics.opticalConnectionCount = state.ocsPlane.GetActiveCircuitCount();
+    std::vector<uint32_t> podDegree(structural.Psi.GetSize(), 0);
+    for (const auto& circuit : state.ocsPlane.GetActiveCircuits())
+    {
+        podDegree[circuit.podA]++;
+        podDegree[circuit.podB]++;
+    }
+    if (!podDegree.empty())
+    {
+        uint32_t degreeTotal = 0;
+        diagnostics.podPortUseMin = std::numeric_limits<uint32_t>::max();
+        for (uint32_t degree : podDegree)
+        {
+            degreeTotal += degree;
+            diagnostics.podPortUseMax = std::max(diagnostics.podPortUseMax, degree);
+            diagnostics.podPortUseMin = std::min(diagnostics.podPortUseMin, degree);
+        }
+        diagnostics.podPortUseMean =
+            static_cast<double>(degreeTotal) / static_cast<double>(podDegree.size());
+    }
+
+    const double psiTotal = GetMatrixSumUpper(structural.Psi);
+    diagnostics.smdTop = ComputeTopologyOnlySmd(state.C, structural, parameters);
+    if (psiTotal <= 0.0)
+    {
+        return diagnostics;
+    }
+
+    const double circuitBytes = WindowCapacityBytes(parameters);
+    double lambdaTotal = 0.0;
+    double directlyCoveredPsi = 0.0;
+    std::vector<std::tuple<uint32_t, uint32_t, double>> psiPairs;
+    for (uint32_t i = 0; i < structural.Psi.GetSize(); ++i)
+    {
+        for (uint32_t j = i + 1; j < structural.Psi.GetSize(); ++j)
+        {
+            const double psi = structural.Psi.Get(i, j);
+            if (psi > 0.0)
+            {
+                psiPairs.emplace_back(i, j, psi);
+            }
+            const double lambda =
+                std::min(state.C.Get(i, j) * circuitBytes, structural.S.Get(i, j)) *
+                structural.Omega.Get(i, j);
+            lambdaTotal += lambda;
+            if (state.C.Get(i, j) > 0.0)
+            {
+                directlyCoveredPsi += psi;
+            }
+        }
+    }
+    diagnostics.topCoverage = lambdaTotal / psiTotal;
+    diagnostics.directStructuralWeightRatio = directlyCoveredPsi / psiTotal;
+
+    std::sort(psiPairs.begin(), psiPairs.end(), [](const auto& left, const auto& right) {
+        if (std::get<2>(left) != std::get<2>(right))
+        {
+            return std::get<2>(left) > std::get<2>(right);
+        }
+        return std::tie(std::get<0>(left), std::get<1>(left)) <
+               std::tie(std::get<0>(right), std::get<1>(right));
+    });
+    for (uint32_t index = 0; index < psiPairs.size() && index < topK; ++index)
+    {
+        const uint32_t i = std::get<0>(psiPairs[index]);
+        const uint32_t j = std::get<1>(psiPairs[index]);
+        if (state.C.Get(i, j) > 0.0)
+        {
+            diagnostics.topKCoveredPairCount++;
+        }
+    }
+    return diagnostics;
 }
 
 SmtraControlResult

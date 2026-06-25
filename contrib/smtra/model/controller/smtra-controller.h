@@ -87,6 +87,18 @@ struct SmtraControlResult
     bool updated = false;
 };
 
+struct SmtraTopologyDiagnostics
+{
+    uint32_t opticalConnectionCount = 0;
+    double podPortUseMean = 0.0;
+    uint32_t podPortUseMax = 0;
+    uint32_t podPortUseMin = 0;
+    double topCoverage = 0.0;
+    double smdTop = 0.0;
+    uint32_t topKCoveredPairCount = 0;
+    double directStructuralWeightRatio = 0.0;
+};
+
 class SmtraController
 {
   public:
@@ -101,6 +113,13 @@ class SmtraController
                                    const SmtraParameters& parameters) const;
     SmtraTopologyRouteState RunTaa(const SmtraStructuralState& structural,
                                    const SmtraParameters& parameters) const;
+    SmtraTopologyRouteState RunTopologyOnlyTaa(const SmtraStructuralState& structural,
+                                               const SmtraParameters& parameters) const;
+    SmtraTopologyDiagnostics ComputeTopologyDiagnostics(
+        const SmtraTopologyRouteState& state,
+        const SmtraStructuralState& structural,
+        const SmtraParameters& parameters,
+        uint32_t topK) const;
     SmtraControlResult Run(const TrafficMatrix& observedT,
                            const SmtraTopologyRouteState& currentState,
                            const SmtraParameters& parameters) const;
