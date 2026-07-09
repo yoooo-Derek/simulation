@@ -1,0 +1,31 @@
+build_lib(
+  LIBNAME satr
+  SOURCE_FILES
+    model/applications/flow-launcher.cc
+    model/config/simulation-config.cc
+    model/controller/ocs-plane.cc
+    model/controller/satr-controller.cc
+    model/datapath/satr-path-installer.cc
+    model/metrics/satr-metrics.cc
+    model/topology/dragonfly-plus-ocs-topology-builder.cc
+    model/topology/node-index.cc
+    model/workload/satr-workload.cc
+  HEADER_FILES
+    model/applications/flow-launcher.h
+    model/config/simulation-config.h
+    model/controller/ocs-plane.h
+    model/controller/satr-controller.h
+    model/datapath/satr-path-installer.h
+    model/metrics/satr-metrics.h
+    model/topology/dragonfly-plus-ocs-topology-builder.h
+    model/topology/node-index.h
+    model/workload/satr-workload.h
+  LIBRARIES_TO_LINK
+    ${libapplications}
+    ${libcore}
+    ${libinternet}
+    ${libnetwork}
+    ${libpoint-to-point}
+  TEST_SOURCES
+    test/satr-core-test-suite.cc
+)

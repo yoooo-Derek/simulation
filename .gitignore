@@ -3,13 +3,14 @@
 
 # Keep this ignore policy tracked.
 !/.gitignore
+!/SATR-README.md
 
 # Track custom ns-3 contribution module files.
 !/contrib/
 /contrib/*
 !/contrib/.gitignore
-!/contrib/smtra/
-!/contrib/smtra/**
+!/contrib/SATR/
+!/contrib/SATR/**
 
 # Track custom project documentation.
 !/docs/
@@ -24,4 +25,4 @@
 # Track custom scratch entry points only.
 !/scratch/
 /scratch/*
-!/scratch/smtra-runner.cc
+!/scratch/satr-runner.cc
